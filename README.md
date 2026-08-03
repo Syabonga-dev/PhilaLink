@@ -149,7 +149,7 @@ Notifications are sent to:
 - Patients
 - Medication Proxies
 
-Helping reduce forgotten collections and improve medication adherence. :contentReference[oaicite:1]{index=1}
+Helping reduce forgotten collections and improve medication adherence.
 
 ---
 
@@ -187,7 +187,6 @@ The system uses weighted symptom scoring to identify likely conditions and provi
 
 This is **not** intended to replace professional medical diagnosis.
 
-:contentReference[oaicite:3]{index=3}
 
 ---
 
@@ -202,7 +201,6 @@ Examples include:
 - High pollen notifications
 - Air quality awareness
 
-:contentReference[oaicite:4]{index=4}
 
 ---
 
@@ -230,7 +228,7 @@ The application separates responsibilities into:
 - Business Logic Layer
 - Data Access Layer
 
-allowing scalability, maintainability and easier testing. :contentReference[oaicite:5]{index=5}
+allowing scalability, maintainability and easier testing.
 
 ---
 
@@ -278,7 +276,7 @@ The platform currently includes entities such as:
 - Symptom Mapping
 - Health Conditions
 
-The database is designed around relational principles using SQL Server and Entity Framework Core. :contentReference[oaicite:6]{index=6}
+The database is designed around relational principles using SQL Server and Entity Framework Core.
 
 ---
 
@@ -366,8 +364,6 @@ Dashboards for clinics to monitor:
 - Missed collections
 - Community health trends
 
-:contentReference[oaicite:7]{index=7}
-
 ---
 
 # Security & Privacy
@@ -386,7 +382,7 @@ Security considerations include:
 - POPIA Compliance
 - Privacy-first architecture
 
-Patient privacy remains one of the project's highest priorities. :contentReference[oaicite:8]{index=8}
+Patient privacy remains one of the project's highest priorities.
 
 ---
 
