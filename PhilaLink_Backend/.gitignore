@@ -1,7 +1,8 @@
 # Visual Studio
 .vs/
 
-# Secrets
+# Configuration secrets
+appsettings.json
 appsettings.Development.json
 appsettings.Production.json
 
