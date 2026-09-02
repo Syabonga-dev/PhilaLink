@@ -5,11 +5,11 @@ namespace PersonalProject.Models.Entities
         public Guid Id { get; set; }
 
         public Guid MedicationId { get; set; }
-        public Medication? Medication { get; set; }
+
+        public Medication Medication { get; set; } = null!;
 
         public DateTime TakenAt { get; set; } = DateTime.UtcNow;
 
         public bool Taken { get; set; }
     }
 }
-

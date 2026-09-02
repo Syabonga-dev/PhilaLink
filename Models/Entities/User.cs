@@ -1,3 +1,4 @@
+
 namespace PersonalProject.Models.Entities
 {
     public class User
@@ -15,9 +16,7 @@ namespace PersonalProject.Models.Entities
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-
-        // Domain relationships
-
+        // Profile relationships
         public Patient? Patient { get; set; }
 
         public Nurse? Nurse { get; set; }
@@ -25,15 +24,5 @@ namespace PersonalProject.Models.Entities
         public Proxy? Proxy { get; set; }
 
         public Admin? Admin { get; set; }
-
-
-        // Proxy relationships
-
-        public ICollection<ProxyLink> ProxyLinksAsPatient { get; set; }
-            = new List<ProxyLink>();
-
-        public ICollection<ProxyLink> ProxyLinksAsProxy { get; set; }
-            = new List<ProxyLink>();
     }
 }
-

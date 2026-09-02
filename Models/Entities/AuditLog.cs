@@ -12,7 +12,6 @@ namespace PersonalProject.Models.Entities
 
         public string Details { get; set; } = null!;
 
-        public DateTime Timestamp { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 }
-

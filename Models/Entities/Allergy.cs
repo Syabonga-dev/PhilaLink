@@ -5,6 +5,7 @@ namespace PersonalProject.Models.Entities
         public Guid Id { get; set; }
 
         public Guid PatientId { get; set; }
+
         public Patient Patient { get; set; } = null!;
 
         public string AllergyName { get; set; } = string.Empty;
@@ -18,5 +19,3 @@ namespace PersonalProject.Models.Entities
         public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
     }
 }
-
-

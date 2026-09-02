@@ -6,11 +6,9 @@ namespace PersonalProject.Data
 {
     public class PhilaLinkDbContext : DbContext
     {
-        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options)
-            : base(options)
+        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options) : base(options)
         {
         }
-
 
         public DbSet<User> Users { get; set; }
 
@@ -32,7 +30,6 @@ namespace PersonalProject.Data
 
         public DbSet<OtpVerification> OtpVerifications { get; set; }
 
-
         public DbSet<Patient> Patients { get; set; }
 
         public DbSet<Nurse> Nurses { get; set; }
@@ -41,6 +38,9 @@ namespace PersonalProject.Data
 
         public DbSet<Admin> Admins { get; set; }
 
+        public DbSet<Allergy> Allergies { get; set; }
+
+        public DbSet<MedicalCondition> MedicalConditions { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -48,16 +48,21 @@ namespace PersonalProject.Data
             base.OnModelCreating(modelBuilder);
 
 
+            // =====================================================
+            // USER
+            // =====================================================
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.PhoneNumber)
                 .IsUnique();
 
-
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Role);
 
 
+            // =====================================================
+            // USER → PATIENT
+            // =====================================================
 
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Patient)
@@ -65,7 +70,14 @@ namespace PersonalProject.Data
                 .HasForeignKey<Patient>(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Patient>()
+                .HasIndex(p => p.UserId)
+                .IsUnique();
 
+
+            // =====================================================
+            // USER → NURSE
+            // =====================================================
 
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Nurse)
@@ -73,7 +85,14 @@ namespace PersonalProject.Data
                 .HasForeignKey<Nurse>(n => n.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Nurse>()
+                .HasIndex(n => n.UserId)
+                .IsUnique();
 
+
+            // =====================================================
+            // USER → PROXY
+            // =====================================================
 
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Proxy)
@@ -81,7 +100,14 @@ namespace PersonalProject.Data
                 .HasForeignKey<Proxy>(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Proxy>()
+                .HasIndex(p => p.UserId)
+                .IsUnique();
 
+
+            // =====================================================
+            // USER → ADMIN
+            // =====================================================
 
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Admin)
@@ -89,31 +115,47 @@ namespace PersonalProject.Data
                 .HasForeignKey<Admin>(a => a.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Admin>()
+                .HasIndex(a => a.UserId)
+                .IsUnique();
 
 
-            modelBuilder.Entity<ProxyLink>()
-                .HasOne(p => p.Patient)
-                .WithMany(u => u.ProxyLinksAsPatient)
-                .HasForeignKey(p => p.PatientId)
-                .OnDelete(DeleteBehavior.Restrict);
+            // =====================================================
+            // PATIENT → ALLERGIES
+            // =====================================================
+
+            modelBuilder.Entity<Allergy>()
+                .HasOne(a => a.Patient)
+                .WithMany(p => p.Allergies)
+                .HasForeignKey(a => a.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
 
 
+            // =====================================================
+            // PATIENT → MEDICAL CONDITIONS
+            // =====================================================
 
-            modelBuilder.Entity<ProxyLink>()
-                .HasOne(p => p.Proxy)
-                .WithMany(u => u.ProxyLinksAsProxy)
-                .HasForeignKey(p => p.ProxyId)
-                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MedicalCondition>()
+                .HasOne(c => c.Patient)
+                .WithMany(p => p.MedicalConditions)
+                .HasForeignKey(c => c.PatientId)
+                .OnDelete(DeleteBehavior.Cascade);
 
 
+            // =====================================================
+            // NURSE → CLINIC
+            // =====================================================
 
-            modelBuilder.Entity<ProxyLink>()
-                .HasOne(p => p.AssignedByNurse)
+            modelBuilder.Entity<Nurse>()
+                .HasOne(n => n.Clinic)
                 .WithMany()
-                .HasForeignKey(p => p.AssignedByNurseId)
+                .HasForeignKey(n => n.ClinicId)
                 .OnDelete(DeleteBehavior.Restrict);
 
 
+            // =====================================================
+            // PATIENT → MEDICATIONS
+            // =====================================================
 
             modelBuilder.Entity<Medication>()
                 .HasOne(m => m.Patient)
@@ -122,6 +164,9 @@ namespace PersonalProject.Data
                 .OnDelete(DeleteBehavior.Restrict);
 
 
+            // =====================================================
+            // MEDICATION → SCHEDULES
+            // =====================================================
 
             modelBuilder.Entity<MedicationSchedule>()
                 .HasOne(s => s.Medication)
@@ -130,6 +175,9 @@ namespace PersonalProject.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
 
+            // =====================================================
+            // MEDICATION → LOGS
+            // =====================================================
 
             modelBuilder.Entity<MedicationLog>()
                 .HasOne(l => l.Medication)
@@ -138,6 +186,9 @@ namespace PersonalProject.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
 
+            // =====================================================
+            // PATIENT → SYMPTOM ASSESSMENTS
+            // =====================================================
 
             modelBuilder.Entity<SymptomAssessment>()
                 .HasOne(sa => sa.Patient)
@@ -145,11 +196,46 @@ namespace PersonalProject.Data
                 .HasForeignKey(sa => sa.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-
             modelBuilder.Entity<SymptomAssessment>()
                 .HasIndex(sa => sa.PatientId);
 
 
+            // =====================================================
+            // PATIENT → PROXY LINKS
+            // =====================================================
+
+            modelBuilder.Entity<ProxyLink>()
+                .HasOne(pl => pl.Patient)
+                .WithMany(p => p.ProxyLinksAsPatient)
+                .HasForeignKey(pl => pl.PatientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
+            // =====================================================
+            // PROXY → PROXY LINKS
+            // =====================================================
+
+            modelBuilder.Entity<ProxyLink>()
+                .HasOne(pl => pl.Proxy)
+                .WithMany(p => p.ProxyLinksAsProxy)
+                .HasForeignKey(pl => pl.ProxyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
+            // =====================================================
+            // NURSE → PROXY LINKS
+            // =====================================================
+
+            modelBuilder.Entity<ProxyLink>()
+                .HasOne(pl => pl.AssignedByNurse)
+                .WithMany()
+                .HasForeignKey(pl => pl.AssignedByNurseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
+            // =====================================================
+            // USER → NOTIFICATIONS
+            // =====================================================
 
             modelBuilder.Entity<Notification>()
                 .HasOne(n => n.User)
@@ -157,12 +243,13 @@ namespace PersonalProject.Data
                 .HasForeignKey(n => n.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
 
-
-
             modelBuilder.Entity<Notification>()
                 .HasIndex(n => n.UserId);
 
 
+            // =====================================================
+            // USER → OTP VERIFICATIONS
+            // =====================================================
 
             modelBuilder.Entity<OtpVerification>()
                 .HasOne(o => o.User)
@@ -170,16 +257,16 @@ namespace PersonalProject.Data
                 .HasForeignKey(o => o.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-
-
             modelBuilder.Entity<OtpVerification>()
                 .HasIndex(o => o.UserId);
-
 
             modelBuilder.Entity<OtpVerification>()
                 .HasIndex(o => o.ExpiryTime);
 
 
+            // =====================================================
+            // USER → AUDIT LOGS
+            // =====================================================
 
             modelBuilder.Entity<AuditLog>()
                 .HasOne(a => a.PerformedByUser)
@@ -189,4 +276,3 @@ namespace PersonalProject.Data
         }
     }
 }
-

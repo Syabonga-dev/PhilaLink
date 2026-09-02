@@ -5,7 +5,8 @@ namespace PersonalProject.Models.Entities
         public Guid Id { get; set; }
 
         public Guid UserId { get; set; }
-        public User? User { get; set; }
+
+        public User User { get; set; } = null!;
 
         public string Code { get; set; } = string.Empty;
 
@@ -14,4 +15,3 @@ namespace PersonalProject.Models.Entities
         public bool IsUsed { get; set; } = false;
     }
 }
-
