@@ -20,30 +20,56 @@ namespace PersonalProject.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
-            var result = await _authService.RegisterAsync(dto);
-            return Ok(result);
+            try
+            {
+                var result = await _authService.RegisterAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            var result = await _authService.LoginAsync(dto);
-            return Ok(result);
+            try
+            {
+                var result = await _authService.LoginAsync(dto);
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
         }
 
         [HttpPost("otp/generate")]
         public async Task<IActionResult> GenerateOtp(Guid userId)
         {
-            var otp = await _otpService.GenerateAsync(userId);
-            return Ok(otp);
+            try
+            {
+                var otp = await _otpService.GenerateAsync(userId);
+                // NOTE: intentionally NOT returning `otp` itself — that would
+                // leak the code straight back in the HTTP response, defeating
+                // the point of emailing it out-of-band.
+                return Ok(new { message = "Verification code sent.", expiresAt = otp.ExpiryTime });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("otp/verify")]
         public async Task<IActionResult> VerifyOtp(Guid userId, string code)
         {
-            var result = await _otpService.VerifyAsync(userId, code);
-            return Ok(result);
+            var verified = await _otpService.VerifyAsync(userId, code);
+            if (!verified)
+                return BadRequest(new { message = "Invalid or expired code." });
+
+            return Ok(new { verified = true });
         }
     }
 }
-

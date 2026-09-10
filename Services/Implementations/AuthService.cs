@@ -22,18 +22,22 @@ namespace PersonalProject.Services.Implementations
             _config = config;
         }
 
-        public async Task<string> RegisterAsync(RegisterDto dto)
+        public async Task<RegisterResponseDto> RegisterAsync(RegisterDto dto)
         {
             var exists = await _context.Users
-                .AnyAsync(u => u.PhoneNumber == dto.PhoneNumber);
+                .AnyAsync(u => u.IdNumber == dto.IdNumber || u.PhoneNumber == dto.PhoneNumber);
 
             if (exists)
-                return "User already exists";
+                throw new InvalidOperationException(
+                    "An account with that ID number or phone number already exists.");
 
             var user = new User
             {
+                Id = Guid.NewGuid(),
                 FullName = dto.FullName,
+                IdNumber = dto.IdNumber,
                 PhoneNumber = dto.PhoneNumber,
+                Email = dto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 Role = dto.Role
             };
@@ -41,22 +45,38 @@ namespace PersonalProject.Services.Implementations
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            return "User registered successfully";
+            return new RegisterResponseDto
+            {
+                UserId = user.Id,
+                FullName = user.FullName,
+                Role = user.Role
+            };
         }
 
-        public async Task<string> LoginAsync(LoginDto dto)
+        public async Task<LoginResponseDto> LoginAsync(LoginDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == dto.PhoneNumber);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.IdNumber == dto.IdNumber);
 
-            if (user == null)
-                return "Invalid credentials";
+            // Deliberately the same error whether the ID number doesn't exist
+            // or the password is wrong — don't let a client fish for which
+            // ID numbers are registered.
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                throw new UnauthorizedAccessException("Invalid ID number or password.");
 
-            var validPassword = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
-
-            if (!validPassword)
-                return "Invalid credentials";
-
-            return GenerateToken(user);
+            return new LoginResponseDto
+            {
+                Token = GenerateToken(user),
+                User = new UserResponseDto
+                {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    IdNumber = user.IdNumber,
+                    PhoneNumber = user.PhoneNumber,
+                    Email = user.Email,
+                    Role = user.Role
+                }
+            };
         }
 
         private string GenerateToken(User user)
@@ -73,7 +93,7 @@ namespace PersonalProject.Services.Implementations
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.FullName),
                 new Claim(ClaimTypes.Role, user.Role),
-                new Claim("phone", user.PhoneNumber)
+                new Claim("idNumber", user.IdNumber)
             };
 
             var token = new JwtSecurityToken(
@@ -91,5 +111,3 @@ namespace PersonalProject.Services.Implementations
         }
     }
 }
-
-

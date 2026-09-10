@@ -4,8 +4,7 @@ namespace PersonalProject.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task<string> RegisterAsync(RegisterDto dto);
-        Task<string> LoginAsync(LoginDto dto);
+        Task<RegisterResponseDto> RegisterAsync(RegisterDto dto);
+        Task<LoginResponseDto> LoginAsync(LoginDto dto);
     }
 }
-

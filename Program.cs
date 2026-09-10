@@ -121,7 +121,8 @@ using (var scope = app.Services.CreateScope())
         {
             Id = adminUserId,
             FullName = "System Administrator",
-            PhoneNumber = "0000000000",
+            IdNumber = "0909103061081",
+            PhoneNumber = "0724347162",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@2004.."),
             Role = "Admin",
             CreatedAt = DateTime.UtcNow
@@ -151,10 +152,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHttpsRedirection();
+}
 
 
 
-app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
