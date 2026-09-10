@@ -1,3 +1,5 @@
+using PersonalProject.Models;
+
 namespace PersonalProject.Models.Entities
 {
     public class ProxyLink
@@ -8,7 +10,9 @@ namespace PersonalProject.Models.Entities
 
         public Guid ProxyId { get; set; }
 
-        public Guid AssignedByNurseId { get; set; }
+        public Guid? AssignedByNurseId { get; set; }
+
+        public int? AssignedByAdminId { get; set; }
 
         public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
 
@@ -17,6 +21,8 @@ namespace PersonalProject.Models.Entities
 
         public Proxy Proxy { get; set; } = null!;
 
-        public Nurse AssignedByNurse { get; set; } = null!;
+        public Nurse? AssignedByNurse { get; set; }
+
+        public Admin? AssignedByAdmin { get; set; }
     }
 }

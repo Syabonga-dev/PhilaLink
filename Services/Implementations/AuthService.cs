@@ -25,7 +25,9 @@ namespace PersonalProject.Services.Implementations
         public async Task<RegisterResponseDto> RegisterAsync(RegisterDto dto)
         {
             var exists = await _context.Users
-                .AnyAsync(u => u.IdNumber == dto.IdNumber || u.PhoneNumber == dto.PhoneNumber);
+                .AnyAsync(u =>
+                    u.IdNumber == dto.IdNumber ||
+                    u.PhoneNumber == dto.PhoneNumber);
 
             if (exists)
                 throw new InvalidOperationException(
@@ -39,7 +41,7 @@ namespace PersonalProject.Services.Implementations
                 PhoneNumber = dto.PhoneNumber,
                 Email = dto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Role = dto.Role
+                Role = "Patient"
             };
 
             _context.Users.Add(user);

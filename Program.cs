@@ -29,7 +29,7 @@ builder.Services.AddScoped<IMedicationLogService, MedicationLogService>();
 builder.Services.AddScoped<ISymptomAssessmentService, SymptomAssessmentService>();
 builder.Services.AddScoped<IOtpVerificationService, OtpVerificationService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
-
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
