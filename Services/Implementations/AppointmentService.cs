@@ -102,9 +102,9 @@ namespace PersonalProject.Services.Implementations
                         ? null
                         : dto.ProviderName.Trim(),
 
-                Mode = NormalizeMode(dto.Mode),
+                Mode = AppointmentModes.Normalize(dto.Mode),
 
-                Status = "Scheduled",
+                Status = AppointmentStatuses.Scheduled,
 
                 Notes = dto.Notes,
 
@@ -173,7 +173,7 @@ namespace PersonalProject.Services.Implementations
             appointment.Reason = dto.Reason.Trim();
             appointment.ProviderName = string.IsNullOrWhiteSpace(dto.ProviderName) ? null : dto.ProviderName.Trim();
             appointment.Mode = NormalizeMode(dto.Mode);
-            appointment.Status = NormalizeStatus(dto.Status);
+            appointment.Status = AppointmentStatuses.Normalize(dto.Status );
             appointment.Notes = dto.Notes;
             appointment.UpdatedAt = DateTime.UtcNow;
 
@@ -321,38 +321,6 @@ namespace PersonalProject.Services.Implementations
             return "InPerson";
         }
 
-        private static string NormalizeStatus(
-            string status
-        )
-        {
-            var allowed = new[]
-            {
-                "Scheduled",
-                "Confirmed",
-                "Pending",
-                "Completed",
-                "Cancelled",
-                "Missed",
-                "Rescheduled"
-            };
-
-            var match = allowed.FirstOrDefault(
-                s => string.Equals(
-                    s,
-                    status,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
-
-            if (match == null)
-            {
-                throw new InvalidOperationException(
-                    "Invalid appointment status."
-                );
-            }
-
-            return match;
-        }
     }
 
     internal static class AppointmentMappings

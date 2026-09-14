@@ -22,6 +22,10 @@ namespace PersonalProject.Services.Implementations
             _audit = audit;
         }
 
+        // =====================================================
+        // CREATE COLLECTION
+        // =====================================================
+
         public async Task<MedicationCollectionResponseDto>
             CreateAsync(
                 CreateMedicationCollectionDto dto,
@@ -83,7 +87,7 @@ namespace PersonalProject.Services.Implementations
                         dto.ScheduledCollectionDate,
 
                     Status =
-                        "Scheduled",
+                        MedicationCollectionStatuses.Scheduled,
 
                     Notes =
                         dto.Notes,
@@ -153,7 +157,8 @@ namespace PersonalProject.Services.Implementations
                 collection.Items.Add(
                     new MedicationCollectionItem
                     {
-                        Id = Guid.NewGuid(),
+                        Id =
+                            Guid.NewGuid(),
 
                         MedicationId =
                             medication.Id,
@@ -191,8 +196,11 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task<
-            List<MedicationCollectionResponseDto>>
+        // =====================================================
+        // CLINIC COLLECTIONS
+        // =====================================================
+
+        public async Task<List<MedicationCollectionResponseDto>>
             GetClinicCollectionsAsync(
                 Guid performedByUserId
             )
@@ -205,10 +213,13 @@ namespace PersonalProject.Services.Implementations
             var collections =
                 await GetCollectionQuery()
                     .Where(
-                        c => c.ClinicId == clinicId
+                        c =>
+                            c.ClinicId ==
+                            clinicId
                     )
                     .OrderBy(
-                        c => c.ScheduledCollectionDate
+                        c =>
+                            c.ScheduledCollectionDate
                     )
                     .ToListAsync();
 
@@ -216,6 +227,10 @@ namespace PersonalProject.Services.Implementations
                 .Select(ToDto)
                 .ToList();
         }
+
+        // =====================================================
+        // SUMMARY
+        // =====================================================
 
         public async Task<MedicationCollectionSummaryDto>
             GetSummaryAsync(
@@ -227,8 +242,11 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            var today = DateTime.UtcNow.Date;
-            var tomorrow = today.AddDays(1);
+            var today =
+                DateTime.UtcNow.Date;
+
+            var tomorrow =
+                today.AddDays(1);
 
             var dayOfWeek =
                 (int)today.DayOfWeek;
@@ -246,50 +264,61 @@ namespace PersonalProject.Services.Implementations
             var dueToday =
                 await _context
                     .MedicationCollections
-                    .CountAsync(c =>
-                        c.ClinicId == clinicId &&
-                        c.Status != "Collected" &&
-                        c.Status != "Cancelled" &&
-                        c.ScheduledCollectionDate >=
-                            today &&
-                        c.ScheduledCollectionDate <
-                            tomorrow
+                    .CountAsync(
+                        c =>
+                            c.ClinicId == clinicId &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Collected &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Cancelled &&
+                            c.ScheduledCollectionDate >=
+                                today &&
+                            c.ScheduledCollectionDate <
+                                tomorrow
                     );
 
             var overdue =
                 await _context
                     .MedicationCollections
-                    .CountAsync(c =>
-                        c.ClinicId == clinicId &&
-                        c.Status != "Collected" &&
-                        c.Status != "Cancelled" &&
-                        c.ScheduledCollectionDate <
-                            today
+                    .CountAsync(
+                        c =>
+                            c.ClinicId == clinicId &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Collected &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Cancelled &&
+                            c.ScheduledCollectionDate <
+                                today
                     );
 
             var collectedThisWeek =
                 await _context
                     .MedicationCollections
-                    .CountAsync(c =>
-                        c.ClinicId == clinicId &&
-                        c.Status == "Collected" &&
-                        c.CollectedAt != null &&
-                        c.CollectedAt >= monday
+                    .CountAsync(
+                        c =>
+                            c.ClinicId == clinicId &&
+                            c.Status ==
+                                MedicationCollectionStatuses.Collected &&
+                            c.CollectedAt != null &&
+                            c.CollectedAt >= monday
                     );
 
             var totalActive =
                 await _context.Medications
-                    .CountAsync(m =>
-                        m.IsActive &&
-                        m.Patient.ClinicId ==
-                            clinicId
+                    .CountAsync(
+                        m =>
+                            m.IsActive &&
+                            m.Patient.ClinicId ==
+                                clinicId
                     );
 
             return new MedicationCollectionSummaryDto
             {
-                DueToday = dueToday,
+                DueToday =
+                    dueToday,
 
-                Overdue = overdue,
+                Overdue =
+                    overdue,
 
                 CollectedThisWeek =
                     collectedThisWeek,
@@ -298,6 +327,10 @@ namespace PersonalProject.Services.Implementations
                     totalActive
             };
         }
+
+        // =====================================================
+        // ASSIGN PROXY
+        // =====================================================
 
         public async Task<MedicationCollectionResponseDto>
             AssignProxyAsync(
@@ -316,8 +349,10 @@ namespace PersonalProject.Services.Implementations
                     .MedicationCollections
                     .FirstOrDefaultAsync(
                         c =>
-                            c.Id == collectionId &&
-                            c.ClinicId == clinicId
+                            c.Id ==
+                                collectionId &&
+                            c.ClinicId ==
+                                clinicId
                     );
 
             if (collection == null)
@@ -332,8 +367,11 @@ namespace PersonalProject.Services.Implementations
                 proxyId
             );
 
-            collection.ProxyId = proxyId;
-            collection.UpdatedAt = DateTime.UtcNow;
+            collection.ProxyId =
+                proxyId;
+
+            collection.UpdatedAt =
+                DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -348,6 +386,10 @@ namespace PersonalProject.Services.Implementations
                 collection.Id
             );
         }
+
+        // =====================================================
+        // COMPLETE COLLECTION
+        // =====================================================
 
         public async Task<MedicationCollectionResponseDto>
             CompleteAsync(
@@ -369,7 +411,8 @@ namespace PersonalProject.Services.Implementations
                 await GetCollectionQuery()
                     .FirstOrDefaultAsync(
                         c =>
-                            c.Id == collectionId &&
+                            c.Id ==
+                                collectionId &&
                             c.ClinicId ==
                                 nurse.ClinicId
                     );
@@ -381,14 +424,20 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (collection.Status == "Collected")
+            if (
+                collection.Status ==
+                MedicationCollectionStatuses.Collected
+            )
             {
                 throw new InvalidOperationException(
                     "Collection has already been completed."
                 );
             }
 
-            if (collection.Status == "Cancelled")
+            if (
+                collection.Status ==
+                MedicationCollectionStatuses.Cancelled
+            )
             {
                 throw new InvalidOperationException(
                     "Cancelled collection cannot be completed."
@@ -436,12 +485,23 @@ namespace PersonalProject.Services.Implementations
                     DateTime.UtcNow;
             }
 
-            collection.ProxyId = proxyId;
-            collection.ProcessedByNurseId = nurse.Id;
-            collection.CollectedAt = DateTime.UtcNow;
-            collection.Status = "Collected";
+            collection.ProxyId =
+                proxyId;
 
-            if (!string.IsNullOrWhiteSpace(dto.Notes))
+            collection.ProcessedByNurseId =
+                nurse.Id;
+
+            collection.CollectedAt =
+                DateTime.UtcNow;
+
+            collection.Status =
+                MedicationCollectionStatuses.Collected;
+
+            if (
+                !string.IsNullOrWhiteSpace(
+                    dto.Notes
+                )
+            )
             {
                 collection.Notes =
                     string.IsNullOrWhiteSpace(
@@ -469,17 +529,25 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        private async Task ValidateProxyAssignmentAsync(Guid patientId, Guid proxyId)
+        // =====================================================
+        // PROXY VALIDATION
+        // =====================================================
+
+        private async Task ValidateProxyAssignmentAsync(
+            Guid patientId,
+            Guid proxyId
+        )
         {
             var valid =
                 await _context.ProxyLinks
-                    .AnyAsync(pl =>
-                        pl.PatientId ==
-                            patientId &&
-                        pl.ProxyId ==
-                            proxyId &&
-                        pl.IsActive &&
-                        pl.Proxy.User.IsActive
+                    .AnyAsync(
+                        pl =>
+                            pl.PatientId ==
+                                patientId &&
+                            pl.ProxyId ==
+                                proxyId &&
+                            pl.IsActive &&
+                            pl.Proxy.User.IsActive
                     );
 
             if (!valid)
@@ -489,6 +557,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
         }
+
+        // =====================================================
+        // NURSE
+        // =====================================================
 
         private async Task<Nurse>
             GetActiveNurseAsync(
@@ -500,7 +572,8 @@ namespace PersonalProject.Services.Implementations
                     .Include(n => n.User)
                     .FirstOrDefaultAsync(
                         n =>
-                            n.UserId == userId &&
+                            n.UserId ==
+                                userId &&
                             n.User.Role ==
                                 RoleNames.Nurse &&
                             n.User.IsActive
@@ -516,6 +589,10 @@ namespace PersonalProject.Services.Implementations
             return nurse;
         }
 
+        // =====================================================
+        // STAFF CLINIC
+        // =====================================================
+
         private async Task<Guid>
             GetStaffClinicIdAsync(
                 Guid userId
@@ -526,7 +603,9 @@ namespace PersonalProject.Services.Implementations
                     .Include(u => u.Admin)
                     .Include(u => u.Nurse)
                     .FirstOrDefaultAsync(
-                        u => u.Id == userId
+                        u =>
+                            u.Id ==
+                            userId
                     );
 
             if (
@@ -547,7 +626,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role == RoleNames.Nurse &&
+                user.Role ==
+                    RoleNames.Nurse &&
                 user.Nurse != null
             )
             {
@@ -556,6 +636,10 @@ namespace PersonalProject.Services.Implementations
 
             throw new UnauthorizedAccessException();
         }
+
+        // =====================================================
+        // QUERY
+        // =====================================================
 
         private IQueryable<MedicationCollection>
             GetCollectionQuery()
@@ -575,18 +659,31 @@ namespace PersonalProject.Services.Implementations
                     .ThenInclude(i => i.ClinicStock);
         }
 
-        private async Task<
-            MedicationCollectionResponseDto>
-            GetDtoAsync(Guid id)
+        // =====================================================
+        // GET DTO
+        // =====================================================
+
+        private async Task<MedicationCollectionResponseDto>
+            GetDtoAsync(
+                Guid id
+            )
         {
             var collection =
                 await GetCollectionQuery()
                     .FirstAsync(
-                        c => c.Id == id
+                        c =>
+                            c.Id ==
+                            id
                     );
 
-            return ToDto(collection);
+            return ToDto(
+                collection
+            );
         }
+
+        // =====================================================
+        // MAPPING
+        // =====================================================
 
         private static MedicationCollectionResponseDto
             ToDto(
@@ -600,16 +697,18 @@ namespace PersonalProject.Services.Implementations
                 collection.Status;
 
             if (
-                collection.Status != "Collected" &&
-                collection.Status != "Cancelled"
+                collection.Status !=
+                    MedicationCollectionStatuses.Collected &&
+                collection.Status !=
+                    MedicationCollectionStatuses.Cancelled
             )
             {
                 displayStatus =
                     collection
                         .ScheduledCollectionDate
                         .Date < today
-                        ? "Overdue"
-                        : "Pending";
+                        ? MedicationCollectionStatuses.Overdue
+                        : MedicationCollectionStatuses.Pending;
             }
 
             return new MedicationCollectionResponseDto
@@ -633,7 +732,8 @@ namespace PersonalProject.Services.Implementations
                     collection.ProxyId,
 
                 ProxyName =
-                    collection.Proxy?.User.FullName,
+                    collection.Proxy?
+                        .User.FullName,
 
                 ProcessedByNurseId =
                     collection.ProcessedByNurseId,
@@ -643,8 +743,7 @@ namespace PersonalProject.Services.Implementations
                         .User.FullName,
 
                 ScheduledCollectionDate =
-                    collection
-                        .ScheduledCollectionDate,
+                    collection.ScheduledCollectionDate,
 
                 CollectedAt =
                     collection.CollectedAt,
@@ -666,40 +765,43 @@ namespace PersonalProject.Services.Implementations
                 Date =
                     collection
                         .ScheduledCollectionDate
-                        .ToString("yyyy-MM-dd"),
+                        .ToString(
+                            "yyyy-MM-dd"
+                        ),
 
                 Notes =
                     collection.Notes,
 
                 Items =
                     collection.Items
-                        .Select(i =>
-                            new MedicationCollectionItemResponseDto
-                            {
-                                Id =
-                                    i.Id,
+                        .Select(
+                            i =>
+                                new MedicationCollectionItemResponseDto
+                                {
+                                    Id =
+                                        i.Id,
 
-                                MedicationId =
-                                    i.MedicationId,
+                                    MedicationId =
+                                        i.MedicationId,
 
-                                ClinicStockId =
-                                    i.ClinicStockId,
+                                    ClinicStockId =
+                                        i.ClinicStockId,
 
-                                MedicationName =
-                                    i.Medication.Name,
+                                    MedicationName =
+                                        i.Medication.Name,
 
-                                Dosage =
-                                    i.Medication.Dosage,
+                                    Dosage =
+                                        i.Medication.Dosage,
 
-                                Form =
-                                    i.Medication.Form,
+                                    Form =
+                                        i.Medication.Form,
 
-                                Quantity =
-                                    i.Quantity,
+                                    Quantity =
+                                        i.Quantity,
 
-                                Notes =
-                                    i.Notes
-                            }
+                                    Notes =
+                                        i.Notes
+                                }
                         )
                         .ToList()
             };

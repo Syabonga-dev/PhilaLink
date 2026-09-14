@@ -16,5 +16,10 @@ namespace PersonalProject.Services.Interfaces
             GetClinicPatientsAsync(
                 Guid userId
             );
+
+        Task<List<NurseAlertDto>>
+            GetUrgentAlertsAsync(
+                Guid userId
+            );
     }
 }

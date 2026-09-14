@@ -13,7 +13,9 @@ namespace PersonalProject.Services.Implementations
     {
         private readonly PhilaLinkDbContext _context;
 
-        public AdminService(PhilaLinkDbContext context)
+        public AdminService(
+            PhilaLinkDbContext context
+        )
         {
             _context = context;
         }
@@ -22,18 +24,34 @@ namespace PersonalProject.Services.Implementations
         // REGISTER CLINIC ADMIN
         // =====================================================
 
-        public async Task<NewStaffAccountDto> RegisterClinicAdminAsync(RegisterClinicAdminDto dto, Guid performedByUserId)
+        public async Task<NewStaffAccountDto>
+            RegisterClinicAdminAsync(
+                RegisterClinicAdminDto dto,
+                Guid performedByUserId
+            )
         {
-            var actor = await GetAdminActorAsync(performedByUserId);
+            var actor =
+                await GetAdminActorAsync(
+                    performedByUserId
+                );
 
-            if (actor.User.Role != RoleNames.SuperAdmin)
+            if (
+                actor.User.Role !=
+                RoleNames.SuperAdmin
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Only a SuperAdmin can create ClinicAdmin accounts."
                 );
             }
 
-            var clinicExists = await _context.Clinics.AnyAsync(c => c.Id == dto.ClinicId);
+            var clinicExists =
+                await _context.Clinics
+                    .AnyAsync(
+                        c =>
+                            c.Id ==
+                            dto.ClinicId
+                    );
 
             if (!clinicExists)
             {
@@ -51,20 +69,28 @@ namespace PersonalProject.Services.Implementations
                     RoleNames.ClinicAdmin
                 );
 
-            var admin = new Admin
-            {
-                UserId = user.Id,
+            var admin =
+                new Admin
+                {
+                    UserId =
+                        user.Id,
 
-                FullName = user.FullName,
+                    FullName =
+                        user.FullName,
 
-                Email = dto.Email,
+                    Email =
+                        dto.Email,
 
-                ClinicId = dto.ClinicId,
+                    ClinicId =
+                        dto.ClinicId,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Admins.Add(admin);
+            _context.Admins.Add(
+                admin
+            );
 
             await _context.SaveChangesAsync();
 
@@ -95,9 +121,12 @@ namespace PersonalProject.Services.Implementations
             );
 
             var clinicExists =
-                await _context.Clinics.AnyAsync(
-                    c => c.Id == dto.ClinicId
-                );
+                await _context.Clinics
+                    .AnyAsync(
+                        c =>
+                            c.Id ==
+                            dto.ClinicId
+                    );
 
             if (!clinicExists)
             {
@@ -115,56 +144,76 @@ namespace PersonalProject.Services.Implementations
                     RoleNames.Nurse
                 );
 
-            var nurse = new Nurse
-            {
-                Id = Guid.NewGuid(),
+            var nurse =
+                new Nurse
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                UserId = user.Id,
+                    UserId =
+                        user.Id,
 
-                EmployeeNumber = dto.EmployeeNumber,
+                    EmployeeNumber =
+                        dto.EmployeeNumber,
 
-                RegistrationNumber =
-                    dto.RegistrationNumber,
+                    RegistrationNumber =
+                        dto.RegistrationNumber,
 
-                Qualification = dto.Qualification,
+                    Qualification =
+                        dto.Qualification,
 
-                ClinicId = dto.ClinicId,
+                    ClinicId =
+                        dto.ClinicId,
 
-                Email = dto.Email,
+                    Email =
+                        dto.Email,
 
-                AddressLine1 = dto.AddressLine1,
+                    AddressLine1 =
+                        dto.AddressLine1,
 
-                AddressLine2 = dto.AddressLine2,
+                    AddressLine2 =
+                        dto.AddressLine2,
 
-                Suburb = dto.Suburb,
+                    Suburb =
+                        dto.Suburb,
 
-                City = dto.City,
+                    City =
+                        dto.City,
 
-                Province = dto.Province,
+                    Province =
+                        dto.Province,
 
-                PostalCode = dto.PostalCode,
+                    PostalCode =
+                        dto.PostalCode,
 
-                DateOfBirth = dto.DateOfBirth,
+                    DateOfBirth =
+                        dto.DateOfBirth,
 
-                Gender = dto.Gender,
+                    Gender =
+                        dto.Gender,
 
-                EmploymentDate = dto.EmploymentDate,
+                    EmploymentDate =
+                        dto.EmploymentDate,
 
-                IsActive = true,
+                    IsActive =
+                        true,
 
-                EmergencyContactName =
-                    dto.EmergencyContactName,
+                    EmergencyContactName =
+                        dto.EmergencyContactName,
 
-                EmergencyContactPhone =
-                    dto.EmergencyContactPhone,
+                    EmergencyContactPhone =
+                        dto.EmergencyContactPhone,
 
-                EmergencyContactRelationship =
-                    dto.EmergencyContactRelationship,
+                    EmergencyContactRelationship =
+                        dto.EmergencyContactRelationship,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Nurses.Add(nurse);
+            _context.Nurses.Add(
+                nurse
+            );
 
             await _context.SaveChangesAsync();
 
@@ -184,12 +233,9 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            /*
-             * At this stage Proxy does not directly belong to
-             * one clinic. We still validate that the caller is
-             * a valid SuperAdmin or ClinicAdmin.
-             */
-            await GetAdminActorAsync(performedByUserId);
+            await GetAdminActorAsync(
+                performedByUserId
+            );
 
             var (user, tempPassword) =
                 await CreateUserAsync(
@@ -200,48 +246,64 @@ namespace PersonalProject.Services.Implementations
                     RoleNames.Proxy
                 );
 
-            var proxy = new Proxy
-            {
-                Id = Guid.NewGuid(),
+            var proxy =
+                new Proxy
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                UserId = user.Id,
+                    UserId =
+                        user.Id,
 
-                Email = dto.Email,
+                    Email =
+                        dto.Email,
 
-                AddressLine1 = dto.AddressLine1,
+                    AddressLine1 =
+                        dto.AddressLine1,
 
-                AddressLine2 = dto.AddressLine2,
+                    AddressLine2 =
+                        dto.AddressLine2,
 
-                Suburb = dto.Suburb,
+                    Suburb =
+                        dto.Suburb,
 
-                City = dto.City,
+                    City =
+                        dto.City,
 
-                Province = dto.Province,
+                    Province =
+                        dto.Province,
 
-                PostalCode = dto.PostalCode,
+                    PostalCode =
+                        dto.PostalCode,
 
-                DateOfBirth = dto.DateOfBirth,
+                    DateOfBirth =
+                        dto.DateOfBirth,
 
-                Gender = dto.Gender,
+                    Gender =
+                        dto.Gender,
 
-                RelationshipToPatient =
-                    dto.RelationshipToPatient,
+                    RelationshipToPatient =
+                        dto.RelationshipToPatient,
 
-                EmergencyContactName =
-                    dto.EmergencyContactName,
+                    EmergencyContactName =
+                        dto.EmergencyContactName,
 
-                EmergencyContactPhone =
-                    dto.EmergencyContactPhone,
+                    EmergencyContactPhone =
+                        dto.EmergencyContactPhone,
 
-                EmergencyContactRelationship =
-                    dto.EmergencyContactRelationship,
+                    EmergencyContactRelationship =
+                        dto.EmergencyContactRelationship,
 
-                IsActive = true,
+                    IsActive =
+                        true,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Proxies.Add(proxy);
+            _context.Proxies.Add(
+                proxy
+            );
 
             await _context.SaveChangesAsync();
 
@@ -266,75 +328,100 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            var query = _context.Users
-                .Include(u => u.Nurse)
-                .Include(u => u.Proxy)
-                .Include(u => u.Patient)
-                .Include(u => u.Admin)
-                .AsQueryable();
+            var query =
+                _context.Users
+                    .Include(u => u.Nurse)
+                    .Include(u => u.Proxy)
+                    .Include(u => u.Patient)
+                    .Include(u => u.Admin)
+                    .AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(role))
+            if (
+                !string.IsNullOrWhiteSpace(
+                    role
+                )
+            )
             {
-                query = query.Where(
-                    u => u.Role == role
-                );
+                query =
+                    query.Where(
+                        u =>
+                            u.Role ==
+                            role
+                    );
             }
 
-            // =================================================
-            // CLINIC ADMIN SCOPE
-            // =================================================
-
-            if (actor.User.Role == RoleNames.ClinicAdmin)
+            if (
+                actor.User.Role ==
+                RoleNames.ClinicAdmin
+            )
             {
-                if (actor.Admin.ClinicId == null)
+                if (
+                    actor.Admin.ClinicId ==
+                    null
+                )
                 {
                     throw new InvalidOperationException(
                         "ClinicAdmin account has no clinic assigned."
                     );
                 }
 
-                var clinicId = actor.Admin.ClinicId.Value;
+                var clinicId =
+                    actor.Admin.ClinicId.Value;
 
-                query = query.Where(u =>
-                    (
-                        u.Role == RoleNames.Nurse &&
-                        u.Nurse != null &&
-                        u.Nurse.ClinicId == clinicId
-                    )
-                    ||
-                    (
-                        u.Role == RoleNames.Patient &&
-                        u.Patient != null &&
-                        u.Patient.ClinicId == clinicId
-                    )
-                    ||
-                    /*
-                     * Proxies currently have no direct ClinicId.
-                     * They will later be scoped through their
-                     * patient assignments.
-                     */
-                    u.Id == performedByUserId
-                );
+                query =
+                    query.Where(
+                        u =>
+                            (
+                                u.Role ==
+                                    RoleNames.Nurse &&
+                                u.Nurse != null &&
+                                u.Nurse.ClinicId ==
+                                    clinicId
+                            )
+                            ||
+                            (
+                                u.Role ==
+                                    RoleNames.Patient &&
+                                u.Patient != null &&
+                                u.Patient.ClinicId ==
+                                    clinicId
+                            )
+                            ||
+                            u.Id ==
+                                performedByUserId
+                    );
             }
 
-            var users = await query
-                .OrderBy(u => u.FullName)
-                .ToListAsync();
+            var users =
+                await query
+                    .OrderBy(
+                        u =>
+                            u.FullName
+                    )
+                    .ToListAsync();
 
-            return users.Select(
-                u => new AdminAccountDto
-                {
-                    UserId = u.Id,
+            return users
+                .Select(
+                    u =>
+                        new AdminAccountDto
+                        {
+                            UserId =
+                                u.Id,
 
-                    FullName = u.FullName,
+                            FullName =
+                                u.FullName,
 
-                    IdNumber = u.IdNumber,
+                            IdNumber =
+                                u.IdNumber,
 
-                    Role = u.Role,
+                            Role =
+                                u.Role,
 
-                    IsActive = u.IsActive
-                }
-            ).ToList();
+                            IsActive =
+                                u.IsActive
+                        }
+                )
+                .ToList();
         }
 
         // =====================================================
@@ -351,53 +438,65 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            // =================================================
-            // SUPER ADMIN
-            // =================================================
-
-            if (actor.User.Role == RoleNames.SuperAdmin)
+            if (
+                actor.User.Role ==
+                RoleNames.SuperAdmin
+            )
             {
                 return new AdminDashboardDto
                 {
                     TotalNurses =
-                        await _context.Nurses.CountAsync(),
+                        await _context.Nurses
+                            .CountAsync(),
 
                     ActiveNurses =
-                        await _context.Users.CountAsync(
-                            u =>
-                                u.Role == RoleNames.Nurse &&
-                                u.IsActive
-                        ),
+                        await _context.Users
+                            .CountAsync(
+                                u =>
+                                    u.Role ==
+                                        RoleNames.Nurse &&
+                                    u.IsActive
+                            ),
 
                     TotalProxies =
-                        await _context.Proxies.CountAsync(),
+                        await _context.Proxies
+                            .CountAsync(),
 
                     ActiveProxies =
-                        await _context.Users.CountAsync(
-                            u =>
-                                u.Role == RoleNames.Proxy &&
-                                u.IsActive
-                        ),
+                        await _context.Users
+                            .CountAsync(
+                                u =>
+                                    u.Role ==
+                                        RoleNames.Proxy &&
+                                    u.IsActive
+                            ),
 
                     TotalPatients =
-                        await _context.Patients.CountAsync(),
+                        await _context.Patients
+                            .CountAsync(),
 
                     ActivePatients =
-                        await _context.Users.CountAsync(
-                            u =>
-                                u.Role == RoleNames.Patient &&
-                                u.IsActive
-                        ),
+                        await _context.Users
+                            .CountAsync(
+                                u =>
+                                    u.Role ==
+                                        RoleNames.Patient &&
+                                    u.IsActive
+                            ),
 
-                    TotalProxyLinks = await _context.ProxyLinks.CountAsync(pl => pl.IsActive)
+                    TotalProxyLinks =
+                        await _context.ProxyLinks
+                            .CountAsync(
+                                pl =>
+                                    pl.IsActive
+                            )
                 };
             }
 
-            // =================================================
-            // CLINIC ADMIN
-            // =================================================
-
-            if (actor.Admin.ClinicId == null)
+            if (
+                actor.Admin.ClinicId ==
+                null
+            )
             {
                 throw new InvalidOperationException(
                     "ClinicAdmin account has no clinic assigned."
@@ -409,53 +508,72 @@ namespace PersonalProject.Services.Implementations
 
             var clinicPatientIds =
                 _context.Patients
-                    .Where(p => p.ClinicId == clinicId)
-                    .Select(p => p.Id);
+                    .Where(
+                        p =>
+                            p.ClinicId ==
+                            clinicId
+                    )
+                    .Select(
+                        p =>
+                            p.Id
+                    );
 
             return new AdminDashboardDto
             {
                 TotalNurses =
-                    await _context.Nurses.CountAsync(
-                        n => n.ClinicId == clinicId
-                    ),
+                    await _context.Nurses
+                        .CountAsync(
+                            n =>
+                                n.ClinicId ==
+                                clinicId
+                        ),
 
                 ActiveNurses =
                     await _context.Nurses
                         .Where(
-                            n => n.ClinicId == clinicId
+                            n =>
+                                n.ClinicId ==
+                                clinicId
                         )
                         .CountAsync(
-                            n => n.User.IsActive
+                            n =>
+                                n.User.IsActive
                         ),
 
                 TotalPatients =
-                    await _context.Patients.CountAsync(
-                        p => p.ClinicId == clinicId
-                    ),
+                    await _context.Patients
+                        .CountAsync(
+                            p =>
+                                p.ClinicId ==
+                                clinicId
+                        ),
 
                 ActivePatients =
                     await _context.Patients
                         .Where(
-                            p => p.ClinicId == clinicId
+                            p =>
+                                p.ClinicId ==
+                                clinicId
                         )
                         .CountAsync(
-                            p => p.User.IsActive
+                            p =>
+                                p.User.IsActive
                         ),
 
-                /*
-                 * Proxy totals for ClinicAdmin are based on
-                 * proxies assigned to patients in the clinic.
-                 */
                 TotalProxies =
                     await _context.ProxyLinks
                         .Where(
                             pl =>
-                                clinicPatientIds.Contains(
-                                    pl.PatientId
-                                ) &&
+                                clinicPatientIds
+                                    .Contains(
+                                        pl.PatientId
+                                    ) &&
                                 pl.IsActive
                         )
-                        .Select(pl => pl.ProxyId)
+                        .Select(
+                            pl =>
+                                pl.ProxyId
+                        )
                         .Distinct()
                         .CountAsync(),
 
@@ -463,29 +581,35 @@ namespace PersonalProject.Services.Implementations
                     await _context.ProxyLinks
                         .Where(
                             pl =>
-                                clinicPatientIds.Contains(
-                                    pl.PatientId
-                                ) &&
+                                clinicPatientIds
+                                    .Contains(
+                                        pl.PatientId
+                                    ) &&
                                 pl.IsActive &&
                                 pl.Proxy.User.IsActive
                         )
-                        .Select(pl => pl.ProxyId)
+                        .Select(
+                            pl =>
+                                pl.ProxyId
+                        )
                         .Distinct()
                         .CountAsync(),
 
                 TotalProxyLinks =
-                    await _context.ProxyLinks.CountAsync(
-                        pl =>
-                            clinicPatientIds.Contains(
-                                pl.PatientId
-                            ) &&
-                            pl.IsActive
-                    )
+                    await _context.ProxyLinks
+                        .CountAsync(
+                            pl =>
+                                clinicPatientIds
+                                    .Contains(
+                                        pl.PatientId
+                                    ) &&
+                                pl.IsActive
+                        )
             };
         }
 
         // =====================================================
-        // DEACTIVATE ACCOUNT
+        // DEACTIVATE / ACTIVATE
         // =====================================================
 
         public async Task DeactivateAccountAsync(
@@ -500,11 +624,10 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        // =====================================================
-        // ACTIVATE ACCOUNT
-        // =====================================================
-
-        public async Task ActivateAccountAsync(Guid userId, Guid performedByUserId)
+        public async Task ActivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        )
         {
             await SetActiveAsync(
                 userId,
@@ -513,10 +636,14 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // CLINIC ADMIN SELF
+        // =====================================================
+
         public async Task<ClinicAdminMeDto>
-    GetClinicAdminMeAsync(
-        Guid performedByUserId
-    )
+            GetClinicAdminMeAsync(
+                Guid performedByUserId
+            )
         {
             var actor =
                 await GetAdminActorAsync(
@@ -526,7 +653,8 @@ namespace PersonalProject.Services.Implementations
             if (
                 actor.User.Role !=
                     RoleNames.ClinicAdmin ||
-                actor.Admin.ClinicId == null
+                actor.Admin.ClinicId ==
+                    null
             )
             {
                 throw new UnauthorizedAccessException(
@@ -574,6 +702,10 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
+        // =====================================================
+        // CLINIC OVERVIEW
+        // =====================================================
+
         public async Task<ClinicAdminOverviewDto>
             GetClinicOverviewAsync(
                 Guid performedByUserId
@@ -587,7 +719,8 @@ namespace PersonalProject.Services.Implementations
             if (
                 actor.User.Role !=
                     RoleNames.ClinicAdmin ||
-                actor.Admin.ClinicId == null
+                actor.Admin.ClinicId ==
+                    null
             )
             {
                 throw new UnauthorizedAccessException(
@@ -601,7 +734,9 @@ namespace PersonalProject.Services.Implementations
             var clinic =
                 await _context.Clinics
                     .FirstOrDefaultAsync(
-                        c => c.Id == clinicId
+                        c =>
+                            c.Id ==
+                            clinicId
                     );
 
             if (clinic == null)
@@ -646,7 +781,7 @@ namespace PersonalProject.Services.Implementations
                             a.ScheduledAt <
                                 tomorrow &&
                             a.Status !=
-                                "Cancelled"
+                                AppointmentStatuses.Cancelled
                     );
 
             var collectionsDueToday =
@@ -661,9 +796,9 @@ namespace PersonalProject.Services.Implementations
                             c.ScheduledCollectionDate <
                                 tomorrow &&
                             c.Status !=
-                                "Collected" &&
+                                MedicationCollectionStatuses.Collected &&
                             c.Status !=
-                                "Cancelled"
+                                MedicationCollectionStatuses.Cancelled
                     );
 
             var overdueCollections =
@@ -676,9 +811,9 @@ namespace PersonalProject.Services.Implementations
                             c.ScheduledCollectionDate <
                                 today &&
                             c.Status !=
-                                "Collected" &&
+                                MedicationCollectionStatuses.Collected &&
                             c.Status !=
-                                "Cancelled"
+                                MedicationCollectionStatuses.Cancelled
                     );
 
             var lowStockItems =
@@ -720,28 +855,42 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
-
         // =====================================================
         // CENTRAL ACCOUNT STATUS
         // =====================================================
 
-        private async Task SetActiveAsync(Guid targetUserId, bool isActive, Guid performedByUserId)
+        private async Task SetActiveAsync(
+            Guid targetUserId,
+            bool isActive,
+            Guid performedByUserId
+        )
         {
-            var actor = await GetAdminActorAsync(performedByUserId);
+            var actor =
+                await GetAdminActorAsync(
+                    performedByUserId
+                );
 
-            if (targetUserId == performedByUserId)
+            if (
+                targetUserId ==
+                performedByUserId
+            )
             {
-                throw new InvalidOperationException("You cannot change the active state of your own account.");
+                throw new InvalidOperationException(
+                    "You cannot change the active state of your own account."
+                );
             }
 
-            var target = await _context.Users
-                .Include(u => u.Admin)
-                .Include(u => u.Nurse)
-                .Include(u => u.Proxy)
-                .Include(u => u.Patient)
-                .FirstOrDefaultAsync(
-                    u => u.Id == targetUserId
-                );
+            var target =
+                await _context.Users
+                    .Include(u => u.Admin)
+                    .Include(u => u.Nurse)
+                    .Include(u => u.Proxy)
+                    .Include(u => u.Patient)
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id ==
+                            targetUserId
+                    );
 
             if (target == null)
             {
@@ -750,13 +899,15 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // =================================================
-            // CLINIC ADMIN RESTRICTIONS
-            // =================================================
-
-            if (actor.User.Role == RoleNames.ClinicAdmin)
+            if (
+                actor.User.Role ==
+                RoleNames.ClinicAdmin
+            )
             {
-                if (actor.Admin.ClinicId == null)
+                if (
+                    actor.Admin.ClinicId ==
+                    null
+                )
                 {
                     throw new InvalidOperationException(
                         "ClinicAdmin account has no clinic assigned."
@@ -768,13 +919,17 @@ namespace PersonalProject.Services.Implementations
 
                 var allowed =
                     (
-                        target.Role == RoleNames.Nurse &&
-                        target.Nurse?.ClinicId == clinicId
+                        target.Role ==
+                            RoleNames.Nurse &&
+                        target.Nurse?.ClinicId ==
+                            clinicId
                     )
                     ||
                     (
-                        target.Role == RoleNames.Patient &&
-                        target.Patient?.ClinicId == clinicId
+                        target.Role ==
+                            RoleNames.Patient &&
+                        target.Patient?.ClinicId ==
+                            clinicId
                     );
 
                 if (!allowed)
@@ -785,13 +940,11 @@ namespace PersonalProject.Services.Implementations
                 }
             }
 
-            // =================================================
-            // SUPERADMIN PROTECTION
-            // =================================================
-
             if (
-                target.Role == RoleNames.SuperAdmin &&
-                actor.User.Role != RoleNames.SuperAdmin
+                target.Role ==
+                    RoleNames.SuperAdmin &&
+                actor.User.Role !=
+                    RoleNames.SuperAdmin
             )
             {
                 throw new UnauthorizedAccessException(
@@ -799,29 +952,37 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            target.IsActive = isActive;
-            target.UpdatedAt = DateTime.UtcNow;
+            target.IsActive =
+                isActive;
 
-            /*
-             * Temporarily keep legacy profile flags synchronized
-             * while those properties still exist.
-             */
+            target.UpdatedAt =
+                DateTime.UtcNow;
+
             if (target.Nurse != null)
             {
-                target.Nurse.IsActive = isActive;
-                target.Nurse.UpdatedAt = DateTime.UtcNow;
+                target.Nurse.IsActive =
+                    isActive;
+
+                target.Nurse.UpdatedAt =
+                    DateTime.UtcNow;
             }
 
             if (target.Proxy != null)
             {
-                target.Proxy.IsActive = isActive;
-                target.Proxy.UpdatedAt = DateTime.UtcNow;
+                target.Proxy.IsActive =
+                    isActive;
+
+                target.Proxy.UpdatedAt =
+                    DateTime.UtcNow;
             }
 
             if (target.Patient != null)
             {
-                target.Patient.IsActive = isActive;
-                target.Patient.UpdatedAt = DateTime.UtcNow;
+                target.Patient.IsActive =
+                    isActive;
+
+                target.Patient.UpdatedAt =
+                    DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
@@ -847,10 +1008,15 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var exists = await _context.Users.AnyAsync(u =>
-                u.IdNumber == idNumber ||
-                u.PhoneNumber == phoneNumber
-            );
+            var exists =
+                await _context.Users
+                    .AnyAsync(
+                        u =>
+                            u.IdNumber ==
+                                idNumber ||
+                            u.PhoneNumber ==
+                                phoneNumber
+                    );
 
             if (exists)
             {
@@ -865,35 +1031,50 @@ namespace PersonalProject.Services.Implementations
                     idNumber
                 );
 
-            var user = new User
-            {
-                Id = Guid.NewGuid(),
+            var user =
+                new User
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                FullName = fullName.Trim(),
+                    FullName =
+                        fullName.Trim(),
 
-                IdNumber = idNumber.Trim(),
+                    IdNumber =
+                        idNumber.Trim(),
 
-                PhoneNumber = phoneNumber.Trim(),
+                    PhoneNumber =
+                        phoneNumber.Trim(),
 
-                Email = email.Trim(),
+                    Email =
+                        email.Trim(),
 
-                PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(
-                        tempPassword
-                    ),
+                    PasswordHash =
+                        BCrypt.Net.BCrypt
+                            .HashPassword(
+                                tempPassword
+                            ),
 
-                Role = role,
+                    Role =
+                        role,
 
-                IsActive = true,
+                    IsActive =
+                        true,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Users.Add(user);
+            _context.Users.Add(
+                user
+            );
 
             await _context.SaveChangesAsync();
 
-            return (user, tempPassword);
+            return (
+                user,
+                tempPassword
+            );
         }
 
         // =====================================================
@@ -901,13 +1082,21 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         private async Task<(User User, Admin Admin)>
-            GetAdminActorAsync(Guid userId)
+            GetAdminActorAsync(
+                Guid userId
+            )
         {
-            var user = await _context.Users
-                .Include(u => u.Admin)
-                .FirstOrDefaultAsync(
-                    u => u.Id == userId
-                );
+            var user =
+                await _context.Users
+                    .Include(
+                        u =>
+                            u.Admin
+                    )
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id ==
+                            userId
+                    );
 
             if (
                 user == null ||
@@ -927,8 +1116,10 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role != RoleNames.SuperAdmin &&
-                user.Role != RoleNames.ClinicAdmin
+                user.Role !=
+                    RoleNames.SuperAdmin &&
+                user.Role !=
+                    RoleNames.ClinicAdmin
             )
             {
                 throw new UnauthorizedAccessException(
@@ -936,7 +1127,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return (user, user.Admin);
+            return (
+                user,
+                user.Admin
+            );
         }
 
         // =====================================================
@@ -948,14 +1142,19 @@ namespace PersonalProject.Services.Implementations
             Guid clinicId
         )
         {
-            if (actor.User.Role == RoleNames.SuperAdmin)
+            if (
+                actor.User.Role ==
+                RoleNames.SuperAdmin
+            )
             {
                 return Task.CompletedTask;
             }
 
             if (
-                actor.Admin.ClinicId == null ||
-                actor.Admin.ClinicId != clinicId
+                actor.Admin.ClinicId ==
+                    null ||
+                actor.Admin.ClinicId !=
+                    clinicId
             )
             {
                 throw new UnauthorizedAccessException(
@@ -1052,7 +1251,9 @@ namespace PersonalProject.Services.Implementations
                 password
             );
 
-            return new string(password);
+            return new string(
+                password
+            );
         }
 
         // =====================================================
@@ -1067,13 +1268,17 @@ namespace PersonalProject.Services.Implementations
         {
             return new NewStaffAccountDto
             {
-                UserId = user.Id,
+                UserId =
+                    user.Id,
 
-                FullName = user.FullName,
+                FullName =
+                    user.FullName,
 
-                IdNumber = user.IdNumber,
+                IdNumber =
+                    user.IdNumber,
 
-                Role = user.Role,
+                Role =
+                    user.Role,
 
                 TemporaryPassword =
                     temporaryPassword

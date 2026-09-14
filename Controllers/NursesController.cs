@@ -9,8 +9,7 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/nurses")]
     [Authorize(Roles = RoleNames.Nurse)]
-    public class NursesController :
-        ControllerBase
+    public class NursesController : ControllerBase
     {
         private readonly INurseService _nurseService;
 
@@ -65,6 +64,24 @@ namespace PersonalProject.Controllers
                 return Ok(
                     await _nurseService
                         .GetClinicPatientsAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpGet("me/alerts")]
+        public async Task<IActionResult> Alerts()
+        {
+            try
+            {
+                return Ok(
+                    await _nurseService
+                        .GetUrgentAlertsAsync(
                             GetCurrentUserId()
                         )
                 );

@@ -19,9 +19,14 @@ namespace PersonalProject.Services.Implementations
             _context = context;
         }
 
-        public async Task<NurseMeDto> GetMeAsync(Guid userId)
+        public async Task<NurseMeDto> GetMeAsync(
+            Guid userId
+        )
         {
-            var nurse = await GetActiveNurseAsync(userId);
+            var nurse =
+                await GetActiveNurseAsync(
+                    userId
+                );
 
             await _context.Entry(nurse)
                 .Reference(n => n.Clinic)
@@ -97,7 +102,7 @@ namespace PersonalProject.Services.Implementations
                             a.ScheduledAt <
                                 tomorrow &&
                             a.Status !=
-                                "Cancelled"
+                                AppointmentStatuses.Cancelled
                     );
 
             var collectionsDueToday =
@@ -112,9 +117,9 @@ namespace PersonalProject.Services.Implementations
                             c.ScheduledCollectionDate <
                                 tomorrow &&
                             c.Status !=
-                                "Collected" &&
+                                MedicationCollectionStatuses.Collected &&
                             c.Status !=
-                                "Cancelled"
+                                MedicationCollectionStatuses.Cancelled
                     );
 
             var overdueCollections =
@@ -127,18 +132,11 @@ namespace PersonalProject.Services.Implementations
                             c.ScheduledCollectionDate <
                                 today &&
                             c.Status !=
-                                "Collected" &&
+                                MedicationCollectionStatuses.Collected &&
                             c.Status !=
-                                "Cancelled"
+                                MedicationCollectionStatuses.Cancelled
                     );
 
-            /*
-             * For now "low stock" means quantity on hand
-             * is at or below the configured reorder level.
-             *
-             * This uses the existing stock model instead
-             * of inventing another supply system.
-             */
             var lowStockItems =
                 await _context.ClinicStocks
                     .CountAsync(
@@ -169,8 +167,7 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
-        public async Task<
-            List<NursePatientDto>>
+        public async Task<List<NursePatientDto>>
             GetClinicPatientsAsync(
                 Guid userId
             )
@@ -192,31 +189,120 @@ namespace PersonalProject.Services.Implementations
                     p => p.User.FullName
                 )
                 .Select(
-                    p => new NursePatientDto
-                    {
-                        PatientId =
-                            p.Id,
+                    p =>
+                        new NursePatientDto
+                        {
+                            PatientId =
+                                p.Id,
 
-                        UserId =
-                            p.UserId,
+                            UserId =
+                                p.UserId,
 
-                        PatientNumber =
-                            p.PatientNumber,
+                            PatientNumber =
+                                p.PatientNumber,
 
-                        FullName =
-                            p.User.FullName,
+                            FullName =
+                                p.User.FullName,
 
-                        DateOfBirth =
-                            p.DateOfBirth,
+                            DateOfBirth =
+                                p.DateOfBirth,
 
-                        Gender =
-                            p.Gender,
+                            Gender =
+                                p.Gender,
 
-                        PhoneNumber =
-                            p.User.PhoneNumber
-                    }
+                            PhoneNumber =
+                                p.User.PhoneNumber
+                        }
                 )
                 .ToListAsync();
+        }
+
+        public async Task<List<NurseAlertDto>>
+            GetUrgentAlertsAsync(
+                Guid userId
+            )
+        {
+            var nurse =
+                await GetActiveNurseAsync(
+                    userId
+                );
+
+            var clinicId =
+                nurse.ClinicId;
+
+            var today =
+                DateTime.UtcNow.Date;
+
+            var overdueCollections =
+                await _context
+                    .MedicationCollections
+                    .CountAsync(
+                        c =>
+                            c.ClinicId ==
+                                clinicId &&
+                            c.ScheduledCollectionDate <
+                                today &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Collected &&
+                            c.Status !=
+                                MedicationCollectionStatuses.Cancelled
+                    );
+
+            var lowStockItems =
+                await _context.ClinicStocks
+                    .CountAsync(
+                        s =>
+                            s.ClinicId ==
+                                clinicId &&
+                            s.IsActive &&
+                            s.QuantityOnHand <=
+                                s.ReorderLevel
+                    );
+
+            var alerts =
+                new List<NurseAlertDto>();
+
+            if (overdueCollections > 0)
+            {
+                alerts.Add(
+                    new NurseAlertDto
+                    {
+                        Code =
+                            "OVERDUE_COLLECTIONS",
+
+                        Severity =
+                            "High",
+
+                        Count =
+                            overdueCollections,
+
+                        Message =
+                            $"{overdueCollections} medication collection(s) are overdue."
+                    }
+                );
+            }
+
+            if (lowStockItems > 0)
+            {
+                alerts.Add(
+                    new NurseAlertDto
+                    {
+                        Code =
+                            "LOW_STOCK",
+
+                        Severity =
+                            "Medium",
+
+                        Count =
+                            lowStockItems,
+
+                        Message =
+                            $"{lowStockItems} clinic stock item(s) are at or below reorder level."
+                    }
+                );
+            }
+
+            return alerts;
         }
 
         private async Task<Nurse>
