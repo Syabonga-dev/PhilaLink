@@ -13,6 +13,9 @@ namespace PersonalProject.Models.Entities
         public User User { get; set; } = null!;
 
         public string PatientNumber { get; set; } = string.Empty;
+        public bool IsProfileComplete { get; set; }
+
+        public DateTime? ProfileCompletedAt { get; set; }
 
         // =====================================================
         // CLINIC

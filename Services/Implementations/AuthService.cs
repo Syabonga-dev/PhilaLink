@@ -34,10 +34,11 @@ namespace PersonalProject.Services.Implementations
             RegisterDto dto
         )
         {
-            var exists = await _context.Users.AnyAsync(u =>
-                u.IdNumber == dto.IdNumber ||
-                u.PhoneNumber == dto.PhoneNumber
-            );
+            var exists =
+                await _context.Users.AnyAsync(u =>
+                    u.IdNumber == dto.IdNumber.Trim() ||
+                    u.PhoneNumber == dto.PhoneNumber.Trim()
+                );
 
             if (exists)
             {
@@ -45,6 +46,10 @@ namespace PersonalProject.Services.Implementations
                     "An account with that ID number or phone number already exists."
                 );
             }
+
+            await using var transaction =
+                await _context.Database
+                    .BeginTransactionAsync();
 
             var user = new User
             {
@@ -59,7 +64,9 @@ namespace PersonalProject.Services.Implementations
                 Email = dto.Email.Trim(),
 
                 PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                    BCrypt.Net.BCrypt.HashPassword(
+                        dto.Password
+                    ),
 
                 Role = RoleNames.Patient,
 
@@ -70,19 +77,59 @@ namespace PersonalProject.Services.Implementations
 
             _context.Users.Add(user);
 
+            var patient = new Patient
+            {
+                Id = Guid.NewGuid(),
+
+                UserId = user.Id,
+
+                PatientNumber =
+                    await GeneratePatientNumberAsync(),
+
+                Email = user.Email,
+
+                IsActive = true,
+
+                IsProfileComplete = false,
+
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Patients.Add(patient);
+
+            var preference = new PatientPreference
+            {
+                Id = Guid.NewGuid(),
+
+                PatientId = patient.Id,
+
+                MedicationReminders = true,
+
+                AppointmentReminders = true,
+
+                ClinicNotifications = true,
+
+                HealthUpdates = false,
+
+                ShareHealthData = true,
+
+                AllowChatbotProfileAccess = true,
+
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.PatientPreferences.Add(preference);
+
             await _context.SaveChangesAsync();
 
-            /*
-             * Patient profile creation will be completed during the
-             * dedicated Patient onboarding batch because RegisterDto
-             * currently does not contain DateOfBirth, address,
-             * emergency contact, etc.
-             */
+            await transaction.CommitAsync();
 
             return new RegisterResponseDto
             {
                 UserId = user.Id,
+
                 FullName = user.FullName,
+
                 Role = user.Role
             };
         }
@@ -91,7 +138,9 @@ namespace PersonalProject.Services.Implementations
         // LOGIN
         // =====================================================
 
-        public async Task<LoginResponseDto> LoginAsync(LoginDto dto)
+        public async Task<LoginResponseDto> LoginAsync(
+            LoginDto dto
+        )
         {
             var user = await _context.Users
                 .FirstOrDefaultAsync(
@@ -115,9 +164,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // =====================================================
+            // =================================================
             // ACCOUNT STATUS
-            // =====================================================
+            // =================================================
 
             if (!user.IsActive)
             {
@@ -126,9 +175,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // =====================================================
+            // =================================================
             // LEGACY ROLE PROTECTION
-            // =====================================================
+            // =================================================
 
             /*
              * The old architecture used Role = "Admin".
@@ -166,12 +215,45 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
+        // PATIENT NUMBER
+        // =====================================================
+
+        private async Task<string>
+            GeneratePatientNumberAsync()
+        {
+            string patientNumber;
+
+            do
+            {
+                var suffix =
+                    Guid.NewGuid()
+                        .ToString("N")[..8]
+                        .ToUpperInvariant();
+
+                patientNumber =
+                    $"PHL-{DateTime.UtcNow.Year}-{suffix}";
+            }
+            while (
+                await _context.Patients.AnyAsync(
+                    p =>
+                        p.PatientNumber ==
+                        patientNumber
+                )
+            );
+
+            return patientNumber;
+        }
+
+        // =====================================================
         // JWT
         // =====================================================
 
-        private string GenerateToken(User user)
+        private string GenerateToken(
+            User user
+        )
         {
-            var jwtKey = _config["Jwt:Key"];
+            var jwtKey =
+                _config["Jwt:Key"];
 
             if (string.IsNullOrWhiteSpace(jwtKey))
             {
@@ -180,7 +262,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var key = Encoding.UTF8.GetBytes(jwtKey);
+            var key =
+                Encoding.UTF8.GetBytes(
+                    jwtKey
+                );
 
             var claims = new[]
             {
@@ -205,21 +290,30 @@ namespace PersonalProject.Services.Implementations
                 )
             };
 
-            var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
+            var token =
+                new JwtSecurityToken(
+                    issuer:
+                        _config["Jwt:Issuer"],
 
-                audience: _config["Jwt:Audience"],
+                    audience:
+                        _config["Jwt:Audience"],
 
-                claims: claims,
+                    claims:
+                        claims,
 
-                expires: DateTime.UtcNow.AddHours(1),
+                    expires:
+                        DateTime.UtcNow
+                            .AddHours(1),
 
-                signingCredentials:
-                    new SigningCredentials(
-                        new SymmetricSecurityKey(key),
-                        SecurityAlgorithms.HmacSha256
-                    )
-            );
+                    signingCredentials:
+                        new SigningCredentials(
+                            new SymmetricSecurityKey(
+                                key
+                            ),
+                            SecurityAlgorithms
+                                .HmacSha256
+                        )
+                );
 
             return new JwtSecurityTokenHandler()
                 .WriteToken(token);
