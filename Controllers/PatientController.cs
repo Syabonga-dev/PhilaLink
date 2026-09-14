@@ -54,6 +54,48 @@ namespace PersonalProject.Controllers
             }
         }
 
+
+        [HttpPost(
+    "me/medications/{medicationId:guid}/log"
+)]
+        public async Task<IActionResult>
+    LogMedication(
+        Guid medicationId,
+        PatientMedicationLogDto dto
+    )
+        {
+            try
+            {
+                await _patientService
+                    .LogMedicationAsync(
+                        GetCurrentUserId(),
+                        medicationId,
+                        dto.Taken,
+                        dto.Notes
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            dto.Taken
+                                ? "Medication marked as taken."
+                                : "Medication marked as skipped."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
         // =====================================================
         // DASHBOARD
         // =====================================================

@@ -554,6 +554,22 @@ namespace PersonalProject.Data
 
 
             // =================================================
+            // AUDIT LOG → CLINIC
+            // =================================================
+
+            modelBuilder.Entity<AuditLog>()
+                .HasOne(a => a.Clinic)
+                .WithMany()
+                .HasForeignKey(a => a.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.ClinicId);
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.Timestamp);
+
+            // =================================================
             // PATIENT -> HEALTH METRICS
             // =================================================
 

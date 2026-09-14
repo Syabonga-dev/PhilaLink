@@ -2,66 +2,182 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/medications")]
     [Authorize(Policy = "ClinicStaff")]
-    public class MedicationController : ControllerBase
+    public class MedicationController :
+        ControllerBase
     {
-        private readonly IMedicationService _medicationService;
+        private readonly IMedicationService
+            _medicationService;
 
-        public MedicationController(IMedicationService medicationService)
+        public MedicationController(
+            IMedicationService medicationService
+        )
         {
-            _medicationService = medicationService;
+            _medicationService =
+                medicationService;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(MedicationCreateDto dto)
+        public async Task<IActionResult> Create(
+            MedicationCreateDto dto
+        )
         {
             try
             {
-                var result = await _medicationService.CreateMedicationAsync(dto.PatientId, dto.Name, dto.Dosage, dto.Instructions);
-
-                return Ok(result);
+                return Ok(
+                    await _medicationService
+                        .CreateMedicationAsync(
+                            dto,
+                            GetCurrentUserId()
+                        )
+                );
             }
-            catch (Exception ex)
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(
                     new { message = ex.Message }
                 );
             }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        [HttpGet("patient/{patientId:guid}")]
-        public async Task<IActionResult> GetByPatient(Guid patientId)
+        [HttpGet(
+            "patient/{patientId:guid}"
+        )]
+        public async Task<IActionResult>
+            GetByPatient(
+                Guid patientId
+            )
         {
-            var result = await _medicationService.GetPatientMedicationsAsync(patientId);
-
-            return Ok(result);
+            try
+            {
+                return Ok(
+                    await _medicationService
+                        .GetPatientMedicationsAsync(
+                            patientId,
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        [HttpPost("{medicationId:guid}/schedule")]
-        public async Task<IActionResult> AddSchedule(Guid medicationId, MedicationScheduleDto dto)
+        [HttpPost(
+            "{medicationId:guid}/schedule"
+        )]
+        public async Task<IActionResult>
+            AddSchedule(
+                Guid medicationId,
+                MedicationScheduleDto dto
+            )
         {
+            try
+            {
+                await _medicationService
+                    .AddScheduleAsync(
+                        medicationId,
+                        dto.TimeOfDay,
+                        GetCurrentUserId()
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Schedule added successfully."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpGet(
+            "{medicationId:guid}/logs"
+        )]
+        public async Task<IActionResult> GetLogs(
+            Guid medicationId
+        )
+        {
+            try
+            {
+                return Ok(
+                    await _medicationService
+                        .GetMedicationLogsAsync(
+                            medicationId,
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
             if (
-                dto.MedicationId != Guid.Empty &&
-                dto.MedicationId != medicationId
+                string.IsNullOrWhiteSpace(value) ||
+                !Guid.TryParse(
+                    value,
+                    out var userId
+                )
             )
             {
-                return BadRequest(new { message = "Medication ID mismatch." });
+                throw new UnauthorizedAccessException();
             }
 
-            var result = await _medicationService.AddScheduleAsync(medicationId, dto.TimeOfDay);
-
-            return Ok(new { message = result });
-        }
-
-        [HttpGet("{medicationId:guid}/logs")]
-        public async Task<IActionResult> GetLogs(Guid medicationId)
-        {
-            return Ok(await _medicationService.GetMedicationLogsAsync(medicationId));
+            return userId;
         }
     }
 }

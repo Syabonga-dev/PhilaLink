@@ -33,5 +33,7 @@ namespace PersonalProject.Services.Interfaces
         Task<PatientPreferenceDto> GetPreferencesAsync(Guid userId);
 
         Task<PatientPreferenceDto> UpdatePreferencesAsync(Guid userId, PatientPreferenceDto dto);
+
+        Task LogMedicationAsync(Guid userId,Guid medicationId,bool taken,string? notes);
     }
 }

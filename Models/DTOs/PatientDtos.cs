@@ -264,4 +264,11 @@
     {
         public DateTime ScheduledAt { get; set; }
     }
+
+    public class PatientMedicationLogDto
+    {
+        public bool Taken { get; set; }
+
+        public string? Notes { get; set; }
+    }
 }
