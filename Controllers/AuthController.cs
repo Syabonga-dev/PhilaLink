@@ -46,19 +46,36 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPost("otp/generate")]
-        public async Task<IActionResult> GenerateOtp(Guid userId)
+        public async Task<IActionResult> GenerateOtp(
+    Guid userId
+)
         {
             try
             {
-                var otp = await _otpService.GenerateAsync(userId);
-                // NOTE: intentionally NOT returning `otp` itself — that would
-                // leak the code straight back in the HTTP response, defeating
-                // the point of emailing it out-of-band.
-                return Ok(new { message = "Verification code sent.", expiresAt = otp.ExpiryTime });
+                var expiresAt =
+                    await _otpService
+                        .GenerateAsync(
+                            userId
+                        );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Verification code sent.",
+
+                        expiresAt
+                    }
+                );
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(
+                    new
+                    {
+                        message = ex.Message
+                    }
+                );
             }
         }
 

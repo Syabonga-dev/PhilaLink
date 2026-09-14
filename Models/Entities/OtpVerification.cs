@@ -8,10 +8,20 @@ namespace PersonalProject.Models.Entities
 
         public User User { get; set; } = null!;
 
-        public string Code { get; set; } = string.Empty;
+        /*
+         * Never store the verification code itself.
+         * Only the BCrypt hash is persisted.
+         */
+        public string CodeHash { get; set; } =
+            string.Empty;
 
         public DateTime ExpiryTime { get; set; }
 
         public bool IsUsed { get; set; } = false;
+
+        public int AttemptCount { get; set; } = 0;
+
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
     }
 }
