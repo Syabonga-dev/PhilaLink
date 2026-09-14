@@ -1,40 +1,57 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PersonalProject.Services.Interfaces;
 using PersonalProject.Models.DTOs;
+using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/notifications")]
+    [Authorize(Policy = "ClinicStaff")]
     public class NotificationController : ControllerBase
     {
         private readonly INotificationService _service;
 
-        public NotificationController(INotificationService service)
+        public NotificationController(
+            INotificationService service
+        )
         {
             _service = service;
         }
 
-        [HttpGet("{userId}")]
-        public async Task<IActionResult> GetUserNotifications(Guid userId)
-        {
-            var result = await _service.GetUserNotificationsAsync(userId);
-            return Ok(result);
-        }
-
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateNotificationDto dto)
+        public async Task<IActionResult> Create(
+            CreateNotificationDto dto
+        )
         {
-            await _service.CreateAsync(dto.UserId, dto.Message);
-            return Ok("Notification created");
-        }
+            if (
+                dto.UserId == Guid.Empty ||
+                string.IsNullOrWhiteSpace(
+                    dto.Message
+                )
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "UserId and message are required."
+                    }
+                );
+            }
 
-        [HttpPut("mark-read/{id}")]
-        public async Task<IActionResult> MarkAsRead(Guid id)
-        {
-            await _service.MarkAsReadAsync(id);
-            return Ok("Marked as read");
+            await _service.CreateAsync(
+                dto.UserId,
+                dto.Message.Trim()
+            );
+
+            return Ok(
+                new
+                {
+                    message =
+                        "Notification created."
+                }
+            );
         }
     }
 }
-

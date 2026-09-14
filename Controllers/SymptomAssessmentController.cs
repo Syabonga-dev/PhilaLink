@@ -1,33 +1,101 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    public class SymptomAssessmentController : ControllerBase
+    [Route("api/symptom-assessments")]
+    [Authorize(Policy = "PatientOnly")]
+    public class SymptomAssessmentController :
+        ControllerBase
     {
-        private readonly ISymptomAssessmentService _service;
+        private readonly
+            ISymptomAssessmentService _service;
 
-        public SymptomAssessmentController(ISymptomAssessmentService service)
+        public SymptomAssessmentController(
+            ISymptomAssessmentService service
+        )
         {
             _service = service;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] SymptomCreateDto dto)
+        public async Task<IActionResult> Create(
+            SymptomCreateDto dto
+        )
         {
-            var result = await _service.CreateAsync(dto.PatientId, dto.Symptoms);
-            return Ok(result);
+            try
+            {
+                if (
+                    string.IsNullOrWhiteSpace(
+                        dto.Symptoms
+                    )
+                )
+                {
+                    return BadRequest(
+                        new
+                        {
+                            message =
+                                "Symptoms are required."
+                        }
+                    );
+                }
+
+                var result =
+                    await _service
+                        .CreateForPatientAsync(
+                            GetCurrentUserId(),
+                            dto.Symptoms
+                        );
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        [HttpGet("{patientId}")]
-        public async Task<IActionResult> GetByPatient(Guid patientId)
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMine()
         {
-            var result = await _service.GetByPatientAsync(patientId);
-            return Ok(result);
+            try
+            {
+                return Ok(
+                    await _service
+                        .GetMyAssessmentsAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
+            if (
+                string.IsNullOrWhiteSpace(value) ||
+                !Guid.TryParse(
+                    value,
+                    out var userId
+                )
+            )
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            return userId;
         }
     }
 }
-

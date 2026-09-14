@@ -1,18 +1,32 @@
-using PersonalProject.Models.Entities;
+using PersonalProject.Models.DTOs;
 
 namespace PersonalProject.Services.Interfaces
 {
     public interface IClinicService
     {
-        Task<Clinic> CreateAsync(string name, string address, string contactNumber);
+        Task<ClinicResponseDto> CreateAsync(
+            CreateClinicDto dto
+        );
 
-        Task<List<Clinic>> GetAllAsync();
+        Task<List<ClinicResponseDto>>
+            GetAllAsync();
 
-        Task<Clinic?> GetByIdAsync(Guid id);
+        Task<ClinicResponseDto?>
+            GetByIdAsync(
+                Guid id
+            );
 
-        Task<Clinic> UpdateAsync(Guid id, string name, string address, string contactNumber);
+        Task<ClinicResponseDto> UpdateAsync(
+            Guid id,
+            UpdateClinicDto dto
+        );
 
-        Task<bool> DeleteAsync(Guid id);
+        Task DeactivateAsync(
+            Guid id
+        );
+
+        Task ActivateAsync(
+            Guid id
+        );
     }
 }
-

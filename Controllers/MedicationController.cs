@@ -1,56 +1,109 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/medications")]
+    [Authorize(Policy = "ClinicStaff")]
     public class MedicationController : ControllerBase
     {
-        private readonly IMedicationService _medicationService;
+        private readonly IMedicationService
+            _medicationService;
 
-        public MedicationController(IMedicationService medicationService)
+        public MedicationController(
+            IMedicationService medicationService
+        )
         {
-            _medicationService = medicationService;
+            _medicationService =
+                medicationService;
         }
 
-        // CREATE MEDICATION
         [HttpPost]
-        public async Task<IActionResult> Create(Guid patientId, string name, string dosage, string instructions)
+        public async Task<IActionResult> Create(
+            MedicationCreateDto dto
+        )
         {
-            var result = await _medicationService.CreateMedicationAsync(patientId, name, dosage, instructions);
+            try
+            {
+                var result =
+                    await _medicationService
+                        .CreateMedicationAsync(
+                            dto.PatientId,
+                            dto.Name,
+                            dto.Dosage,
+                            dto.Instructions
+                        );
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(
+                    new { message = ex.Message }
+                );
+            }
+        }
+
+        [HttpGet("patient/{patientId:guid}")]
+        public async Task<IActionResult> GetByPatient(
+            Guid patientId
+        )
+        {
+            var result =
+                await _medicationService
+                    .GetPatientMedicationsAsync(
+                        patientId
+                    );
+
             return Ok(result);
         }
 
-        // GET PATIENT MEDICATIONS
-        [HttpGet("patient/{patientId}")]
-        public async Task<IActionResult> GetByPatient(Guid patientId)
+        [HttpPost("{medicationId:guid}/schedule")]
+        public async Task<IActionResult> AddSchedule(
+            Guid medicationId,
+            MedicationScheduleDto dto
+        )
         {
-            return Ok(await _medicationService.GetPatientMedicationsAsync(patientId));
+            if (
+                dto.MedicationId != Guid.Empty &&
+                dto.MedicationId != medicationId
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Medication ID mismatch."
+                    }
+                );
+            }
+
+            var result =
+                await _medicationService
+                    .AddScheduleAsync(
+                        medicationId,
+                        dto.TimeOfDay
+                    );
+
+            return Ok(
+                new { message = result }
+            );
         }
 
-        // ADD SCHEDULE
-        [HttpPost("schedule")]
-        public async Task<IActionResult> AddSchedule(Guid medicationId, string timeOfDay)
+        [HttpGet("{medicationId:guid}/logs")]
+        public async Task<IActionResult> GetLogs(
+            Guid medicationId
+        )
         {
-            var result = await _medicationService.AddScheduleAsync(medicationId, timeOfDay);
-            return Ok(result);
-        }
-
-        // LOG MEDICATION
-        [HttpPost("log")]
-        public async Task<IActionResult> Log(Guid medicationId, bool taken, string? notes)
-        {
-            var result = await _medicationService.LogMedicationAsync(medicationId, taken, notes);
-            return Ok(result);
-        }
-
-        // GET LOGS
-        [HttpGet("logs/{medicationId}")]
-        public async Task<IActionResult> GetLogs(Guid medicationId)
-        {
-            return Ok(await _medicationService.GetMedicationLogsAsync(medicationId));
+            return Ok(
+                await _medicationService
+                    .GetMedicationLogsAsync(
+                        medicationId
+                    )
+            );
         }
     }
 }
-

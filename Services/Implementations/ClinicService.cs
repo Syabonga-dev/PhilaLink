@@ -1,64 +1,283 @@
+using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
+using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
-public class ClinicService : IClinicService
+namespace PersonalProject.Services.Implementations
 {
-    private readonly PhilaLinkDbContext _context;
-
-    public ClinicService(PhilaLinkDbContext context)
+    public class ClinicService : IClinicService
     {
-        _context = context;
-    }
+        private readonly PhilaLinkDbContext _context;
 
-    public async Task<Clinic> CreateAsync(string name, string address, string contactNumber)
-    {
-        var clinic = new Clinic
+        public ClinicService(
+            PhilaLinkDbContext context
+        )
         {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Address = address,
-            ContactNumber = contactNumber
-        };
+            _context = context;
+        }
 
-        _context.Clinics.Add(clinic);
-        await _context.SaveChangesAsync();
+        public async Task<ClinicResponseDto>
+            CreateAsync(
+                CreateClinicDto dto
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Name
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Clinic name is required."
+                );
+            }
 
-        return clinic;
-    }
+            var clinic =
+                new Clinic
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-    public async Task<List<Clinic>> GetAllAsync()
-    {
-        return await _context.Clinics.ToListAsync();
-    }
+                    Name =
+                        dto.Name.Trim(),
 
-    public async Task<Clinic?> GetByIdAsync(Guid id)
-    {
-        return await _context.Clinics.FindAsync(id);
-    }
+                    Type =
+                        string.IsNullOrWhiteSpace(
+                            dto.Type
+                        )
+                            ? "Clinic"
+                            : dto.Type.Trim(),
 
-    public async Task<Clinic> UpdateAsync(Guid id, string name, string address, string contactNumber)
-    {
-        var clinic = await _context.Clinics.FindAsync(id);
-        if (clinic == null) throw new Exception("Clinic not found");
+                    Address =
+                        dto.Address.Trim(),
 
-        clinic.Name = name;
-        clinic.Address = address;
-        clinic.ContactNumber = contactNumber;
+                    ContactNumber =
+                        dto.ContactNumber.Trim(),
 
-        await _context.SaveChangesAsync();
-        return clinic;
-    }
+                    Latitude =
+                        dto.Latitude,
 
-    public async Task<bool> DeleteAsync(Guid id)
-    {
-        var clinic = await _context.Clinics.FindAsync(id);
-        if (clinic == null) return false;
+                    Longitude =
+                        dto.Longitude,
 
-        _context.Clinics.Remove(clinic);
-        await _context.SaveChangesAsync();
-        return true;
+                    Services =
+                        dto.Services.Trim(),
+
+                    OpeningTime =
+                        dto.OpeningTime,
+
+                    ClosingTime =
+                        dto.ClosingTime,
+
+                    IsActive =
+                        true,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+            _context.Clinics.Add(clinic);
+
+            await _context.SaveChangesAsync();
+
+            return ToDto(clinic);
+        }
+
+        public async Task<List<ClinicResponseDto>>
+            GetAllAsync()
+        {
+            return await _context.Clinics
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.Name)
+                .Select(c =>
+                    new ClinicResponseDto
+                    {
+                        Id = c.Id,
+                        Name = c.Name,
+                        Type = c.Type,
+                        Address = c.Address,
+                        ContactNumber =
+                            c.ContactNumber,
+                        Latitude =
+                            c.Latitude,
+                        Longitude =
+                            c.Longitude,
+                        Services =
+                            c.Services,
+                        OpeningTime =
+                            c.OpeningTime,
+                        ClosingTime =
+                            c.ClosingTime,
+                        IsActive =
+                            c.IsActive
+                    }
+                )
+                .ToListAsync();
+        }
+
+        public async Task<ClinicResponseDto?>
+            GetByIdAsync(
+                Guid id
+            )
+        {
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c =>
+                            c.Id == id &&
+                            c.IsActive
+                    );
+
+            return clinic == null
+                ? null
+                : ToDto(clinic);
+        }
+
+        public async Task<ClinicResponseDto>
+            UpdateAsync(
+                Guid id,
+                UpdateClinicDto dto
+            )
+        {
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c => c.Id == id
+                    );
+
+            if (clinic == null)
+            {
+                throw new KeyNotFoundException(
+                    "Clinic not found."
+                );
+            }
+
+            clinic.Name =
+                dto.Name.Trim();
+
+            clinic.Type =
+                dto.Type.Trim();
+
+            clinic.Address =
+                dto.Address.Trim();
+
+            clinic.ContactNumber =
+                dto.ContactNumber.Trim();
+
+            clinic.Latitude =
+                dto.Latitude;
+
+            clinic.Longitude =
+                dto.Longitude;
+
+            clinic.Services =
+                dto.Services.Trim();
+
+            clinic.OpeningTime =
+                dto.OpeningTime;
+
+            clinic.ClosingTime =
+                dto.ClosingTime;
+
+            clinic.IsActive =
+                dto.IsActive;
+
+            clinic.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return ToDto(clinic);
+        }
+
+        public async Task DeactivateAsync(
+            Guid id
+        )
+        {
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c => c.Id == id
+                    );
+
+            if (clinic == null)
+            {
+                throw new KeyNotFoundException(
+                    "Clinic not found."
+                );
+            }
+
+            clinic.IsActive = false;
+            clinic.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ActivateAsync(
+            Guid id
+        )
+        {
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c => c.Id == id
+                    );
+
+            if (clinic == null)
+            {
+                throw new KeyNotFoundException(
+                    "Clinic not found."
+                );
+            }
+
+            clinic.IsActive = true;
+            clinic.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        private static ClinicResponseDto ToDto(
+            Clinic clinic
+        )
+        {
+            return new ClinicResponseDto
+            {
+                Id =
+                    clinic.Id,
+
+                Name =
+                    clinic.Name,
+
+                Type =
+                    clinic.Type,
+
+                Address =
+                    clinic.Address,
+
+                ContactNumber =
+                    clinic.ContactNumber,
+
+                Latitude =
+                    clinic.Latitude,
+
+                Longitude =
+                    clinic.Longitude,
+
+                Services =
+                    clinic.Services,
+
+                OpeningTime =
+                    clinic.OpeningTime,
+
+                ClosingTime =
+                    clinic.ClosingTime,
+
+                IsActive =
+                    clinic.IsActive
+            };
+        }
     }
 }
-

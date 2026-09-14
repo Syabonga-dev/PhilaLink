@@ -298,24 +298,38 @@ namespace PersonalProject.Controllers
 
         [HttpPost("proxy-links")]
         public async Task<IActionResult> AssignProxy(
-            [FromQuery] Guid patientId,
-            [FromQuery] Guid proxyId
+            Guid patientId,
+            Guid proxyId
         )
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var adminUserId = GetCurrentUserId();
 
-                var result =
-                    await _proxyService
-                        .AssignProxyByAdminAsync(
-                            patientId,
-                            proxyId,
-                            currentUserId
-                        );
+                await _proxyService.AssignProxyAsync(
+                    patientId,
+                    proxyId,
+                    adminUserId
+                );
 
-                return Ok(result);
+                return Ok(
+                    new
+                    {
+                        message = "Proxy assigned successfully."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new { message = ex.Message }
+                );
             }
             catch (UnauthorizedAccessException)
             {

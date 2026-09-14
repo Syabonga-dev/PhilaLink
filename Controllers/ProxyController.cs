@@ -1,50 +1,168 @@
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/proxies")]
+    [Authorize]
     public class ProxyController : ControllerBase
     {
-        private readonly IProxyService _proxyService;
+        private readonly IProxyService
+            _proxyService;
 
-        public ProxyController(IProxyService proxyService)
+        public ProxyController(
+            IProxyService proxyService
+        )
         {
-            _proxyService = proxyService;
+            _proxyService =
+                proxyService;
         }
 
-        // Assign proxy
         [HttpPost("assign")]
-        public async Task<IActionResult> Assign(Guid patientId, Guid proxyId, Guid nurseId)
+        [Authorize(Policy = "ClinicStaff")]
+        public async Task<IActionResult> Assign(
+            AssignProxyDto dto
+        )
         {
-            var result = await _proxyService.AssignProxyAsync(patientId, proxyId, nurseId);
-            return Ok(result);
+            try
+            {
+                await _proxyService.AssignProxyAsync(
+                    dto.PatientId,
+                    dto.ProxyId,
+                    GetCurrentUserId()
+                );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Proxy assigned successfully."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        // Get patient proxies
-        [HttpGet("patient/{patientId}")]
-        public async Task<IActionResult> GetPatientProxies(Guid patientId)
+        [HttpGet("patient/{patientId:guid}")]
+        [Authorize(Policy = "ClinicStaff")]
+        public async Task<IActionResult>
+            GetPatientProxies(
+                Guid patientId
+            )
         {
-            return Ok(await _proxyService.GetPatientProxiesAsync(patientId));
+            try
+            {
+                return Ok(
+                    await _proxyService
+                        .GetPatientProxiesAsync(
+                            patientId,
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        // Get proxy patients
-        [HttpGet("proxy/{proxyId}")]
-        public async Task<IActionResult> GetProxyPatients(Guid proxyId)
+        [HttpGet("me/patients")]
+        [Authorize(Policy = "ProxyOnly")]
+        public async Task<IActionResult>
+            GetMyPatients()
         {
-            return Ok(await _proxyService.GetProxyPatientsAsync(proxyId));
+            try
+            {
+                return Ok(
+                    await _proxyService
+                        .GetMyPatientsAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
 
-        // Remove proxy link
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Remove(Guid id)
+        [HttpDelete("{id:guid}")]
+        [Authorize(Policy = "ClinicStaff")]
+        public async Task<IActionResult> Remove(
+            Guid id
+        )
         {
-            var result = await _proxyService.RemoveProxyAsync(id);
-            return Ok(result);
+            try
+            {
+                await _proxyService.RemoveProxyAsync(
+                    id,
+                    GetCurrentUserId()
+                );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Proxy removed successfully."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
+            if (
+                string.IsNullOrWhiteSpace(value) ||
+                !Guid.TryParse(
+                    value,
+                    out var userId
+                )
+            )
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            return userId;
         }
     }
 }
-
-
