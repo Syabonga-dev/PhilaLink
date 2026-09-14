@@ -6,6 +6,8 @@ namespace PersonalProject.Models.Entities
 
         public string Name { get; set; } = string.Empty;
 
+        public string Type { get; set; } = "Clinic";
+
         public string Address { get; set; } = string.Empty;
 
         public string ContactNumber { get; set; } = string.Empty;
@@ -16,6 +18,15 @@ namespace PersonalProject.Models.Entities
 
         public string Services { get; set; } = string.Empty;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public TimeSpan? OpeningTime { get; set; }
+
+        public TimeSpan? ClosingTime { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
+
+        public DateTime? UpdatedAt { get; set; }
     }
 }

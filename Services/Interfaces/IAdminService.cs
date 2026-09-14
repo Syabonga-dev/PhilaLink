@@ -4,15 +4,46 @@ namespace PersonalProject.Services.Interfaces
 {
     public interface IAdminService
     {
-        Task<NewStaffAccountDto> RegisterNurseAsync(RegisterNurseDto dto);
-        Task<NewStaffAccountDto> RegisterProxyAsync(RegisterProxyDto dto);
+        // =====================================================
+        // ACCOUNT CREATION
+        // =====================================================
 
-        Task<List<AdminAccountDto>> ListAccountsAsync(string? role);
+        Task<NewStaffAccountDto> RegisterClinicAdminAsync(
+            RegisterClinicAdminDto dto,
+            Guid performedByUserId
+        );
 
-        Task<AdminDashboardDto> GetDashboardAsync();
+        Task<NewStaffAccountDto> RegisterNurseAsync(
+            RegisterNurseDto dto,
+            Guid performedByUserId
+        );
 
-        Task DeactivateAccountAsync(Guid userId);
-        Task ActivateAccountAsync(Guid userId);
-        Task DeleteAccountAsync(Guid userId);
+        Task<NewStaffAccountDto> RegisterProxyAsync(
+            RegisterProxyDto dto,
+            Guid performedByUserId
+        );
+
+        // =====================================================
+        // ACCOUNT MANAGEMENT
+        // =====================================================
+
+        Task<List<AdminAccountDto>> ListAccountsAsync(
+            string? role,
+            Guid performedByUserId
+        );
+
+        Task<AdminDashboardDto> GetDashboardAsync(
+            Guid performedByUserId
+        );
+
+        Task DeactivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        );
+
+        Task ActivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        );
     }
 }

@@ -1,131 +1,349 @@
-﻿using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "AdminOnly")]
     public class AdminController : ControllerBase
     {
         private readonly IAdminService _adminService;
         private readonly IProxyService _proxyService;
 
-        public AdminController(IAdminService adminService, IProxyService proxyService)
+        public AdminController(
+            IAdminService adminService,
+            IProxyService proxyService
+        )
         {
             _adminService = adminService;
             _proxyService = proxyService;
         }
 
-        [HttpPost("nurses")]
-        public async Task<IActionResult> RegisterNurse(RegisterNurseDto dto)
+        // =====================================================
+        // REGISTER CLINIC ADMIN
+        // =====================================================
+
+        [HttpPost("clinic-admins")]
+        [Authorize(Policy = "SuperAdminOnly")]
+        public async Task<IActionResult> RegisterClinicAdmin(
+            RegisterClinicAdminDto dto
+        )
         {
             try
             {
-                var result = await _adminService.RegisterNurseAsync(dto);
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .RegisterClinicAdminAsync(
+                            dto,
+                            currentUserId
+                        );
+
                 return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
             }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return Conflict(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
             }
         }
 
-        [HttpPost("proxies")]
-        public async Task<IActionResult> RegisterProxy(RegisterProxyDto dto)
+        // =====================================================
+        // REGISTER NURSE
+        // =====================================================
+
+        [HttpPost("nurses")]
+        public async Task<IActionResult> RegisterNurse(
+            RegisterNurseDto dto
+        )
         {
             try
             {
-                var result = await _adminService.RegisterProxyAsync(dto);
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .RegisterNurseAsync(
+                            dto,
+                            currentUserId
+                        );
+
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // REGISTER PROXY
+        // =====================================================
+
+        [HttpPost("proxies")]
+        public async Task<IActionResult> RegisterProxy(
+            RegisterProxyDto dto
+        )
+        {
+            try
+            {
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .RegisterProxyAsync(
+                            dto,
+                            currentUserId
+                        );
+
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return Conflict(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
             }
         }
+
+        // =====================================================
+        // DASHBOARD
+        // =====================================================
 
         [HttpGet("dashboard")]
         public async Task<IActionResult> GetDashboard()
         {
-            return Ok(await _adminService.GetDashboardAsync());
+            try
+            {
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .GetDashboardAsync(
+                            currentUserId
+                        );
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
+
+        // =====================================================
+        // ACCOUNTS
+        // =====================================================
 
         [HttpGet("accounts")]
-        public async Task<IActionResult> ListAccounts([FromQuery] string? role)
-        {
-            return Ok(await _adminService.ListAccountsAsync(role));
-        }
-
-        [HttpPatch("accounts/{userId}/deactivate")]
-        public async Task<IActionResult> Deactivate(Guid userId)
+        public async Task<IActionResult> ListAccounts(
+            [FromQuery] string? role
+        )
         {
             try
             {
-                await _adminService.DeactivateAccountAsync(userId);
-                return Ok(new { message = "Account deactivated." });
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .ListAccountsAsync(
+                            role,
+                            currentUserId
+                        );
+
+                return Ok(result);
             }
-            catch (KeyNotFoundException)
+            catch (UnauthorizedAccessException)
             {
-                return NotFound();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
+                return Forbid();
             }
         }
 
-        [HttpPatch("accounts/{userId}/activate")]
-        public async Task<IActionResult> Activate(Guid userId)
+        // =====================================================
+        // DEACTIVATE
+        // =====================================================
+
+        [HttpPatch(
+            "accounts/{userId:guid}/deactivate"
+        )]
+        public async Task<IActionResult> Deactivate(
+            Guid userId
+        )
         {
             try
             {
-                await _adminService.ActivateAccountAsync(userId);
-                return Ok(new { message = "Account activated." });
+                var currentUserId =
+                    GetCurrentUserId();
+
+                await _adminService
+                    .DeactivateAccountAsync(
+                        userId,
+                        currentUserId
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Account deactivated."
+                    }
+                );
             }
-            catch (KeyNotFoundException)
+            catch (KeyNotFoundException ex)
             {
-                return NotFound();
+                return NotFound(
+                    new { message = ex.Message }
+                );
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
             }
         }
 
-        [HttpDelete("accounts/{userId}")]
-        public async Task<IActionResult> Delete(Guid userId)
+        // =====================================================
+        // ACTIVATE
+        // =====================================================
+
+        [HttpPatch(
+            "accounts/{userId:guid}/activate"
+        )]
+        public async Task<IActionResult> Activate(
+            Guid userId
+        )
         {
             try
             {
-                await _adminService.DeleteAccountAsync(userId);
-                return Ok(new { message = "Account deleted." });
+                var currentUserId =
+                    GetCurrentUserId();
+
+                await _adminService
+                    .ActivateAccountAsync(
+                        userId,
+                        currentUserId
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Account activated."
+                    }
+                );
             }
-            catch (KeyNotFoundException)
+            catch (KeyNotFoundException ex)
             {
-                return NotFound();
+                return NotFound(
+                    new { message = ex.Message }
+                );
             }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return BadRequest(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
             }
         }
 
-        // Admin-initiated proxy assignment — the nurse-initiated version
-        // stays on ProxyController/api/Proxy/assign. Removal is shared:
-        // DELETE /api/Proxy/{id} already works regardless of who assigned it.
+        // =====================================================
+        // PROXY ASSIGNMENT
+        // =====================================================
+
         [HttpPost("proxy-links")]
-        public async Task<IActionResult> AssignProxy([FromQuery] Guid patientId, [FromQuery] Guid proxyId)
+        public async Task<IActionResult> AssignProxy(
+            [FromQuery] Guid patientId,
+            [FromQuery] Guid proxyId
+        )
         {
-            var adminUserIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (adminUserIdClaim == null || !Guid.TryParse(adminUserIdClaim, out var adminUserId))
-                return Unauthorized();
+            try
+            {
+                var currentUserId =
+                    GetCurrentUserId();
 
-            var result = await _proxyService.AssignProxyByAdminAsync(patientId, proxyId, adminUserId);
-            return Ok(result);
+                var result =
+                    await _proxyService
+                        .AssignProxyByAdminAsync(
+                            patientId,
+                            proxyId,
+                            currentUserId
+                        );
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // JWT USER ID
+        // =====================================================
+
+        private Guid GetCurrentUserId()
+        {
+            var value = User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+            if (
+                string.IsNullOrWhiteSpace(value) ||
+                !Guid.TryParse(value, out var userId)
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Invalid authentication token."
+                );
+            }
+
+            return userId;
         }
     }
 }

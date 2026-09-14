@@ -17,7 +17,8 @@ namespace PersonalProject.Services.Implementations
 
         public async Task<Medication> CreateMedicationAsync(Guid patientId, string name, string dosage, string instructions)
         {
-            var patient = await _context.Users.FindAsync(patientId);
+            var patient = await _context.Patients.FindAsync(patientId);
+
             if (patient == null)
                 throw new Exception("Patient not found");
 
@@ -27,7 +28,10 @@ namespace PersonalProject.Services.Implementations
                 PatientId = patientId,
                 Name = name,
                 Dosage = dosage,
-                Instructions = instructions
+                Instructions = instructions,
+                StartDate = DateTime.UtcNow,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Medications.Add(medication);
@@ -77,8 +81,8 @@ namespace PersonalProject.Services.Implementations
             {
                 Id = Guid.NewGuid(),
                 MedicationId = medicationId,
-                Medication = medication,
                 Taken = taken,
+                Notes = notes,
                 TakenAt = DateTime.UtcNow
             };
 

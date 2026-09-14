@@ -15,17 +15,18 @@ namespace PersonalProject.Models.Entities
         public string PasswordHash { get; set; } = string.Empty;
 
         public string Role { get; set; } = string.Empty;
-        // Admin, Nurse, Patient, Proxy
+
+        public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Profile relationships
+        public DateTime? UpdatedAt { get; set; }
+
         public Patient? Patient { get; set; }
 
         public Nurse? Nurse { get; set; }
 
         public Proxy? Proxy { get; set; }
-
         public Admin? Admin { get; set; }
     }
 }

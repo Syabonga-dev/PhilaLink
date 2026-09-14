@@ -16,7 +16,8 @@ namespace PersonalProject.Services.Implementations
 
         public async Task<SymptomAssessment> CreateAsync(Guid patientId, string symptoms)
         {
-            var patient = await _context.Users.FindAsync(patientId);
+            var patient = await _context.Patients.FindAsync(patientId);
+
             if (patient == null)
                 throw new Exception("Patient not found");
 

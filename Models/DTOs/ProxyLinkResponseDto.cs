@@ -2,12 +2,16 @@ namespace PersonalProject.Models.DTOs
 {
     public class ProxyLinkResponseDto
     {
-        public int Id { get; set; }
-        public int PatientId { get; set; }
-        public int ProxyId { get; set; }
-        public int AssignedByNurseId { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public Guid Id { get; set; }
+
+        public Guid PatientId { get; set; }
+
+        public Guid ProxyId { get; set; }
+
+        public Guid? AssignedByNurseId { get; set; }
+
+        public int? AssignedByAdminId { get; set; }
+
+        public DateTime AssignedAt { get; set; }
     }
 }
-
-

@@ -4,20 +4,51 @@ namespace PersonalProject.Models.Entities
     {
         public Guid Id { get; set; }
 
-        // Authentication
+        // =====================================================
+        // USER ACCOUNT
+        // =====================================================
+
         public Guid UserId { get; set; }
 
         public User User { get; set; } = null!;
 
-        // Personal Information
+        public string PatientNumber { get; set; } = string.Empty;
+
+        // =====================================================
+        // CLINIC
+        // =====================================================
+
+        /*
+         * Nullable during registration/onboarding.
+         *
+         * A patient may create an account before a clinic
+         * has officially been assigned to them.
+         *
+         * Once linked by clinic staff, this identifies their
+         * primary clinic.
+         */
+        public Guid? ClinicId { get; set; }
+
+        public Clinic? Clinic { get; set; }
+
+        // =====================================================
+        // PERSONAL INFORMATION
+        // =====================================================
+
         public DateOnly DateOfBirth { get; set; }
 
         public string Gender { get; set; } = string.Empty;
 
-        // Contact
+        // =====================================================
+        // CONTACT
+        // =====================================================
+
         public string Email { get; set; } = string.Empty;
 
-        // Address
+        // =====================================================
+        // ADDRESS
+        // =====================================================
+
         public string AddressLine1 { get; set; } = string.Empty;
 
         public string? AddressLine2 { get; set; }
@@ -30,26 +61,56 @@ namespace PersonalProject.Models.Entities
 
         public string PostalCode { get; set; } = string.Empty;
 
-        // Emergency Contact
+        // =====================================================
+        // EMERGENCY CONTACT
+        // =====================================================
+
         public string EmergencyContactName { get; set; } = string.Empty;
 
         public string EmergencyContactPhone { get; set; } = string.Empty;
 
         public string EmergencyContactRelationship { get; set; } = string.Empty;
 
-        // Status
+        // =====================================================
+        // LEGACY PROFILE STATUS
+        // =====================================================
+
+        /*
+         * Kept temporarily because existing services currently
+         * reference Patient.IsActive.
+         *
+         * User.IsActive becomes the authoritative account-level
+         * status as the architecture migration continues.
+         */
         public bool IsActive { get; set; } = true;
 
-        // Audit
+        // =====================================================
+        // AUDIT
+        // =====================================================
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 
-        // Relationships
-        public ICollection<Allergy> Allergies { get; set; } = new List<Allergy>();
+        // =====================================================
+        // RELATIONSHIPS
+        // =====================================================
 
-        public ICollection<MedicalCondition> MedicalConditions { get; set; } = new List<MedicalCondition>();
+        public ICollection<Allergy> Allergies { get; set; }
+            = new List<Allergy>();
 
-        public ICollection<ProxyLink> ProxyLinksAsPatient { get; set; } = new List<ProxyLink>();
+        public ICollection<MedicalCondition> MedicalConditions { get; set; }
+            = new List<MedicalCondition>();
+
+        public ICollection<ProxyLink> ProxyLinksAsPatient { get; set; }
+            = new List<ProxyLink>();
+
+        public ICollection<HealthMetric> HealthMetrics { get; set; }
+    = new List<HealthMetric>();
+
+        public ICollection<HealthRecord> HealthRecords { get; set; }
+            = new List<HealthRecord>();
+
+        public PatientPreference? Preference { get; set; }
     }
 }

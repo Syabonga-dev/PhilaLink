@@ -6,17 +6,46 @@ namespace PersonalProject.Models
     {
         public int Id { get; set; }
 
-        // Link to authentication User
+        // =====================================================
+        // USER ACCOUNT
+        // =====================================================
+
         public Guid UserId { get; set; }
 
-        // Admin profile information
+        public User User { get; set; } = null!;
+
+        // =====================================================
+        // PROFILE
+        // =====================================================
+
         public string FullName { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;
 
+        // =====================================================
+        // CLINIC SCOPE
+        // =====================================================
+
+        /*
+         * SuperAdmin:
+         * ClinicId = null
+         *
+         * ClinicAdmin:
+         * ClinicId = clinic they are responsible for
+         *
+         * The service layer will enforce that a ClinicAdmin
+         * must have a clinic assigned.
+         */
+        public Guid? ClinicId { get; set; }
+
+        public Clinic? Clinic { get; set; }
+
+        // =====================================================
+        // AUDIT
+        // =====================================================
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation
-        public User User { get; set; } = null!;
+        public DateTime? UpdatedAt { get; set; }
     }
 }

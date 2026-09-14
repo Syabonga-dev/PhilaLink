@@ -8,8 +8,11 @@ namespace PersonalProject.Models.Entities
 
         public Medication Medication { get; set; } = null!;
 
-        public DateTime TakenAt { get; set; } = DateTime.UtcNow;
+        public DateTime TakenAt { get; set; } =
+            DateTime.UtcNow;
 
         public bool Taken { get; set; }
+
+        public string? Notes { get; set; }
     }
 }
