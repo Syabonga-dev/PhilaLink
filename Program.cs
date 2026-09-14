@@ -17,11 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 // DATABASE
 // =====================================================
 
-builder.Services.AddDbContext<PhilaLinkDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")
-    )
-);
+builder.Services.AddDbContext<PhilaLinkDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // =====================================================
 // DEPENDENCY INJECTION
@@ -34,8 +30,6 @@ builder.Services.AddScoped<IMedicationService, MedicationService>();
 builder.Services.AddScoped<IClinicService, ClinicService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
-builder.Services.AddScoped<IMedicationScheduleService, MedicationScheduleService>();
-builder.Services.AddScoped<IMedicationLogService, MedicationLogService>();
 builder.Services.AddScoped<ISymptomAssessmentService, SymptomAssessmentService>();
 builder.Services.AddScoped<IOtpVerificationService, OtpVerificationService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
