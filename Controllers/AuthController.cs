@@ -105,9 +105,9 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var claim =User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            if ( string.IsNullOrWhiteSpace(claim) || !Guid.TryParse(claim,out var userId ))
+            if (string.IsNullOrWhiteSpace(claim) || !Guid.TryParse(claim, out var userId))
             {
                 throw new UnauthorizedAccessException();
             }

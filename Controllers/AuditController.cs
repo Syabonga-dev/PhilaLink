@@ -7,6 +7,7 @@ namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/audit")]
+    [Route("api/audit-log")]
     [Authorize]
     public class AuditController : ControllerBase
     {

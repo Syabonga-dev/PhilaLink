@@ -109,9 +109,9 @@ namespace PersonalProject.Services.Implementations
                     AssignedAt =
                         DateTime.UtcNow,
 
-                        IsActive = true,
-                        EndedAt = null,
-                        EndedByUserId = null
+                    IsActive = true,
+                    EndedAt = null,
+                    EndedByUserId = null
                 };
 
             if (actor.NurseId != null)

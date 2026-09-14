@@ -164,13 +164,13 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-                        /*
-             * Patient self-registration must complete verification
-             * before a JWT can be issued.
-             *
-             * Administrator-created staff accounts are already trusted
-             * through their controlled creation workflow.
-             */
+            /*
+ * Patient self-registration must complete verification
+ * before a JWT can be issued.
+ *
+ * Administrator-created staff accounts are already trusted
+ * through their controlled creation workflow.
+ */
             if (
                 user.Role == RoleNames.Patient &&
                 !user.IsVerified

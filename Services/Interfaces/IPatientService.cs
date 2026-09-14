@@ -34,6 +34,6 @@ namespace PersonalProject.Services.Interfaces
 
         Task<PatientPreferenceDto> UpdatePreferencesAsync(Guid userId, PatientPreferenceDto dto);
 
-        Task LogMedicationAsync(Guid userId,Guid medicationId,bool taken,string? notes);
+        Task LogMedicationAsync(Guid userId, Guid medicationId, bool taken, string? notes);
     }
 }

@@ -21,7 +21,7 @@ namespace PersonalProject.Services.Implementations
 
         public async Task<NurseMeDto> GetMeAsync(Guid userId)
         {
-            var nurse =await GetActiveNurseAsync(userId);
+            var nurse = await GetActiveNurseAsync(userId);
 
             await _context.Entry(nurse)
                 .Reference(n => n.Clinic)

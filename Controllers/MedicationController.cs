@@ -3,30 +3,25 @@ using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
 using System.Security.Claims;
+using PersonalProject.Models.Constants;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/medications")]
     [Authorize(Policy = "ClinicStaff")]
-    public class MedicationController :
-        ControllerBase
+    public class MedicationController :ControllerBase
     {
-        private readonly IMedicationService
-            _medicationService;
+        private readonly IMedicationService _medicationService;
 
-        public MedicationController(
-            IMedicationService medicationService
-        )
+        public MedicationController(IMedicationService medicationService )
         {
-            _medicationService =
-                medicationService;
+            _medicationService = medicationService;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(
-            MedicationCreateDto dto
-        )
+        [Authorize(Roles = RoleNames.Nurse)]
+        public async Task<IActionResult> Create(MedicationCreateDto dto)
         {
             try
             {
@@ -86,14 +81,9 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpPost(
-            "{medicationId:guid}/schedule"
-        )]
-        public async Task<IActionResult>
-            AddSchedule(
-                Guid medicationId,
-                MedicationScheduleDto dto
-            )
+        [HttpPost("{medicationId:guid}/schedule")]
+        [Authorize(Roles = RoleNames.Nurse)]
+        public async Task<IActionResult>AddSchedule(Guid medicationId,MedicationScheduleDto dto)
         {
             try
             {

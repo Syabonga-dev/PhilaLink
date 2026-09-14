@@ -13,16 +13,16 @@ namespace PersonalProject.Services.Implementations
         private readonly IAuditLogService _audit;
         private readonly IMedicationService _medicationService;
 
-        public PatientService(PhilaLinkDbContext context,IAuditLogService audit,IMedicationService medicationService)
+        public PatientService(PhilaLinkDbContext context, IAuditLogService audit, IMedicationService medicationService)
         {
             _context = context;
             _audit = audit;
             _medicationService = medicationService;
         }
 
-        public async Task LogMedicationAsync( Guid userId,Guid medicationId,bool taken,string? notes)
+        public async Task LogMedicationAsync(Guid userId, Guid medicationId, bool taken, string? notes)
         {
-            await _medicationService.LogPatientMedicationAsync(userId,medicationId,taken,notes);
+            await _medicationService.LogPatientMedicationAsync(userId, medicationId, taken, notes);
         }
 
         // =====================================================

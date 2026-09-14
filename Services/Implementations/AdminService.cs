@@ -6,6 +6,7 @@ using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
+using PersonalProject.Models.Constants;
 
 namespace PersonalProject.Services.Implementations
 {
@@ -22,7 +23,7 @@ namespace PersonalProject.Services.Implementations
         // REGISTER CLINIC ADMIN
         // =====================================================
 
-        public async Task<NewStaffAccountDto>RegisterClinicAdminAsync(RegisterClinicAdminDto dto, Guid performedByUserId)
+        public async Task<NewStaffAccountDto> RegisterClinicAdminAsync(RegisterClinicAdminDto dto, Guid performedByUserId)
         {
             var actor = await GetAdminActorAsync(performedByUserId);
 
@@ -481,8 +482,8 @@ namespace PersonalProject.Services.Implementations
                             ) &&
                             pl.IsActive
                     )
-                            };
-                        }
+            };
+        }
 
         // =====================================================
         // DEACTIVATE ACCOUNT
@@ -503,8 +504,8 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
         // ACTIVATE ACCOUNT
         // =====================================================
-        
-        public async Task ActivateAccountAsync(Guid userId,Guid performedByUserId)
+
+        public async Task ActivateAccountAsync(Guid userId, Guid performedByUserId)
         {
             await SetActiveAsync(
                 userId,
@@ -725,9 +726,9 @@ namespace PersonalProject.Services.Implementations
         // CENTRAL ACCOUNT STATUS
         // =====================================================
 
-        private async Task SetActiveAsync(Guid targetUserId,bool isActive,Guid performedByUserId)
+        private async Task SetActiveAsync(Guid targetUserId, bool isActive, Guid performedByUserId)
         {
-            var actor = await GetAdminActorAsync(performedByUserId );
+            var actor = await GetAdminActorAsync(performedByUserId);
 
             if (targetUserId == performedByUserId)
             {
