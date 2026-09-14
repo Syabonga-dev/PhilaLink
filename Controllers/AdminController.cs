@@ -14,10 +14,7 @@ namespace PersonalProject.Controllers
         private readonly IAdminService _adminService;
         private readonly IProxyService _proxyService;
 
-        public AdminController(
-            IAdminService adminService,
-            IProxyService proxyService
-        )
+        public AdminController(IAdminService adminService, IProxyService proxyService)
         {
             _adminService = adminService;
             _proxyService = proxyService;
@@ -29,21 +26,13 @@ namespace PersonalProject.Controllers
 
         [HttpPost("clinic-admins")]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<IActionResult> RegisterClinicAdmin(
-            RegisterClinicAdminDto dto
-        )
+        public async Task<IActionResult> RegisterClinicAdmin(RegisterClinicAdminDto dto)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                var result =
-                    await _adminService
-                        .RegisterClinicAdminAsync(
-                            dto,
-                            currentUserId
-                        );
+                var result = await _adminService.RegisterClinicAdminAsync(dto, currentUserId);
 
                 return Ok(result);
             }
@@ -70,21 +59,13 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("nurses")]
-        public async Task<IActionResult> RegisterNurse(
-            RegisterNurseDto dto
-        )
+        public async Task<IActionResult> RegisterNurse(RegisterNurseDto dto)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                var result =
-                    await _adminService
-                        .RegisterNurseAsync(
-                            dto,
-                            currentUserId
-                        );
+                var result = await _adminService.RegisterNurseAsync(dto, currentUserId);
 
                 return Ok(result);
             }
@@ -111,21 +92,13 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("proxies")]
-        public async Task<IActionResult> RegisterProxy(
-            RegisterProxyDto dto
-        )
+        public async Task<IActionResult> RegisterProxy(RegisterProxyDto dto)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                var result =
-                    await _adminService
-                        .RegisterProxyAsync(
-                            dto,
-                            currentUserId
-                        );
+                var result = await _adminService.RegisterProxyAsync(dto, currentUserId);
 
                 return Ok(result);
             }
@@ -150,14 +123,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                var result =
-                    await _adminService
-                        .GetDashboardAsync(
-                            currentUserId
-                        );
+                var result = await _adminService.GetDashboardAsync(currentUserId);
 
                 return Ok(result);
             }
@@ -172,21 +140,13 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("accounts")]
-        public async Task<IActionResult> ListAccounts(
-            [FromQuery] string? role
-        )
+        public async Task<IActionResult> ListAccounts([FromQuery] string? role)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                var result =
-                    await _adminService
-                        .ListAccountsAsync(
-                            role,
-                            currentUserId
-                        );
+                var result = await _adminService.ListAccountsAsync(role, currentUserId);
 
                 return Ok(result);
             }
@@ -200,31 +160,16 @@ namespace PersonalProject.Controllers
         // DEACTIVATE
         // =====================================================
 
-        [HttpPatch(
-            "accounts/{userId:guid}/deactivate"
-        )]
-        public async Task<IActionResult> Deactivate(
-            Guid userId
-        )
+        [HttpPatch("accounts/{userId:guid}/deactivate")]
+        public async Task<IActionResult> Deactivate(Guid userId)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                await _adminService
-                    .DeactivateAccountAsync(
-                        userId,
-                        currentUserId
-                    );
+                await _adminService.DeactivateAccountAsync(userId, currentUserId);
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Account deactivated."
-                    }
-                );
+                return Ok(new { message = "Account deactivated." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -248,31 +193,16 @@ namespace PersonalProject.Controllers
         // ACTIVATE
         // =====================================================
 
-        [HttpPatch(
-            "accounts/{userId:guid}/activate"
-        )]
-        public async Task<IActionResult> Activate(
-            Guid userId
-        )
+        [HttpPatch("accounts/{userId:guid}/activate")]
+        public async Task<IActionResult> Activate(Guid userId)
         {
             try
             {
-                var currentUserId =
-                    GetCurrentUserId();
+                var currentUserId = GetCurrentUserId();
 
-                await _adminService
-                    .ActivateAccountAsync(
-                        userId,
-                        currentUserId
-                    );
+                await _adminService.ActivateAccountAsync(userId, currentUserId);
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Account activated."
-                    }
-                );
+                return Ok(new { message = "Account activated." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -297,10 +227,7 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("proxy-links")]
-        public async Task<IActionResult> AssignProxy(
-            Guid patientId,
-            Guid proxyId
-        )
+        public async Task<IActionResult> AssignProxy(Guid patientId, Guid proxyId)
         {
             try
             {
@@ -343,9 +270,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value = User.FindFirstValue(
-                ClaimTypes.NameIdentifier
-            );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||

@@ -4,14 +4,8 @@ namespace PersonalProject.Services.Interfaces
 {
     public interface ISymptomAssessmentService
     {
-        Task<SymptomAssessment> CreateForPatientAsync(
-            Guid userId,
-            string symptoms
-        );
+        Task<SymptomAssessment> CreateForPatientAsync(Guid userId, string symptoms);
 
-        Task<List<SymptomAssessment>>
-            GetMyAssessmentsAsync(
-                Guid userId
-            );
+        Task<List<SymptomAssessment>> GetMyAssessmentsAsync(Guid userId);
     }
 }

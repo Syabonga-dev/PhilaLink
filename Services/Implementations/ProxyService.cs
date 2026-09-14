@@ -111,13 +111,11 @@ namespace PersonalProject.Services.Implementations
 
             if (actor.NurseId != null)
             {
-                link.AssignedByNurseId =
-                    actor.NurseId;
+                link.AssignedByNurseId = actor.NurseId;
             }
             else if (actor.AdminId != null)
             {
-                link.AssignedByAdminId =
-                    actor.AdminId;
+                link.AssignedByAdminId = actor.AdminId;
             }
 
             _context.ProxyLinks.Add(link);

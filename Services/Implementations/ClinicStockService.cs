@@ -51,10 +51,7 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            var clinicId =
-                await GetStaffClinicIdAsync(
-                    performedByUserId
-                );
+            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
 
             if (dto.ClinicId != clinicId)
             {
@@ -161,17 +158,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            stock.QuantityOnHand =
-                dto.QuantityOnHand;
-
-            stock.ReorderLevel =
-                dto.ReorderLevel;
-
-            stock.IsActive =
-                dto.IsActive;
-
-            stock.UpdatedAt =
-                DateTime.UtcNow;
+            stock.QuantityOnHand = dto.QuantityOnHand;
+            stock.ReorderLevel = dto.ReorderLevel;
+            stock.IsActive = dto.IsActive;
+            stock.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -229,11 +219,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            stock.QuantityOnHand =
-                newQuantity;
-
-            stock.UpdatedAt =
-                DateTime.UtcNow;
+            stock.QuantityOnHand = newQuantity;
+            stock.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 

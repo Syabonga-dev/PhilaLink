@@ -11,9 +11,7 @@ namespace PersonalProject.Controllers
     {
         private readonly IUserService _userService;
 
-        public UserController(
-            IUserService userService
-        )
+        public UserController(IUserService userService)
         {
             _userService = userService;
         }
@@ -21,19 +19,13 @@ namespace PersonalProject.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            return Ok(
-                await _userService.GetAllUsersAsync()
-            );
+            return Ok(await _userService.GetAllUsersAsync());
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<IActionResult> GetById(
-            Guid id
-        )
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var user =
-                await _userService
-                    .GetUserByIdAsync(id);
+            var user = await _userService.GetUserByIdAsync(id);
 
             if (user == null)
                 return NotFound();

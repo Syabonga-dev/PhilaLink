@@ -11,38 +11,22 @@ namespace PersonalProject.Controllers
     [Authorize]
     public class ProxyController : ControllerBase
     {
-        private readonly IProxyService
-            _proxyService;
+        private readonly IProxyService _proxyService;
 
-        public ProxyController(
-            IProxyService proxyService
-        )
+        public ProxyController(IProxyService proxyService)
         {
-            _proxyService =
-                proxyService;
+            _proxyService = proxyService;
         }
 
         [HttpPost("assign")]
         [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> Assign(
-            AssignProxyDto dto
-        )
+        public async Task<IActionResult> Assign(AssignProxyDto dto)
         {
             try
             {
-                await _proxyService.AssignProxyAsync(
-                    dto.PatientId,
-                    dto.ProxyId,
-                    GetCurrentUserId()
-                );
+                await _proxyService.AssignProxyAsync(dto.PatientId, dto.ProxyId, GetCurrentUserId());
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Proxy assigned successfully."
-                    }
-                );
+                return Ok(new { message = "Proxy assigned successfully." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -64,20 +48,11 @@ namespace PersonalProject.Controllers
 
         [HttpGet("patient/{patientId:guid}")]
         [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult>
-            GetPatientProxies(
-                Guid patientId
-            )
+        public async Task<IActionResult> GetPatientProxies(Guid patientId)
         {
             try
             {
-                return Ok(
-                    await _proxyService
-                        .GetPatientProxiesAsync(
-                            patientId,
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _proxyService.GetPatientProxiesAsync(patientId, GetCurrentUserId()));
             }
             catch (KeyNotFoundException ex)
             {
@@ -93,17 +68,11 @@ namespace PersonalProject.Controllers
 
         [HttpGet("me/patients")]
         [Authorize(Policy = "ProxyOnly")]
-        public async Task<IActionResult>
-            GetMyPatients()
+        public async Task<IActionResult> GetMyPatients()
         {
             try
             {
-                return Ok(
-                    await _proxyService
-                        .GetMyPatientsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _proxyService.GetMyPatientsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -113,24 +82,13 @@ namespace PersonalProject.Controllers
 
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> Remove(
-            Guid id
-        )
+        public async Task<IActionResult> Remove(Guid id)
         {
             try
             {
-                await _proxyService.RemoveProxyAsync(
-                    id,
-                    GetCurrentUserId()
-                );
+                await _proxyService.RemoveProxyAsync(id, GetCurrentUserId());
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Proxy removed successfully."
-                    }
-                );
+                return Ok(new { message = "Proxy removed successfully." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -146,10 +104,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||

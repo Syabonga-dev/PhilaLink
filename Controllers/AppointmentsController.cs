@@ -11,15 +11,11 @@ namespace PersonalProject.Controllers
     [Authorize(Policy = "ClinicStaff")]
     public class AppointmentsController : ControllerBase
     {
-        private readonly IAppointmentService
-            _appointmentService;
+        private readonly IAppointmentService _appointmentService;
 
-        public AppointmentsController(
-            IAppointmentService appointmentService
-        )
+        public AppointmentsController(IAppointmentService appointmentService)
         {
-            _appointmentService =
-                appointmentService;
+            _appointmentService = appointmentService;
         }
 
         [HttpGet]
@@ -27,11 +23,7 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                var results =
-                    await _appointmentService
-                        .GetClinicAppointmentsAsync(
-                            GetCurrentUserId()
-                        );
+                var results = await _appointmentService.GetClinicAppointmentsAsync(GetCurrentUserId());
 
                 return Ok(results);
             }
@@ -42,18 +34,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<IActionResult> GetById(
-            Guid id
-        )
+        public async Task<IActionResult> GetById(Guid id)
         {
             try
             {
-                var result =
-                    await _appointmentService
-                        .GetByIdAsync(
-                            id,
-                            GetCurrentUserId()
-                        );
+                var result = await _appointmentService.GetByIdAsync(id, GetCurrentUserId());
 
                 return result == null
                     ? NotFound()
@@ -66,24 +51,13 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(
-            CreateAppointmentDto dto
-        )
+        public async Task<IActionResult> Create(CreateAppointmentDto dto)
         {
             try
             {
-                var result =
-                    await _appointmentService
-                        .CreateAsync(
-                            dto,
-                            GetCurrentUserId()
-                        );
+                var result = await _appointmentService.CreateAsync(dto, GetCurrentUserId());
 
-                return CreatedAtAction(
-                    nameof(GetById),
-                    new { id = result.Id },
-                    result
-                );
+                return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
             }
             catch (KeyNotFoundException ex)
             {
@@ -104,20 +78,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        public async Task<IActionResult> Update(
-            Guid id,
-            UpdateAppointmentDto dto
-        )
+        public async Task<IActionResult> Update(Guid id, UpdateAppointmentDto dto)
         {
             try
             {
-                var result =
-                    await _appointmentService
-                        .UpdateAsync(
-                            id,
-                            dto,
-                            GetCurrentUserId()
-                        );
+                var result = await _appointmentService.UpdateAsync(id, dto, GetCurrentUserId());
 
                 return Ok(result);
             }
@@ -141,10 +106,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||

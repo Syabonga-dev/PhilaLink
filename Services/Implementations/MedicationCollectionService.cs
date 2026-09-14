@@ -333,8 +333,7 @@ namespace PersonalProject.Services.Implementations
             );
 
             collection.ProxyId = proxyId;
-            collection.UpdatedAt =
-                DateTime.UtcNow;
+            collection.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -437,17 +436,10 @@ namespace PersonalProject.Services.Implementations
                     DateTime.UtcNow;
             }
 
-            collection.ProxyId =
-                proxyId;
-
-            collection.ProcessedByNurseId =
-                nurse.Id;
-
-            collection.CollectedAt =
-                DateTime.UtcNow;
-
-            collection.Status =
-                "Collected";
+            collection.ProxyId = proxyId;
+            collection.ProcessedByNurseId = nurse.Id;
+            collection.CollectedAt = DateTime.UtcNow;
+            collection.Status = "Collected";
 
             if (!string.IsNullOrWhiteSpace(dto.Notes))
             {

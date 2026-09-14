@@ -153,38 +153,17 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            clinic.Name =
-                dto.Name.Trim();
-
-            clinic.Type =
-                dto.Type.Trim();
-
-            clinic.Address =
-                dto.Address.Trim();
-
-            clinic.ContactNumber =
-                dto.ContactNumber.Trim();
-
-            clinic.Latitude =
-                dto.Latitude;
-
-            clinic.Longitude =
-                dto.Longitude;
-
-            clinic.Services =
-                dto.Services.Trim();
-
-            clinic.OpeningTime =
-                dto.OpeningTime;
-
-            clinic.ClosingTime =
-                dto.ClosingTime;
-
-            clinic.IsActive =
-                dto.IsActive;
-
-            clinic.UpdatedAt =
-                DateTime.UtcNow;
+            clinic.Name = dto.Name.Trim();
+            clinic.Type = dto.Type.Trim();
+            clinic.Address = dto.Address.Trim();
+            clinic.ContactNumber = dto.ContactNumber.Trim();
+            clinic.Latitude = dto.Latitude;
+            clinic.Longitude = dto.Longitude;
+            clinic.Services = dto.Services.Trim();
+            clinic.OpeningTime = dto.OpeningTime;
+            clinic.ClosingTime = dto.ClosingTime;
+            clinic.IsActive = dto.IsActive;
+            clinic.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -233,8 +212,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             clinic.IsActive = true;
-            clinic.UpdatedAt =
-                DateTime.UtcNow;
+            clinic.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
         }
@@ -245,38 +223,17 @@ namespace PersonalProject.Services.Implementations
         {
             return new ClinicResponseDto
             {
-                Id =
-                    clinic.Id,
-
-                Name =
-                    clinic.Name,
-
-                Type =
-                    clinic.Type,
-
-                Address =
-                    clinic.Address,
-
-                ContactNumber =
-                    clinic.ContactNumber,
-
-                Latitude =
-                    clinic.Latitude,
-
-                Longitude =
-                    clinic.Longitude,
-
-                Services =
-                    clinic.Services,
-
-                OpeningTime =
-                    clinic.OpeningTime,
-
-                ClosingTime =
-                    clinic.ClosingTime,
-
-                IsActive =
-                    clinic.IsActive
+                Id = clinic.Id,
+                Name = clinic.Name,
+                Type = clinic.Type,
+                Address = clinic.Address,
+                ContactNumber = clinic.ContactNumber,
+                Latitude = clinic.Latitude,
+                Longitude = clinic.Longitude,
+                Services = clinic.Services,
+                OpeningTime = clinic.OpeningTime,
+                ClosingTime = clinic.ClosingTime,
+                IsActive = clinic.IsActive
             };
         }
     }

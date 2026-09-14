@@ -8,18 +8,11 @@ namespace PersonalProject.Services.Interfaces
             CreateClinicDto dto
         );
 
-        Task<List<ClinicResponseDto>>
-            GetAllAsync();
+        Task<List<ClinicResponseDto>> GetAllAsync();
 
-        Task<ClinicResponseDto?>
-            GetByIdAsync(
-                Guid id
-            );
+        Task<ClinicResponseDto?> GetByIdAsync(Guid id);
 
-        Task<ClinicResponseDto> UpdateAsync(
-            Guid id,
-            UpdateClinicDto dto
-        );
+        Task<ClinicResponseDto> UpdateAsync(Guid id, UpdateClinicDto dto);
 
         Task DeactivateAsync(
             Guid id

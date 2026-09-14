@@ -84,72 +84,30 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            patient.User.FullName =
-                dto.FullName.Trim();
+            patient.User.FullName = dto.FullName.Trim();
+            patient.User.PhoneNumber = dto.PhoneNumber.Trim();
+            patient.User.Email = dto.Email.Trim();
+            patient.User.UpdatedAt = DateTime.UtcNow;
+            patient.DateOfBirth = dto.DateOfBirth;
+            patient.Gender = dto.Gender.Trim();
+            patient.Email = dto.Email.Trim();
+            patient.AddressLine1 = dto.AddressLine1.Trim();
+            patient.AddressLine2 = string.IsNullOrWhiteSpace(dto.AddressLine2) ? null : dto.AddressLine2.Trim();
+            patient.Suburb = dto.Suburb.Trim();
+            patient.City = dto.City.Trim();
+            patient.Province = dto.Province.Trim();
+            patient.PostalCode = dto.PostalCode.Trim();
+            patient.EmergencyContactName = dto.EmergencyContactName.Trim();
+            patient.EmergencyContactPhone = dto.EmergencyContactPhone.Trim();
+            patient.EmergencyContactRelationship = dto.EmergencyContactRelationship.Trim();
+            patient.IsProfileComplete = IsProfileComplete(patient);
 
-            patient.User.PhoneNumber =
-                dto.PhoneNumber.Trim();
-
-            patient.User.Email =
-                dto.Email.Trim();
-
-            patient.User.UpdatedAt =
-                DateTime.UtcNow;
-
-            patient.DateOfBirth =
-                dto.DateOfBirth;
-
-            patient.Gender =
-                dto.Gender.Trim();
-
-            patient.Email =
-                dto.Email.Trim();
-
-            patient.AddressLine1 =
-                dto.AddressLine1.Trim();
-
-            patient.AddressLine2 =
-                string.IsNullOrWhiteSpace(
-                    dto.AddressLine2
-                )
-                    ? null
-                    : dto.AddressLine2.Trim();
-
-            patient.Suburb =
-                dto.Suburb.Trim();
-
-            patient.City =
-                dto.City.Trim();
-
-            patient.Province =
-                dto.Province.Trim();
-
-            patient.PostalCode =
-                dto.PostalCode.Trim();
-
-            patient.EmergencyContactName =
-                dto.EmergencyContactName.Trim();
-
-            patient.EmergencyContactPhone =
-                dto.EmergencyContactPhone.Trim();
-
-            patient.EmergencyContactRelationship =
-                dto.EmergencyContactRelationship.Trim();
-
-            patient.IsProfileComplete =
-                IsProfileComplete(patient);
-
-            if (
-                patient.IsProfileComplete &&
-                patient.ProfileCompletedAt == null
-            )
+            if (patient.IsProfileComplete && patient.ProfileCompletedAt == null)
             {
-                patient.ProfileCompletedAt =
-                    DateTime.UtcNow;
+                patient.ProfileCompletedAt = DateTime.UtcNow;
             }
 
-            patient.UpdatedAt =
-                DateTime.UtcNow;
+            patient.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -565,14 +523,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            appointment.ScheduledAt =
-                dto.ScheduledAt;
-
-            appointment.Status =
-                "Rescheduled";
-
-            appointment.UpdatedAt =
-                DateTime.UtcNow;
+            appointment.ScheduledAt = dto.ScheduledAt;
+            appointment.Status = "Rescheduled";
+            appointment.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 

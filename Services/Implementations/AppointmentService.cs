@@ -136,15 +136,9 @@ namespace PersonalProject.Services.Implementations
             Guid performedByUserId
         )
         {
-            var clinicId =
-                await GetStaffClinicIdAsync(
-                    performedByUserId
-                );
+            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
 
-            var appointment = await _context.Appointments
-                .FirstOrDefaultAsync(
-                    a => a.Id == appointmentId
-                );
+            var appointment = await _context.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
 
             if (appointment == null)
             {
@@ -172,39 +166,16 @@ namespace PersonalProject.Services.Implementations
                 clinicId
             );
 
-            appointment.ScheduledAt =
-                dto.ScheduledAt;
-
-            appointment.DurationMinutes =
-                dto.DurationMinutes;
-
-            appointment.NurseId =
-                dto.NurseId;
-
-            appointment.Type =
-                dto.Type.Trim();
-
-            appointment.Reason =
-                dto.Reason.Trim();
-
-            appointment.ProviderName =
-                string.IsNullOrWhiteSpace(
-                    dto.ProviderName
-                )
-                    ? null
-                    : dto.ProviderName.Trim();
-
-            appointment.Mode =
-                NormalizeMode(dto.Mode);
-
-            appointment.Status =
-                NormalizeStatus(dto.Status);
-
-            appointment.Notes =
-                dto.Notes;
-
-            appointment.UpdatedAt =
-                DateTime.UtcNow;
+            appointment.ScheduledAt = dto.ScheduledAt;
+            appointment.DurationMinutes = dto.DurationMinutes;
+            appointment.NurseId = dto.NurseId;
+            appointment.Type = dto.Type.Trim();
+            appointment.Reason = dto.Reason.Trim();
+            appointment.ProviderName = string.IsNullOrWhiteSpace(dto.ProviderName) ? null : dto.ProviderName.Trim();
+            appointment.Mode = NormalizeMode(dto.Mode);
+            appointment.Status = NormalizeStatus(dto.Status);
+            appointment.Notes = dto.Notes;
+            appointment.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -228,18 +199,9 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            var clinicId =
-                await GetStaffClinicIdAsync(
-                    performedByUserId
-                );
+            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
 
-            var appointment =
-                await GetAppointmentQuery()
-                    .FirstOrDefaultAsync(
-                        a =>
-                            a.Id == appointmentId &&
-                            a.ClinicId == clinicId
-                    );
+            var appointment = await GetAppointmentQuery().FirstOrDefaultAsync(a => a.Id == appointmentId && a.ClinicId == clinicId);
 
             return appointment?.ToDto();
         }
@@ -249,18 +211,9 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            var clinicId =
-                await GetStaffClinicIdAsync(
-                    performedByUserId
-                );
+            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
 
-            var appointments =
-                await GetAppointmentQuery()
-                    .Where(
-                        a => a.ClinicId == clinicId
-                    )
-                    .OrderBy(a => a.ScheduledAt)
-                    .ToListAsync();
+            var appointments = await GetAppointmentQuery().Where(a => a.ClinicId == clinicId).OrderBy(a => a.ScheduledAt).ToListAsync();
 
             return appointments
                 .Select(a => a.ToDto())
@@ -411,48 +364,20 @@ namespace PersonalProject.Services.Implementations
             return new AppointmentResponseDto
             {
                 Id = appointment.Id,
-
-                PatientId =
-                    appointment.PatientId,
-
-                PatientName =
-                    appointment.Patient.User.FullName,
-
-                ClinicId =
-                    appointment.ClinicId,
-
-                ClinicName =
-                    appointment.Clinic.Name,
-
-                NurseId =
-                    appointment.NurseId,
-
-                NurseName =
-                    appointment.Nurse?.User.FullName,
-
-                ScheduledAt =
-                    appointment.ScheduledAt,
-
-                DurationMinutes =
-                    appointment.DurationMinutes,
-
-                Type =
-                    appointment.Type,
-
-                Reason =
-                    appointment.Reason,
-
-                ProviderName =
-                    appointment.ProviderName,
-
-                Mode =
-                    appointment.Mode,
-
-                Status =
-                    appointment.Status,
-
-                Notes =
-                    appointment.Notes
+                PatientId = appointment.PatientId,
+                PatientName = appointment.Patient.User.FullName,
+                ClinicId = appointment.ClinicId,
+                ClinicName = appointment.Clinic.Name,
+                NurseId = appointment.NurseId,
+                NurseName = appointment.Nurse?.User.FullName,
+                ScheduledAt = appointment.ScheduledAt,
+                DurationMinutes = appointment.DurationMinutes,
+                Type = appointment.Type,
+                Reason = appointment.Reason,
+                ProviderName = appointment.ProviderName,
+                Mode = appointment.Mode,
+                Status = appointment.Status,
+                Notes = appointment.Notes
             };
         }
     }

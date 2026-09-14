@@ -17,10 +17,7 @@ namespace PersonalProject.Services.Implementations
         private readonly PhilaLinkDbContext _context;
         private readonly IConfiguration _config;
 
-        public AuthService(
-            PhilaLinkDbContext context,
-            IConfiguration config
-        )
+        public AuthService(PhilaLinkDbContext context, IConfiguration config)
         {
             _context = context;
             _config = config;
@@ -30,15 +27,9 @@ namespace PersonalProject.Services.Implementations
         // PATIENT SELF-REGISTRATION
         // =====================================================
 
-        public async Task<RegisterResponseDto> RegisterAsync(
-            RegisterDto dto
-        )
+        public async Task<RegisterResponseDto> RegisterAsync(RegisterDto dto)
         {
-            var exists =
-                await _context.Users.AnyAsync(u =>
-                    u.IdNumber == dto.IdNumber.Trim() ||
-                    u.PhoneNumber == dto.PhoneNumber.Trim()
-                );
+            var exists = await _context.Users.AnyAsync(u => u.IdNumber == dto.IdNumber.Trim() || u.PhoneNumber == dto.PhoneNumber.Trim());
 
             if (exists)
             {
@@ -47,9 +38,7 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
+            await using var transaction = await _context.Database.BeginTransactionAsync();
 
             var user = new User
             {
@@ -315,8 +304,7 @@ namespace PersonalProject.Services.Implementations
                         )
                 );
 
-            return new JwtSecurityTokenHandler()
-                .WriteToken(token);
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

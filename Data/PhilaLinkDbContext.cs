@@ -6,9 +6,7 @@ namespace PersonalProject.Data
 {
     public class PhilaLinkDbContext : DbContext
     {
-        public PhilaLinkDbContext(
-            DbContextOptions<PhilaLinkDbContext> options
-        ) : base(options)
+        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options) : base(options)
         {
         }
 
@@ -32,11 +30,7 @@ namespace PersonalProject.Data
 
         public DbSet<Clinic> Clinics { get; set; }
 
-        public DbSet<ClinicStock> ClinicStocks
-        {
-            get;
-            set;
-        }
+        public DbSet<ClinicStock> ClinicStocks { get; set; }
 
         // =====================================================
         // PATIENT HEALTH
@@ -44,36 +38,20 @@ namespace PersonalProject.Data
 
         public DbSet<Allergy> Allergies { get; set; }
 
-        public DbSet<MedicalCondition> MedicalConditions
-        {
-            get;
-            set;
-        }
+        public DbSet<MedicalCondition> MedicalConditions { get; set; }
 
-        public DbSet<SymptomAssessment> SymptomAssessments
-        {
-            get;
-            set;
-        }
+        public DbSet<SymptomAssessment> SymptomAssessments { get; set; }
         public DbSet<HealthMetric> HealthMetrics { get; set; }
 
         public DbSet<HealthRecord> HealthRecords { get; set; }
 
-        public DbSet<PatientPreference> PatientPreferences
-        {
-            get;
-            set;
-        }
+        public DbSet<PatientPreference> PatientPreferences { get; set; }
 
         // =====================================================
         // APPOINTMENTS
         // =====================================================
 
-        public DbSet<Appointment> Appointments
-        {
-            get;
-            set;
-        }
+        public DbSet<Appointment> Appointments { get; set; }
 
         // =====================================================
         // MEDICATIONS
@@ -81,29 +59,17 @@ namespace PersonalProject.Data
 
         public DbSet<Medication> Medications { get; set; }
 
-        public DbSet<MedicationSchedule> MedicationSchedules
-        {
-            get;
-            set;
-        }
+        public DbSet<MedicationSchedule> MedicationSchedules { get; set; }
 
-        public DbSet<MedicationLog> MedicationLogs
-        {
-            get;
-            set;
-        }
+        public DbSet<MedicationLog> MedicationLogs { get; set; }
 
         // =====================================================
         // COLLECTIONS
         // =====================================================
 
-        public DbSet<MedicationCollection>
-            MedicationCollections
-        { get; set; }
+        public DbSet<MedicationCollection> MedicationCollections { get; set; }
 
-        public DbSet<MedicationCollectionItem>
-            MedicationCollectionItems
-        { get; set; }
+        public DbSet<MedicationCollectionItem> MedicationCollectionItems { get; set; }
 
         // =====================================================
         // PROXY
@@ -115,23 +81,13 @@ namespace PersonalProject.Data
         // COMMUNICATION / SECURITY
         // =====================================================
 
-        public DbSet<Notification> Notifications
-        {
-            get;
-            set;
-        }
+        public DbSet<Notification> Notifications { get; set; }
 
         public DbSet<AuditLog> AuditLogs { get; set; }
 
-        public DbSet<OtpVerification> OtpVerifications
-        {
-            get;
-            set;
-        }
+        public DbSet<OtpVerification> OtpVerifications { get; set; }
 
-        protected override void OnModelCreating(
-            ModelBuilder modelBuilder
-        )
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 

@@ -212,9 +212,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var context =
-        scope.ServiceProvider
-            .GetRequiredService<PhilaLinkDbContext>();
+    var context = scope.ServiceProvider.GetRequiredService<PhilaLinkDbContext>();
 
     /*
      * During the architecture migration there may still be an old
@@ -223,10 +221,7 @@ using (var scope = app.Services.CreateScope())
      * We no longer create new generic Admin users.
      */
 
-    var superAdminExists =
-        await context.Users.AnyAsync(
-            u => u.Role == RoleNames.SuperAdmin
-        );
+    var superAdminExists = await context.Users.AnyAsync(u => u.Role == RoleNames.SuperAdmin);
 
     if (!superAdminExists)
     {

@@ -12,12 +12,9 @@ namespace PersonalProject.Controllers
     [Authorize(Policy = "ClinicStaff")]
     public class ClinicStockController : ControllerBase
     {
-        private readonly IClinicStockService
-            _stockService;
+        private readonly IClinicStockService _stockService;
 
-        public ClinicStockController(
-            IClinicStockService stockService
-        )
+        public ClinicStockController(IClinicStockService stockService)
         {
             _stockService = stockService;
         }
@@ -27,11 +24,7 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(
-                    await _stockService.GetAllAsync(
-                        GetCurrentUserId()
-                    )
-                );
+                return Ok(await _stockService.GetAllAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -41,17 +34,11 @@ namespace PersonalProject.Controllers
 
         [HttpPost]
         [Authorize(Roles = RoleNames.ClinicAdmin)]
-        public async Task<IActionResult> Create(
-            CreateClinicStockDto dto
-        )
+        public async Task<IActionResult> Create(CreateClinicStockDto dto)
         {
             try
             {
-                var result =
-                    await _stockService.CreateAsync(
-                        dto,
-                        GetCurrentUserId()
-                    );
+                var result = await _stockService.CreateAsync(dto, GetCurrentUserId());
 
                 return Ok(result);
             }
@@ -69,20 +56,11 @@ namespace PersonalProject.Controllers
 
         [HttpPut("{id:guid}")]
         [Authorize(Roles = RoleNames.ClinicAdmin)]
-        public async Task<IActionResult> Update(
-            Guid id,
-            UpdateClinicStockDto dto
-        )
+        public async Task<IActionResult> Update(Guid id, UpdateClinicStockDto dto)
         {
             try
             {
-                return Ok(
-                    await _stockService.UpdateAsync(
-                        id,
-                        dto,
-                        GetCurrentUserId()
-                    )
-                );
+                return Ok(await _stockService.UpdateAsync(id, dto, GetCurrentUserId()));
             }
             catch (KeyNotFoundException ex)
             {
@@ -103,20 +81,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPatch("{id:guid}/adjust")]
-        public async Task<IActionResult> Adjust(
-            Guid id,
-            AdjustClinicStockDto dto
-        )
+        public async Task<IActionResult> Adjust(Guid id, AdjustClinicStockDto dto)
         {
             try
             {
-                return Ok(
-                    await _stockService.AdjustAsync(
-                        id,
-                        dto,
-                        GetCurrentUserId()
-                    )
-                );
+                return Ok(await _stockService.AdjustAsync(id, dto, GetCurrentUserId()));
             }
             catch (KeyNotFoundException ex)
             {
@@ -138,10 +107,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||

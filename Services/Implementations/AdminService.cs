@@ -28,9 +28,7 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            var actor = await GetAdminActorAsync(
-                performedByUserId
-            );
+            var actor = await GetAdminActorAsync(performedByUserId);
 
             if (actor.User.Role != RoleNames.SuperAdmin)
             {
@@ -39,10 +37,7 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var clinicExists =
-                await _context.Clinics.AnyAsync(
-                    c => c.Id == dto.ClinicId
-                );
+            var clinicExists = await _context.Clinics.AnyAsync(c => c.Id == dto.ClinicId);
 
             if (!clinicExists)
             {

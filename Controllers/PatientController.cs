@@ -11,15 +11,11 @@ namespace PersonalProject.Controllers
     [Authorize(Policy = "PatientOnly")]
     public class PatientController : ControllerBase
     {
-        private readonly IPatientService
-            _patientService;
+        private readonly IPatientService _patientService;
 
-        public PatientController(
-            IPatientService patientService
-        )
+        public PatientController(IPatientService patientService)
         {
-            _patientService =
-                patientService;
+            _patientService = patientService;
         }
 
         // =====================================================
@@ -31,12 +27,7 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetMeAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetMeAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -45,19 +36,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPut("me")]
-        public async Task<IActionResult> UpdateMe(
-            UpdatePatientProfileDto dto
-        )
+        public async Task<IActionResult> UpdateMe(UpdatePatientProfileDto dto)
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .UpdateMeAsync(
-                            GetCurrentUserId(),
-                            dto
-                        )
-                );
+                return Ok(await _patientService.UpdateMeAsync(GetCurrentUserId(), dto));
             }
             catch (InvalidOperationException ex)
             {
@@ -76,17 +59,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/dashboard")]
-        public async Task<IActionResult>
-            GetDashboard()
+        public async Task<IActionResult> GetDashboard()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetDashboardAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetDashboardAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -99,17 +76,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/medications")]
-        public async Task<IActionResult>
-            GetMedications()
+        public async Task<IActionResult> GetMedications()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetMedicationsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetMedicationsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -122,17 +93,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/appointments")]
-        public async Task<IActionResult>
-            GetAppointments()
+        public async Task<IActionResult> GetAppointments()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetAppointmentsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetAppointmentsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -141,20 +106,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPost("me/appointments")]
-        public async Task<IActionResult>
-            BookAppointment(
-                PatientBookAppointmentDto dto
-            )
+        public async Task<IActionResult> BookAppointment(PatientBookAppointmentDto dto)
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .BookAppointmentAsync(
-                            GetCurrentUserId(),
-                            dto
-                        )
-                );
+                return Ok(await _patientService.BookAppointmentAsync(GetCurrentUserId(), dto));
             }
             catch (InvalidOperationException ex)
             {
@@ -168,25 +124,12 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpPatch(
-            "me/appointments/{id:guid}/reschedule"
-        )]
-        public async Task<IActionResult>
-            RescheduleAppointment(
-                Guid id,
-                PatientRescheduleAppointmentDto dto
-            )
+        [HttpPatch("me/appointments/{id:guid}/reschedule")]
+        public async Task<IActionResult> RescheduleAppointment(Guid id, PatientRescheduleAppointmentDto dto)
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .RescheduleAppointmentAsync(
-                            GetCurrentUserId(),
-                            id,
-                            dto
-                        )
-                );
+                return Ok(await _patientService.RescheduleAppointmentAsync(GetCurrentUserId(), id, dto));
             }
             catch (KeyNotFoundException ex)
             {
@@ -206,29 +149,14 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpPatch(
-            "me/appointments/{id:guid}/cancel"
-        )]
-        public async Task<IActionResult>
-            CancelAppointment(
-                Guid id
-            )
+        [HttpPatch("me/appointments/{id:guid}/cancel")]
+        public async Task<IActionResult> CancelAppointment(Guid id)
         {
             try
             {
-                await _patientService
-                    .CancelAppointmentAsync(
-                        GetCurrentUserId(),
-                        id
-                    );
+                await _patientService.CancelAppointmentAsync(GetCurrentUserId(), id);
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Appointment cancelled."
-                    }
-                );
+                return Ok(new { message = "Appointment cancelled." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -253,17 +181,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/records")]
-        public async Task<IActionResult>
-            GetRecords()
+        public async Task<IActionResult> GetRecords()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetRecordsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetRecordsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -276,17 +198,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/collections")]
-        public async Task<IActionResult>
-            GetCollections()
+        public async Task<IActionResult> GetCollections()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetCollectionsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetCollectionsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -295,16 +211,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpGet("me/collections/next")]
-        public async Task<IActionResult>
-            GetNextCollection()
+        public async Task<IActionResult> GetNextCollection()
         {
             try
             {
-                var result =
-                    await _patientService
-                        .GetNextCollectionAsync(
-                            GetCurrentUserId()
-                        );
+                var result = await _patientService.GetNextCollectionAsync(GetCurrentUserId());
 
                 return Ok(result);
             }
@@ -319,17 +230,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/notifications")]
-        public async Task<IActionResult>
-            GetNotifications()
+        public async Task<IActionResult> GetNotifications()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetNotificationsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetNotificationsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -337,21 +242,12 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpPatch(
-            "me/notifications/{id:guid}/read"
-        )]
-        public async Task<IActionResult>
-            MarkNotificationRead(
-                Guid id
-            )
+        [HttpPatch("me/notifications/{id:guid}/read")]
+        public async Task<IActionResult> MarkNotificationRead(Guid id)
         {
             try
             {
-                await _patientService
-                    .MarkNotificationReadAsync(
-                        GetCurrentUserId(),
-                        id
-                    );
+                await _patientService.MarkNotificationReadAsync(GetCurrentUserId(), id);
 
                 return NoContent();
             }
@@ -372,17 +268,11 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me/preferences")]
-        public async Task<IActionResult>
-            GetPreferences()
+        public async Task<IActionResult> GetPreferences()
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .GetPreferencesAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _patientService.GetPreferencesAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -391,20 +281,11 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPut("me/preferences")]
-        public async Task<IActionResult>
-            UpdatePreferences(
-                PatientPreferenceDto dto
-            )
+        public async Task<IActionResult> UpdatePreferences(PatientPreferenceDto dto)
         {
             try
             {
-                return Ok(
-                    await _patientService
-                        .UpdatePreferencesAsync(
-                            GetCurrentUserId(),
-                            dto
-                        )
-                );
+                return Ok(await _patientService.UpdatePreferencesAsync(GetCurrentUserId(), dto));
             }
             catch (UnauthorizedAccessException)
             {
@@ -418,10 +299,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||

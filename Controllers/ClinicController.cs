@@ -12,9 +12,7 @@ namespace PersonalProject.Controllers
     {
         private readonly IClinicService _service;
 
-        public ClinicController(
-            IClinicService service
-        )
+        public ClinicController(IClinicService service)
         {
             _service = service;
         }
@@ -22,18 +20,13 @@ namespace PersonalProject.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            return Ok(
-                await _service.GetAllAsync()
-            );
+            return Ok(await _service.GetAllAsync());
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<IActionResult> GetById(
-            Guid id
-        )
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var result =
-                await _service.GetByIdAsync(id);
+            var result = await _service.GetByIdAsync(id);
 
             return result == null
                 ? NotFound()
@@ -42,17 +35,11 @@ namespace PersonalProject.Controllers
 
         [HttpPost]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<IActionResult> Create(
-            CreateClinicDto dto
-        )
+        public async Task<IActionResult> Create(CreateClinicDto dto)
         {
             try
             {
-                return Ok(
-                    await _service.CreateAsync(
-                        dto
-                    )
-                );
+                return Ok(await _service.CreateAsync(dto));
             }
             catch (InvalidOperationException ex)
             {
@@ -64,19 +51,11 @@ namespace PersonalProject.Controllers
 
         [HttpPut("{id:guid}")]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<IActionResult> Update(
-            Guid id,
-            UpdateClinicDto dto
-        )
+        public async Task<IActionResult> Update(Guid id, UpdateClinicDto dto)
         {
             try
             {
-                return Ok(
-                    await _service.UpdateAsync(
-                        id,
-                        dto
-                    )
-                );
+                return Ok(await _service.UpdateAsync(id, dto));
             }
             catch (KeyNotFoundException ex)
             {
@@ -88,23 +67,13 @@ namespace PersonalProject.Controllers
 
         [HttpPatch("{id:guid}/deactivate")]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<IActionResult>
-            Deactivate(
-                Guid id
-            )
+        public async Task<IActionResult> Deactivate(Guid id)
         {
             try
             {
-                await _service
-                    .DeactivateAsync(id);
+                await _service.DeactivateAsync(id);
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Clinic deactivated."
-                    }
-                );
+                return Ok(new { message = "Clinic deactivated." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -116,23 +85,13 @@ namespace PersonalProject.Controllers
 
         [HttpPatch("{id:guid}/activate")]
         [Authorize(Policy = "SuperAdminOnly")]
-        public async Task<IActionResult>
-            Activate(
-                Guid id
-            )
+        public async Task<IActionResult> Activate(Guid id)
         {
             try
             {
-                await _service
-                    .ActivateAsync(id);
+                await _service.ActivateAsync(id);
 
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Clinic activated."
-                    }
-                );
+                return Ok(new { message = "Clinic activated." });
             }
             catch (KeyNotFoundException ex)
             {

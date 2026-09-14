@@ -9,47 +9,26 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/symptom-assessments")]
     [Authorize(Policy = "PatientOnly")]
-    public class SymptomAssessmentController :
-        ControllerBase
+    public class SymptomAssessmentController : ControllerBase
     {
-        private readonly
-            ISymptomAssessmentService _service;
+        private readonly ISymptomAssessmentService _service;
 
-        public SymptomAssessmentController(
-            ISymptomAssessmentService service
-        )
+        public SymptomAssessmentController(ISymptomAssessmentService service)
         {
             _service = service;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(
-            SymptomCreateDto dto
-        )
+        public async Task<IActionResult> Create(SymptomCreateDto dto)
         {
             try
             {
-                if (
-                    string.IsNullOrWhiteSpace(
-                        dto.Symptoms
-                    )
-                )
+                if (string.IsNullOrWhiteSpace(dto.Symptoms))
                 {
-                    return BadRequest(
-                        new
-                        {
-                            message =
-                                "Symptoms are required."
-                        }
-                    );
+                    return BadRequest(new { message = "Symptoms are required." });
                 }
 
-                var result =
-                    await _service
-                        .CreateForPatientAsync(
-                            GetCurrentUserId(),
-                            dto.Symptoms
-                        );
+                var result = await _service.CreateForPatientAsync(GetCurrentUserId(), dto.Symptoms);
 
                 return Ok(result);
             }
@@ -64,12 +43,7 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(
-                    await _service
-                        .GetMyAssessmentsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _service.GetMyAssessmentsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -79,10 +53,7 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (
                 string.IsNullOrWhiteSpace(value) ||
