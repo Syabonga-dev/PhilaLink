@@ -6,7 +6,6 @@ using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
-using PersonalProject.Models.Constants;
 
 namespace PersonalProject.Services.Implementations
 {

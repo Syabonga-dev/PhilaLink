@@ -11,7 +11,6 @@ using PersonalProject.Services.AI;
 using PersonalProject.Services.Implementations;
 using PersonalProject.Services.Interfaces;
 using System.Text;
-using PersonalProject.Services.AI;
 
 
 var builder = WebApplication.CreateBuilder(args);
