@@ -2,32 +2,109 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/notifications")]
     [Authorize(Policy = "ClinicStaff")]
-    public class NotificationController : ControllerBase
+    public class NotificationController :
+        ControllerBase
     {
-        private readonly INotificationService _service;
+        private readonly INotificationService
+            _service;
 
-        public NotificationController(INotificationService service)
+        public NotificationController(
+            INotificationService service
+        )
         {
             _service = service;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(CreateNotificationDto dto)
+        public async Task<IActionResult> Create(
+            CreateNotificationDto dto
+        )
         {
-            if (dto.UserId == Guid.Empty || string.IsNullOrWhiteSpace(dto.Message))
+            if (
+                dto.UserId == Guid.Empty ||
+                string.IsNullOrWhiteSpace(
+                    dto.Message
+                )
+            )
             {
-                return BadRequest(new { message = "UserId and message are required." });
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Patient user ID and message are required."
+                    }
+                );
             }
 
-            await _service.CreateAsync(dto.UserId, dto.Message.Trim());
+            try
+            {
+                await _service
+                    .CreateForPatientAsync(
+                        dto.UserId,
+                        dto.Message,
+                        GetCurrentUserId()
+                    );
 
-            return Ok(new { message = "Notification created." });
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Notification created."
+                    }
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new
+                    {
+                        message = ex.Message
+                    }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new
+                    {
+                        message = ex.Message
+                    }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var claim =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    claim
+                ) ||
+                !Guid.TryParse(
+                    claim,
+                    out var userId
+                )
+            )
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            return userId;
         }
     }
 }

@@ -1,49 +1,133 @@
 using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
+using PersonalProject.Models.Constants;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class NotificationService : INotificationService
+    public class NotificationService :
+        INotificationService
     {
         private readonly PhilaLinkDbContext _context;
 
-        public NotificationService(PhilaLinkDbContext context)
+        public NotificationService(
+            PhilaLinkDbContext context
+        )
         {
             _context = context;
         }
 
-        public async Task CreateAsync(Guid userId, string message)
+        public async Task CreateForPatientAsync(
+            Guid patientUserId,
+            string message,
+            Guid performedByUserId
+        )
         {
-            var notification = new Notification
+            if (string.IsNullOrWhiteSpace(message))
             {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Message = message,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            };
+                throw new InvalidOperationException(
+                    "Notification message is required."
+                );
+            }
 
-            _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
-        }
+            var staffUser =
+                await _context.Users
+                    .Include(u => u.Admin)
+                    .Include(u => u.Nurse)
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id == performedByUserId &&
+                            u.IsActive
+                    );
 
-        public async Task<List<Notification>> GetUserNotificationsAsync(Guid userId)
-        {
-            return await _context.Notifications
-                .Where(n => n.UserId == userId)
-                .ToListAsync();
-        }
+            if (staffUser == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active staff account required."
+                );
+            }
 
-        public async Task MarkAsReadAsync(Guid notificationId)
-        {
-            var n = await _context.Notifications.FindAsync(notificationId);
-            if (n == null) return;
+            Guid? staffClinicId = null;
 
-            n.IsRead = true;
+            if (
+                staffUser.Role ==
+                    RoleNames.ClinicAdmin &&
+                staffUser.Admin?.ClinicId != null
+            )
+            {
+                staffClinicId =
+                    staffUser.Admin.ClinicId.Value;
+            }
+            else if (
+                staffUser.Role ==
+                    RoleNames.Nurse &&
+                staffUser.Nurse != null
+            )
+            {
+                staffClinicId =
+                    staffUser.Nurse.ClinicId;
+            }
+            else
+            {
+                throw new UnauthorizedAccessException(
+                    "Clinic staff privileges are required."
+                );
+            }
+
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.UserId ==
+                                patientUserId &&
+                            p.User.Role ==
+                                RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (patient == null)
+            {
+                throw new KeyNotFoundException(
+                    "Active patient account not found."
+                );
+            }
+
+            if (
+                patient.ClinicId == null ||
+                patient.ClinicId != staffClinicId
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Patient does not belong to your clinic."
+                );
+            }
+
+            var notification =
+                new Notification
+                {
+                    Id =
+                        Guid.NewGuid(),
+
+                    UserId =
+                        patient.UserId,
+
+                    Message =
+                        message.Trim(),
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+            _context.Notifications.Add(
+                notification
+            );
+
             await _context.SaveChangesAsync();
         }
     }
 }
-
