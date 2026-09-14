@@ -37,6 +37,7 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IMedicationCollectionService, MedicationCollectionService>();
 builder.Services.AddScoped<IClinicStockService, ClinicStockService>();
+builder.Services.AddScoped<INurseService, NurseService>();
 
 // =====================================================
 // CONTROLLERS
