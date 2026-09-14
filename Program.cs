@@ -49,6 +49,19 @@ builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
     }
 );
 
+builder.Services.AddHttpClient<IWeatherService, WeatherService>(
+    client =>
+    {
+        client.BaseAddress =
+            new Uri(
+                "https://api.openweathermap.org"
+            );
+
+        client.Timeout =
+            TimeSpan.FromSeconds(15);
+    }
+);
+
 // =====================================================
 // CONTROLLERS
 // =====================================================

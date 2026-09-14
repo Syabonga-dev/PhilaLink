@@ -7,5 +7,10 @@ namespace PersonalProject.Services.Interfaces
             string message,
             Guid performedByUserId
         );
+
+        Task<bool> CreateSystemForPatientAsync(
+            Guid patientUserId,
+            string message
+        );
     }
 }

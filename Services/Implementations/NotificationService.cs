@@ -6,8 +6,7 @@ using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class NotificationService :
-        INotificationService
+    public class NotificationService : INotificationService
     {
         private readonly PhilaLinkDbContext _context;
 
@@ -51,8 +50,7 @@ namespace PersonalProject.Services.Implementations
             Guid? staffClinicId = null;
 
             if (
-                staffUser.Role ==
-                    RoleNames.ClinicAdmin &&
+                staffUser.Role == RoleNames.ClinicAdmin &&
                 staffUser.Admin?.ClinicId != null
             )
             {
@@ -60,8 +58,7 @@ namespace PersonalProject.Services.Implementations
                     staffUser.Admin.ClinicId.Value;
             }
             else if (
-                staffUser.Role ==
-                    RoleNames.Nurse &&
+                staffUser.Role == RoleNames.Nurse &&
                 staffUser.Nurse != null
             )
             {
@@ -80,10 +77,8 @@ namespace PersonalProject.Services.Implementations
                     .Include(p => p.User)
                     .FirstOrDefaultAsync(
                         p =>
-                            p.UserId ==
-                                patientUserId &&
-                            p.User.Role ==
-                                RoleNames.Patient &&
+                            p.UserId == patientUserId &&
+                            p.User.Role == RoleNames.Patient &&
                             p.User.IsActive
                     );
 
@@ -107,8 +102,7 @@ namespace PersonalProject.Services.Implementations
             var notification =
                 new Notification
                 {
-                    Id =
-                        Guid.NewGuid(),
+                    Id = Guid.NewGuid(),
 
                     UserId =
                         patient.UserId,
@@ -128,6 +122,82 @@ namespace PersonalProject.Services.Implementations
             );
 
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<bool> CreateSystemForPatientAsync(
+            Guid patientUserId,
+            string message
+        )
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                throw new InvalidOperationException(
+                    "Notification message is required."
+                );
+            }
+
+            var patientExists =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .AnyAsync(
+                        p =>
+                            p.UserId == patientUserId &&
+                            p.User.Role == RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (!patientExists)
+            {
+                throw new KeyNotFoundException(
+                    "Active patient account not found."
+                );
+            }
+
+            var trimmedMessage =
+                message.Trim();
+
+            var duplicateCutoff =
+                DateTime.UtcNow.AddHours(-12);
+
+            var duplicateExists =
+                await _context.Notifications
+                    .AnyAsync(
+                        n =>
+                            n.UserId == patientUserId &&
+                            n.Message == trimmedMessage &&
+                            n.CreatedAt >= duplicateCutoff
+                    );
+
+            if (duplicateExists)
+            {
+                return false;
+            }
+
+            var notification =
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+
+                    UserId =
+                        patientUserId,
+
+                    Message =
+                        trimmedMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+            _context.Notifications.Add(
+                notification
+            );
+
+            await _context.SaveChangesAsync();
+
+            return true;
         }
     }
 }
