@@ -469,10 +469,7 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        private async Task ValidateProxyAssignmentAsync(
-            Guid patientId,
-            Guid proxyId
-        )
+        private async Task ValidateProxyAssignmentAsync(Guid patientId,Guid proxyId)
         {
             var valid =
                 await _context.ProxyLinks
@@ -481,6 +478,7 @@ namespace PersonalProject.Services.Implementations
                             patientId &&
                         pl.ProxyId ==
                             proxyId &&
+                        pl.IsActive &&
                         pl.Proxy.User.IsActive
                     );
 

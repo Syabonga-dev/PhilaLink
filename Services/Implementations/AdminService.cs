@@ -22,11 +22,7 @@ namespace PersonalProject.Services.Implementations
         // REGISTER CLINIC ADMIN
         // =====================================================
 
-        public async Task<NewStaffAccountDto>
-            RegisterClinicAdminAsync(
-                RegisterClinicAdminDto dto,
-                Guid performedByUserId
-            )
+        public async Task<NewStaffAccountDto>RegisterClinicAdminAsync(RegisterClinicAdminDto dto, Guid performedByUserId)
         {
             var actor = await GetAdminActorAsync(performedByUserId);
 
@@ -393,8 +389,7 @@ namespace PersonalProject.Services.Implementations
                                 u.IsActive
                         ),
 
-                    TotalProxyLinks =
-                        await _context.ProxyLinks.CountAsync()
+                    TotalProxyLinks = await _context.ProxyLinks.CountAsync(pl => pl.IsActive)
                 };
             }
 
@@ -457,7 +452,8 @@ namespace PersonalProject.Services.Implementations
                             pl =>
                                 clinicPatientIds.Contains(
                                     pl.PatientId
-                                )
+                                ) &&
+                                pl.IsActive
                         )
                         .Select(pl => pl.ProxyId)
                         .Distinct()
@@ -470,6 +466,7 @@ namespace PersonalProject.Services.Implementations
                                 clinicPatientIds.Contains(
                                     pl.PatientId
                                 ) &&
+                                pl.IsActive &&
                                 pl.Proxy.User.IsActive
                         )
                         .Select(pl => pl.ProxyId)
@@ -481,10 +478,11 @@ namespace PersonalProject.Services.Implementations
                         pl =>
                             clinicPatientIds.Contains(
                                 pl.PatientId
-                            )
+                            ) &&
+                            pl.IsActive
                     )
-            };
-        }
+                            };
+                        }
 
         // =====================================================
         // DEACTIVATE ACCOUNT
