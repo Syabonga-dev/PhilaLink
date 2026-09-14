@@ -29,12 +29,7 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(
-                    await _service
-                        .GetVisibleLogsAsync(
-                            GetCurrentUserId()
-                        )
-                );
+                return Ok(await _service.GetVisibleLogsAsync(GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {

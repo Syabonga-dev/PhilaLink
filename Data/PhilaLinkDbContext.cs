@@ -87,6 +87,10 @@ namespace PersonalProject.Data
 
         public DbSet<OtpVerification> OtpVerifications { get; set; }
 
+        public DbSet<ChatConversation> ChatConversations { get; set; }
+
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -552,6 +556,49 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<OtpVerification>()
                 .HasIndex(o => o.ExpiryTime);
+
+            // =================================================
+            // PATIENT → CHAT CONVERSATIONS
+            // =================================================
+
+            modelBuilder.Entity<ChatConversation>()
+                .HasOne(c => c.Patient)
+                .WithMany()
+                .HasForeignKey(c => c.PatientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ChatConversation>()
+                .HasIndex(c => c.PatientId);
+
+            modelBuilder.Entity<ChatConversation>()
+                .HasIndex(c => new
+                {
+                    c.PatientId,
+                    c.IsActive
+                });
+
+            modelBuilder.Entity<ChatConversation>()
+                .HasIndex(c => c.UpdatedAt);
+
+            // =================================================
+            // CHAT CONVERSATION → MESSAGES
+            // =================================================
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasIndex(m => m.ConversationId);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasIndex(m => new
+                {
+                    m.ConversationId,
+                    m.CreatedAt
+                });
 
             // =================================================
             // USER → AUDIT LOGS
