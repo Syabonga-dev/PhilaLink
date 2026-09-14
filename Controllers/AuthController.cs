@@ -67,10 +67,10 @@ namespace PersonalProject.Controllers
             try
             {
                 var expiresAt =
-                    await _otpService
-                        .GenerateAsync(
-                            userId
-                        );
+                    await _otpService.GenerateAsync(
+                        userId,
+                        "AccountVerification"
+                    );
 
                 return Ok(
                     new
@@ -96,7 +96,13 @@ namespace PersonalProject.Controllers
         [HttpPost("otp/verify")]
         public async Task<IActionResult> VerifyOtp(Guid userId, string code)
         {
-            var verified = await _otpService.VerifyAsync(userId, code);
+            var verified =
+                    await _otpService.VerifyAsync(
+                        userId,
+                        code,
+                        "AccountVerification"
+                    );
+
             if (!verified)
                 return BadRequest(new { message = "Invalid or expired code." });
 

@@ -8,10 +8,9 @@ namespace PersonalProject.Models.Entities
 
         public User User { get; set; } = null!;
 
-        /*
-         * Never store the verification code itself.
-         * Only the BCrypt hash is persisted.
-         */
+        public string Purpose { get; set; } =
+            "AccountVerification";
+
         public string CodeHash { get; set; } =
             string.Empty;
 

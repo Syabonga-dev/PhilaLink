@@ -975,15 +975,84 @@ namespace PersonalProject.Services.Implementations
             string idNumber
         )
         {
-            var namePart =
-                fullName.Replace(" ", "");
+            const string uppercase =
+                "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-            var idPart =
-                idNumber.Length >= 6
-                    ? idNumber[..6]
-                    : idNumber;
+            const string lowercase =
+                "abcdefghijkmnopqrstuvwxyz";
 
-            return $"{namePart}{idPart}";
+            const string digits =
+                "23456789";
+
+            const string symbols =
+                "!@#$%&*";
+
+            const string all =
+                uppercase +
+                lowercase +
+                digits +
+                symbols;
+
+            var password =
+                new char[14];
+
+            password[0] =
+                uppercase[
+                    System.Security.Cryptography
+                        .RandomNumberGenerator
+                        .GetInt32(
+                            uppercase.Length
+                        )
+                ];
+
+            password[1] =
+                lowercase[
+                    System.Security.Cryptography
+                        .RandomNumberGenerator
+                        .GetInt32(
+                            lowercase.Length
+                        )
+                ];
+
+            password[2] =
+                digits[
+                    System.Security.Cryptography
+                        .RandomNumberGenerator
+                        .GetInt32(
+                            digits.Length
+                        )
+                ];
+
+            password[3] =
+                symbols[
+                    System.Security.Cryptography
+                        .RandomNumberGenerator
+                        .GetInt32(
+                            symbols.Length
+                        )
+                ];
+
+            for (
+                var i = 4;
+                i < password.Length;
+                i++
+            )
+            {
+                password[i] =
+                    all[
+                        System.Security.Cryptography
+                            .RandomNumberGenerator
+                            .GetInt32(
+                                all.Length
+                            )
+                    ];
+            }
+
+            Random.Shared.Shuffle(
+                password
+            );
+
+            return new string(password);
         }
 
         // =====================================================

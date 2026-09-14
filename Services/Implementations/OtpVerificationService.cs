@@ -15,6 +15,8 @@ namespace PersonalProject.Services.Implementations
 
         private const int MaxAttempts = 5;
 
+        private const int ResendCooldownSeconds = 60;
+
         private readonly PhilaLinkDbContext _context;
 
         private readonly IConfiguration _config;
@@ -33,14 +35,14 @@ namespace PersonalProject.Services.Implementations
             _logger = logger;
         }
 
-        // =====================================================
-        // GENERATE
-        // =====================================================
-
         public async Task<DateTime> GenerateAsync(
-            Guid userId
+            Guid userId,
+            string purpose
         )
         {
+            purpose =
+                NormalizePurpose(purpose);
+
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
@@ -54,25 +56,39 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                /*
-                 * Keep the response generic.
-                 * Do not reveal whether an account exists.
-                 */
                 throw new InvalidOperationException(
                     "Unable to send verification code."
                 );
             }
 
-            /*
-             * Only the newest code should remain usable.
-             *
-             * A resend invalidates all previous codes.
-             */
+            var cooldownStart =
+                DateTime.UtcNow.AddSeconds(
+                    -ResendCooldownSeconds
+                );
+
+            var recentlyCreated =
+                await _context.OtpVerifications
+                    .AnyAsync(
+                        o =>
+                            o.UserId == userId &&
+                            o.Purpose == purpose &&
+                            o.CreatedAt >= cooldownStart
+                    );
+
+            if (recentlyCreated)
+            {
+                throw new InvalidOperationException(
+                    "Please wait before requesting another verification code."
+                );
+            }
+
             var existingCodes =
                 await _context.OtpVerifications
-                    .Where(o =>
-                        o.UserId == userId &&
-                        !o.IsUsed
+                    .Where(
+                        o =>
+                            o.UserId == userId &&
+                            o.Purpose == purpose &&
+                            !o.IsUsed
                     )
                     .ToListAsync();
 
@@ -97,6 +113,9 @@ namespace PersonalProject.Services.Implementations
 
                     UserId =
                         userId,
+
+                    Purpose =
+                        purpose,
 
                     CodeHash =
                         BCrypt.Net.BCrypt.HashPassword(
@@ -127,15 +146,12 @@ namespace PersonalProject.Services.Implementations
                 await SendOtpEmailAsync(
                     user.Email,
                     user.FullName,
-                    generatedCode
+                    generatedCode,
+                    purpose
                 );
             }
             catch
             {
-                /*
-                 * Do not leave a usable OTP in the database
-                 * when delivery failed.
-                 */
                 otp.IsUsed = true;
 
                 await _context.SaveChangesAsync();
@@ -146,15 +162,15 @@ namespace PersonalProject.Services.Implementations
             return expiry;
         }
 
-        // =====================================================
-        // VERIFY
-        // =====================================================
-
         public async Task<bool> VerifyAsync(
             Guid userId,
-            string code
+            string code,
+            string purpose
         )
         {
+            purpose =
+                NormalizePurpose(purpose);
+
             if (
                 string.IsNullOrWhiteSpace(code) ||
                 code.Length != 6 ||
@@ -166,9 +182,11 @@ namespace PersonalProject.Services.Implementations
 
             var otp =
                 await _context.OtpVerifications
-                    .Where(o =>
-                        o.UserId == userId &&
-                        !o.IsUsed
+                    .Where(
+                        o =>
+                            o.UserId == userId &&
+                            o.Purpose == purpose &&
+                            !o.IsUsed
                     )
                     .OrderByDescending(
                         o => o.CreatedAt
@@ -229,42 +247,54 @@ namespace PersonalProject.Services.Implementations
 
             otp.IsUsed = true;
 
-            var user =
-                await _context.Users
-                    .FirstOrDefaultAsync(
-                        u => u.Id == userId
-                    );
-
-            if (user == null)
+            if (
+                purpose ==
+                "AccountVerification"
+            )
             {
-                return false;
+                var user =
+                    await _context.Users
+                        .FirstOrDefaultAsync(
+                            u => u.Id == userId
+                        );
+
+                if (user == null)
+                {
+                    return false;
+                }
+
+                user.IsVerified = true;
+
+                user.VerifiedAt =
+                    DateTime.UtcNow;
+
+                user.UpdatedAt =
+                    DateTime.UtcNow;
             }
-
-            user.IsVerified = true;
-
-            user.VerifiedAt =
-                DateTime.UtcNow;
-
-            user.UpdatedAt =
-                DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
             return true;
         }
 
-        // =====================================================
-        // SECURE CODE GENERATION
-        // =====================================================
+        private static string NormalizePurpose(
+            string purpose
+        )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    purpose
+                )
+            )
+            {
+                return "AccountVerification";
+            }
+
+            return purpose.Trim();
+        }
 
         private static string GenerateSecureCode()
         {
-            /*
-             * RandomNumberGenerator is cryptographically secure.
-             *
-             * Range:
-             * 100000 - 999999 inclusive.
-             */
             var value =
                 RandomNumberGenerator.GetInt32(
                     100000,
@@ -274,14 +304,11 @@ namespace PersonalProject.Services.Implementations
             return value.ToString();
         }
 
-        // =====================================================
-        // EMAIL DELIVERY
-        // =====================================================
-
         private async Task SendOtpEmailAsync(
             string toEmail,
             string recipientName,
-            string code
+            string code,
+            string purpose
         )
         {
             var host =
@@ -293,12 +320,6 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                /*
-                 * Do NOT log OTP codes.
-                 *
-                 * Missing SMTP configuration is now treated
-                 * as an actual configuration failure.
-                 */
                 _logger.LogError(
                     "SMTP is not configured."
                 );
@@ -393,6 +414,7 @@ namespace PersonalProject.Services.Implementations
                     Body =
                         $"Hi {recipientName},\n\n" +
                         $"Your PhilaLink verification code is: {code}\n\n" +
+                        $"Purpose: {purpose}\n\n" +
                         $"This code expires in {ExpiryMinutes} minutes.\n\n" +
                         "If you did not request this code, you can ignore this message.",
 
@@ -412,9 +434,6 @@ namespace PersonalProject.Services.Implementations
             }
             catch (Exception ex)
             {
-                /*
-                 * Never include the OTP itself in logs.
-                 */
                 _logger.LogError(
                     ex,
                     "Failed to send verification email."
