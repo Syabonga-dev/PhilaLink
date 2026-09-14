@@ -25,5 +25,8 @@ namespace PersonalProject.Services.Interfaces
         Task DeactivateAccountAsync(Guid userId, Guid performedByUserId);
 
         Task ActivateAccountAsync(Guid userId, Guid performedByUserId);
+        Task<ClinicAdminMeDto> GetClinicAdminMeAsync(Guid performedByUserId);
+
+        Task<ClinicAdminOverviewDto> GetClinicOverviewAsync(Guid performedByUserId);
     }
 }

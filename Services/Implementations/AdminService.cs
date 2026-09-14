@@ -503,11 +503,8 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
         // ACTIVATE ACCOUNT
         // =====================================================
-
-        public async Task ActivateAccountAsync(
-            Guid userId,
-            Guid performedByUserId
-        )
+        
+        public async Task ActivateAccountAsync(Guid userId,Guid performedByUserId)
         {
             await SetActiveAsync(
                 userId,
@@ -516,26 +513,225 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        // =====================================================
-        // CENTRAL ACCOUNT STATUS
-        // =====================================================
-
-        private async Task SetActiveAsync(
-            Guid targetUserId,
-            bool isActive,
-            Guid performedByUserId
-        )
+        public async Task<ClinicAdminMeDto>
+    GetClinicAdminMeAsync(
+        Guid performedByUserId
+    )
         {
             var actor =
                 await GetAdminActorAsync(
                     performedByUserId
                 );
 
+            if (
+                actor.User.Role !=
+                    RoleNames.ClinicAdmin ||
+                actor.Admin.ClinicId == null
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "ClinicAdmin account required."
+                );
+            }
+
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c =>
+                            c.Id ==
+                            actor.Admin.ClinicId.Value
+                    );
+
+            if (clinic == null)
+            {
+                throw new KeyNotFoundException(
+                    "Assigned clinic not found."
+                );
+            }
+
+            return new ClinicAdminMeDto
+            {
+                UserId =
+                    actor.User.Id,
+
+                AdminId =
+                    actor.Admin.Id,
+
+                FullName =
+                    actor.User.FullName,
+
+                Email =
+                    actor.User.Email,
+
+                ClinicId =
+                    clinic.Id,
+
+                ClinicName =
+                    clinic.Name,
+
+                IsActive =
+                    actor.User.IsActive
+            };
+        }
+
+        public async Task<ClinicAdminOverviewDto>
+            GetClinicOverviewAsync(
+                Guid performedByUserId
+            )
+        {
+            var actor =
+                await GetAdminActorAsync(
+                    performedByUserId
+                );
+
+            if (
+                actor.User.Role !=
+                    RoleNames.ClinicAdmin ||
+                actor.Admin.ClinicId == null
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "ClinicAdmin account required."
+                );
+            }
+
+            var clinicId =
+                actor.Admin.ClinicId.Value;
+
+            var clinic =
+                await _context.Clinics
+                    .FirstOrDefaultAsync(
+                        c => c.Id == clinicId
+                    );
+
+            if (clinic == null)
+            {
+                throw new KeyNotFoundException(
+                    "Assigned clinic not found."
+                );
+            }
+
+            var today =
+                DateTime.UtcNow.Date;
+
+            var tomorrow =
+                today.AddDays(1);
+
+            var activePatients =
+                await _context.Patients
+                    .CountAsync(
+                        p =>
+                            p.ClinicId ==
+                                clinicId &&
+                            p.User.IsActive
+                    );
+
+            var activeNurses =
+                await _context.Nurses
+                    .CountAsync(
+                        n =>
+                            n.ClinicId ==
+                                clinicId &&
+                            n.User.IsActive
+                    );
+
+            var appointmentsToday =
+                await _context.Appointments
+                    .CountAsync(
+                        a =>
+                            a.ClinicId ==
+                                clinicId &&
+                            a.ScheduledAt >=
+                                today &&
+                            a.ScheduledAt <
+                                tomorrow &&
+                            a.Status !=
+                                "Cancelled"
+                    );
+
+            var collectionsDueToday =
+                await _context
+                    .MedicationCollections
+                    .CountAsync(
+                        c =>
+                            c.ClinicId ==
+                                clinicId &&
+                            c.ScheduledCollectionDate >=
+                                today &&
+                            c.ScheduledCollectionDate <
+                                tomorrow &&
+                            c.Status !=
+                                "Collected" &&
+                            c.Status !=
+                                "Cancelled"
+                    );
+
+            var overdueCollections =
+                await _context
+                    .MedicationCollections
+                    .CountAsync(
+                        c =>
+                            c.ClinicId ==
+                                clinicId &&
+                            c.ScheduledCollectionDate <
+                                today &&
+                            c.Status !=
+                                "Collected" &&
+                            c.Status !=
+                                "Cancelled"
+                    );
+
+            var lowStockItems =
+                await _context.ClinicStocks
+                    .CountAsync(
+                        s =>
+                            s.ClinicId ==
+                                clinicId &&
+                            s.IsActive &&
+                            s.QuantityOnHand <=
+                                s.ReorderLevel
+                    );
+
+            return new ClinicAdminOverviewDto
+            {
+                ClinicId =
+                    clinic.Id,
+
+                ClinicName =
+                    clinic.Name,
+
+                ActivePatients =
+                    activePatients,
+
+                ActiveNurses =
+                    activeNurses,
+
+                AppointmentsToday =
+                    appointmentsToday,
+
+                CollectionsDueToday =
+                    collectionsDueToday,
+
+                OverdueCollections =
+                    overdueCollections,
+
+                LowStockItems =
+                    lowStockItems
+            };
+        }
+
+
+        // =====================================================
+        // CENTRAL ACCOUNT STATUS
+        // =====================================================
+
+        private async Task SetActiveAsync(Guid targetUserId,bool isActive,Guid performedByUserId)
+        {
+            var actor = await GetAdminActorAsync(performedByUserId );
+
             if (targetUserId == performedByUserId)
             {
-                throw new InvalidOperationException(
-                    "You cannot change the active state of your own account."
-                );
+                throw new InvalidOperationException("You cannot change the active state of your own account.");
             }
 
             var target = await _context.Users

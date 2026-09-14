@@ -264,6 +264,54 @@ namespace PersonalProject.Controllers
             }
         }
 
+        [HttpGet("me")]
+        public async Task<IActionResult> Me()
+        {
+            try
+            {
+                return Ok(
+                    await _adminService
+                        .GetClinicAdminMeAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpGet("clinic-overview")]
+        public async Task<IActionResult> ClinicOverview()
+        {
+            try
+            {
+                return Ok(
+                    await _adminService
+                        .GetClinicOverviewAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
         // =====================================================
         // JWT USER ID
         // =====================================================
