@@ -7,9 +7,12 @@ using PersonalProject.Data;
 using PersonalProject.Models;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.Entities;
+using PersonalProject.Services.AI;
 using PersonalProject.Services.Implementations;
 using PersonalProject.Services.Interfaces;
 using System.Text;
+using PersonalProject.Services.AI;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +41,8 @@ builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IMedicationCollectionService, MedicationCollectionService>();
 builder.Services.AddScoped<IClinicStockService, ClinicStockService>();
 builder.Services.AddScoped<INurseService, NurseService>();
+builder.Services.AddScoped<IChatbotService, ChatbotService>();
+builder.Services.AddScoped<IChatbotProvider, SafeFallbackChatbotProvider>();
 
 // =====================================================
 // CONTROLLERS
