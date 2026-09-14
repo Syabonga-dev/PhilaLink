@@ -52,14 +52,15 @@ namespace PersonalProject.Services.Implementations
 
                 Email = dto.Email.Trim(),
 
-                PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(
-                        dto.Password
-                    ),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
 
                 Role = RoleNames.Patient,
 
                 IsActive = true,
+
+                IsVerified = false,
+
+                VerifiedAt = null,
 
                 CreatedAt = DateTime.UtcNow
             };
@@ -72,8 +73,7 @@ namespace PersonalProject.Services.Implementations
 
                 UserId = user.Id,
 
-                PatientNumber =
-                    await GeneratePatientNumberAsync(),
+                PatientNumber = await GeneratePatientNumberAsync(),
 
                 Email = user.Email,
 
@@ -119,7 +119,9 @@ namespace PersonalProject.Services.Implementations
 
                 FullName = user.FullName,
 
-                Role = user.Role
+                Role = user.Role,
+
+                RequiresVerification = true
             };
         }
 
@@ -127,9 +129,7 @@ namespace PersonalProject.Services.Implementations
         // LOGIN
         // =====================================================
 
-        public async Task<LoginResponseDto> LoginAsync(
-            LoginDto dto
-        )
+        public async Task<LoginResponseDto> LoginAsync(LoginDto dto)
         {
             var user = await _context.Users
                 .FirstOrDefaultAsync(
@@ -161,6 +161,23 @@ namespace PersonalProject.Services.Implementations
             {
                 throw new UnauthorizedAccessException(
                     "This account is inactive. Contact an administrator."
+                );
+            }
+
+                        /*
+             * Patient self-registration must complete verification
+             * before a JWT can be issued.
+             *
+             * Administrator-created staff accounts are already trusted
+             * through their controlled creation workflow.
+             */
+            if (
+                user.Role == RoleNames.Patient &&
+                !user.IsVerified
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Account verification is required before login."
                 );
             }
 
@@ -198,8 +215,71 @@ namespace PersonalProject.Services.Implementations
 
                     Email = user.Email,
 
-                    Role = user.Role
+                    Role = user.Role,
+
+                    IsActive = user.IsActive,
+
+                    IsVerified = user.IsVerified
                 }
+            };
+        }
+
+        // =====================================================
+        // AUTHENTICATED USER
+        // =====================================================
+
+        public async Task<UserResponseDto> GetMeAsync(
+            Guid userId
+        )
+        {
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        u => u.Id == userId
+                    );
+
+            if (
+                user == null ||
+                !user.IsActive
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Account is not available."
+                );
+            }
+
+            if (!RoleNames.IsValid(user.Role))
+            {
+                throw new UnauthorizedAccessException(
+                    "Account role is invalid."
+                );
+            }
+
+            return new UserResponseDto
+            {
+                Id =
+                    user.Id,
+
+                FullName =
+                    user.FullName,
+
+                IdNumber =
+                    user.IdNumber,
+
+                PhoneNumber =
+                    user.PhoneNumber,
+
+                Email =
+                    user.Email,
+
+                Role =
+                    user.Role,
+
+                IsActive =
+                    user.IsActive,
+
+                IsVerified =
+                    user.IsVerified
             };
         }
 

@@ -83,7 +83,8 @@ namespace PersonalProject.Services.Implementations
                             p.PatientId ==
                                 patientId &&
                             p.ProxyId ==
-                                proxyId
+                                proxyId &&
+                            p.IsActive
                     );
 
             if (exists)
@@ -106,7 +107,11 @@ namespace PersonalProject.Services.Implementations
                         proxyId,
 
                     AssignedAt =
-                        DateTime.UtcNow
+                        DateTime.UtcNow,
+
+                        IsActive = true,
+                        EndedAt = null,
+                        EndedByUserId = null
                 };
 
             if (actor.NurseId != null)
@@ -164,7 +169,20 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            _context.ProxyLinks.Remove(link);
+            if (!link.IsActive)
+            {
+                throw new InvalidOperationException(
+                    "Proxy assignment is already inactive."
+                );
+            }
+
+            link.IsActive = false;
+
+            link.EndedAt =
+                DateTime.UtcNow;
+
+            link.EndedByUserId =
+                performedByUserId;
 
             await _context.SaveChangesAsync();
 
@@ -217,7 +235,8 @@ namespace PersonalProject.Services.Implementations
                 .Where(
                     pl =>
                         pl.PatientId ==
-                        patientId
+                            patientId &&
+                        pl.IsActive
                 )
                 .OrderByDescending(
                     pl => pl.AssignedAt
@@ -279,7 +298,8 @@ namespace PersonalProject.Services.Implementations
                 .Where(
                     pl =>
                         pl.ProxyId ==
-                        proxy.Id
+                            proxy.Id &&
+                        pl.IsActive
                 )
                 .OrderBy(
                     pl =>

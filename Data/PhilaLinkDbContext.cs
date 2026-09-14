@@ -355,16 +355,19 @@ namespace PersonalProject.Data
             modelBuilder.Entity<ProxyLink>()
                 .HasIndex(pl => pl.ProxyId);
 
-            // Prevent same proxy being linked to same patient twice.
+            // Track active/inactive proxy links.
+            modelBuilder.Entity<ProxyLink>()
+                .HasIndex(pl => pl.IsActive);
+
             modelBuilder.Entity<ProxyLink>()
                 .HasIndex(
                     pl => new
                     {
                         pl.PatientId,
-                        pl.ProxyId
+                        pl.ProxyId,
+                        pl.IsActive
                     }
-                )
-                .IsUnique();
+                );
 
             // =================================================
             // NURSE → PROXY LINKS
@@ -388,6 +391,16 @@ namespace PersonalProject.Data
                 .HasForeignKey(
                     pl => pl.AssignedByAdminId
                 )
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // =================================================
+            // USER → ENDED PROXY LINKS
+            // =================================================
+
+            modelBuilder.Entity<ProxyLink>()
+                .HasOne(pl => pl.EndedByUser)
+                .WithMany()
+                .HasForeignKey(pl => pl.EndedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // =================================================

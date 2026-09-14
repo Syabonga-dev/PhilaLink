@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace PersonalProject.Controllers
 {
@@ -45,10 +47,22 @@ namespace PersonalProject.Controllers
             }
         }
 
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> Me()
+        {
+            try
+            {
+                return Ok(await _authService.GetMeAsync(GetCurrentUserId()));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized();
+            }
+        }
+
         [HttpPost("otp/generate")]
-        public async Task<IActionResult> GenerateOtp(
-    Guid userId
-)
+        public async Task<IActionResult> GenerateOtp(Guid userId)
         {
             try
             {
@@ -87,6 +101,18 @@ namespace PersonalProject.Controllers
                 return BadRequest(new { message = "Invalid or expired code." });
 
             return Ok(new { verified = true });
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var claim =User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if ( string.IsNullOrWhiteSpace(claim) || !Guid.TryParse(claim,out var userId ))
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            return userId;
         }
     }
 }

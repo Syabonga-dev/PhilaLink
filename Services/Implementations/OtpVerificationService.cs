@@ -229,6 +229,25 @@ namespace PersonalProject.Services.Implementations
 
             otp.IsUsed = true;
 
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        u => u.Id == userId
+                    );
+
+            if (user == null)
+            {
+                return false;
+            }
+
+            user.IsVerified = true;
+
+            user.VerifiedAt =
+                DateTime.UtcNow;
+
+            user.UpdatedAt =
+                DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
 
             return true;
