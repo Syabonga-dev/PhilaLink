@@ -517,6 +517,15 @@ namespace PersonalProject.Data
                 )
                 .IsUnique();
 
+            modelBuilder.Entity<MedicationCollectionItem>()
+                .HasOne(i => i.ClinicStock)
+                .WithMany()
+                .HasForeignKey(i => i.ClinicStockId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MedicationCollectionItem>()
+                .HasIndex(i => i.ClinicStockId);
+
             // =================================================
             // CLINIC STOCK → CLINIC
             // =================================================

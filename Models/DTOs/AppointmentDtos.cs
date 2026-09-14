@@ -10,11 +10,15 @@
 
         public DateTime ScheduledAt { get; set; }
 
-        public string Type { get; set; } =
-            string.Empty;
+        public int DurationMinutes { get; set; } = 30;
 
-        public string Reason { get; set; } =
-            string.Empty;
+        public string Type { get; set; } = string.Empty;
+
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ProviderName { get; set; }
+
+        public string Mode { get; set; } = "InPerson";
 
         public string? Notes { get; set; }
     }
@@ -25,14 +29,17 @@
 
         public Guid? NurseId { get; set; }
 
-        public string Type { get; set; } =
-            string.Empty;
+        public int DurationMinutes { get; set; } = 30;
 
-        public string Reason { get; set; } =
-            string.Empty;
+        public string Type { get; set; } = string.Empty;
 
-        public string Status { get; set; } =
-            string.Empty;
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ProviderName { get; set; }
+
+        public string Mode { get; set; } = "InPerson";
+
+        public string Status { get; set; } = string.Empty;
 
         public string? Notes { get; set; }
     }
@@ -43,13 +50,11 @@
 
         public Guid PatientId { get; set; }
 
-        public string PatientName { get; set; } =
-            string.Empty;
+        public string PatientName { get; set; } = string.Empty;
 
         public Guid ClinicId { get; set; }
 
-        public string ClinicName { get; set; } =
-            string.Empty;
+        public string ClinicName { get; set; } = string.Empty;
 
         public Guid? NurseId { get; set; }
 
@@ -57,14 +62,17 @@
 
         public DateTime ScheduledAt { get; set; }
 
-        public string Type { get; set; } =
-            string.Empty;
+        public int DurationMinutes { get; set; }
 
-        public string Reason { get; set; } =
-            string.Empty;
+        public string Type { get; set; } = string.Empty;
 
-        public string Status { get; set; } =
-            string.Empty;
+        public string Reason { get; set; } = string.Empty;
+
+        public string? ProviderName { get; set; }
+
+        public string Mode { get; set; } = string.Empty;
+
+        public string Status { get; set; } = string.Empty;
 
         public string? Notes { get; set; }
     }

@@ -4,10 +4,7 @@
     {
         public Guid Id { get; set; }
 
-        // =====================================================
-        // COLLECTION
-        // =====================================================
-
+        // Collection
         public Guid MedicationCollectionId { get; set; }
 
         public MedicationCollection MedicationCollection
@@ -16,23 +13,21 @@
             set;
         } = null!;
 
-        // =====================================================
-        // PATIENT MEDICATION
-        // =====================================================
-
+        // Patient medication/prescription
         public Guid MedicationId { get; set; }
 
         public Medication Medication { get; set; } = null!;
 
-        // =====================================================
-        // QUANTITY
-        // =====================================================
+        // Exact clinic inventory item being issued
+        public Guid ClinicStockId { get; set; }
+
+        public ClinicStock ClinicStock { get; set; } = null!;
 
         public int Quantity { get; set; }
 
         public string? Notes { get; set; }
 
-        public DateTime CreatedAt { get; set; } =
-            DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; }
+            = DateTime.UtcNow;
     }
 }

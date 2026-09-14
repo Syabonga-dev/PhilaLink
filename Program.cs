@@ -40,6 +40,9 @@ builder.Services.AddScoped<ISymptomAssessmentService, SymptomAssessmentService>(
 builder.Services.AddScoped<IOtpVerificationService, OtpVerificationService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<IMedicationCollectionService, MedicationCollectionService>();
+builder.Services.AddScoped<IClinicStockService, ClinicStockService>();
 
 // =====================================================
 // CONTROLLERS
