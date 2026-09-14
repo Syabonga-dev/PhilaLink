@@ -41,7 +41,13 @@ builder.Services.AddScoped<IMedicationCollectionService, MedicationCollectionSer
 builder.Services.AddScoped<IClinicStockService, ClinicStockService>();
 builder.Services.AddScoped<INurseService, NurseService>();
 builder.Services.AddScoped<IChatbotService, ChatbotService>();
-builder.Services.AddScoped<IChatbotProvider, SafeFallbackChatbotProvider>();
+
+builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
+    client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(20);
+    }
+);
 
 // =====================================================
 // CONTROLLERS
