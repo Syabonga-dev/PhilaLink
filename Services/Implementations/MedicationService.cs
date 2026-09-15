@@ -26,32 +26,15 @@ namespace PersonalProject.Services.Implementations
         // CLINIC STAFF: CREATE
         // =====================================================
 
-        public async Task<Medication>
-            CreateMedicationAsync(
-                MedicationCreateDto dto,
-                Guid performedByUserId
-            )
+        public async Task<Medication>CreateMedicationAsync(MedicationCreateDto dto,  Guid performedByUserId )
         {
-            var clinicId =
-                await GetStaffClinicIdAsync(
-                    performedByUserId
-                );
+            var clinicId =  await GetStaffClinicIdAsync(performedByUserId);
 
-            var patient =
-                await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
-                                dto.PatientId &&
-                            p.User.IsActive
-                    );
+            var patient = await _context.Patients.Include(p => p.User).FirstOrDefaultAsync( p => p.Id == dto.PatientId &&p.User.IsActive );
 
             if (patient == null)
             {
-                throw new KeyNotFoundException(
-                    "Patient not found."
-                );
+                throw new KeyNotFoundException(  "Patient not found." );
             }
 
             if (
@@ -142,6 +125,41 @@ namespace PersonalProject.Services.Implementations
             );
 
             return medication;
+        }
+
+        public async Task<List<Medication>>
+    GetPatientMedicationsByUserIdAsync(
+        Guid patientUserId
+    )
+        {
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.UserId == patientUserId &&
+                            p.User.Role ==
+                                RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (patient == null)
+            {
+                throw new KeyNotFoundException(
+                    "Active patient profile not found."
+                );
+            }
+
+            return await _context.Medications
+                .Include(m => m.Schedules)
+                .Include(m => m.Logs)
+                .Where(
+                    m =>
+                        m.PatientId == patient.Id
+                )
+                .OrderByDescending(m => m.IsActive)
+                .ThenBy(m => m.Name)
+                .ToListAsync();
         }
 
         // =====================================================

@@ -1,37 +1,46 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
 using System.Security.Claims;
-using PersonalProject.Models.Constants;
 
 namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/medications")]
-    [Authorize(Policy = "ClinicStaff")]
+    [Authorize]
     public class MedicationController : ControllerBase
     {
         private readonly IMedicationService _medicationService;
 
-        public MedicationController(IMedicationService medicationService)
+        public MedicationController(
+            IMedicationService medicationService
+        )
         {
             _medicationService = medicationService;
         }
 
+        // =====================================================
+        // CLINIC STAFF: CREATE MEDICATION
+        // =====================================================
+
         [HttpPost]
         [Authorize(Roles = RoleNames.Nurse)]
-        public async Task<IActionResult> Create(MedicationCreateDto dto)
+        public async Task<IActionResult> Create(
+            MedicationCreateDto dto
+        )
         {
             try
             {
-                return Ok(
+                var medication =
                     await _medicationService
                         .CreateMedicationAsync(
                             dto,
                             GetCurrentUserId()
-                        )
-                );
+                        );
+
+                return Ok(medication);
             }
             catch (KeyNotFoundException ex)
             {
@@ -51,23 +60,26 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpGet(
-            "patient/{patientId:guid}"
-        )]
-        public async Task<IActionResult>
-            GetByPatient(
-                Guid patientId
-            )
+        // =====================================================
+        // CLINIC STAFF: PATIENT MEDICATIONS
+        // =====================================================
+
+        [HttpGet("patient/{patientId:guid}")]
+        [Authorize(Policy = "ClinicStaff")]
+        public async Task<IActionResult> GetByPatient(
+            Guid patientId
+        )
         {
             try
             {
-                return Ok(
+                var medications =
                     await _medicationService
                         .GetPatientMedicationsAsync(
                             patientId,
                             GetCurrentUserId()
-                        )
-                );
+                        );
+
+                return Ok(medications);
             }
             catch (KeyNotFoundException ex)
             {
@@ -81,9 +93,47 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // PATIENT: OWN MEDICATIONS
+        // =====================================================
+
+        [HttpGet("me")]
+        [Authorize(Roles = RoleNames.Patient)]
+        public async Task<IActionResult>
+            GetMyMedications()
+        {
+            try
+            {
+                var medications =
+                    await _medicationService
+                        .GetPatientMedicationsByUserIdAsync(
+                            GetCurrentUserId()
+                        );
+
+                return Ok(medications);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // CLINIC STAFF: ADD SCHEDULE
+        // =====================================================
+
         [HttpPost("{medicationId:guid}/schedule")]
         [Authorize(Roles = RoleNames.Nurse)]
-        public async Task<IActionResult> AddSchedule(Guid medicationId, MedicationScheduleDto dto)
+        public async Task<IActionResult> AddSchedule(
+            Guid medicationId,
+            MedicationScheduleDto dto
+        )
         {
             try
             {
@@ -120,21 +170,68 @@ namespace PersonalProject.Controllers
             }
         }
 
-        [HttpGet(
-            "{medicationId:guid}/logs"
-        )]
+        // =====================================================
+        // CLINIC STAFF: MEDICATION LOGS
+        // =====================================================
+
+        [HttpGet("{medicationId:guid}/logs")]
+        [Authorize(Policy = "ClinicStaff")]
         public async Task<IActionResult> GetLogs(
             Guid medicationId
         )
         {
             try
             {
-                return Ok(
+                var logs =
                     await _medicationService
                         .GetMedicationLogsAsync(
                             medicationId,
                             GetCurrentUserId()
-                        )
+                        );
+
+                return Ok(logs);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(
+                    new { message = ex.Message }
+                );
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // PATIENT: MARK MEDICATION TAKEN / SKIPPED
+        // =====================================================
+
+        [HttpPost("{medicationId:guid}/log")]
+        [Authorize(Roles = RoleNames.Patient)]
+        public async Task<IActionResult>
+            LogMedication(
+                Guid medicationId,
+                MedicationLogRequestDto dto
+            )
+        {
+            try
+            {
+                await _medicationService
+                    .LogPatientMedicationAsync(
+                        GetCurrentUserId(),
+                        medicationId,
+                        dto.Taken,
+                        dto.Notes
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message = dto.Taken
+                            ? "Medication marked as taken."
+                            : "Medication marked as skipped."
+                    }
                 );
             }
             catch (KeyNotFoundException ex)

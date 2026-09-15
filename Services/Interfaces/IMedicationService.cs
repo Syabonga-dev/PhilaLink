@@ -3,7 +3,6 @@ using PersonalProject.Models.Entities;
 
 namespace PersonalProject.Services.Interfaces
 {
-
     public interface IMedicationService
     {
         Task<Medication> CreateMedicationAsync(
@@ -15,6 +14,11 @@ namespace PersonalProject.Services.Interfaces
             GetPatientMedicationsAsync(
                 Guid patientId,
                 Guid performedByUserId
+            );
+
+        Task<List<Medication>>
+            GetPatientMedicationsByUserIdAsync(
+                Guid patientUserId
             );
 
         Task AddScheduleAsync(
