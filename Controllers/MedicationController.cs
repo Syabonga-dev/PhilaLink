@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
+using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
 using System.Security.Claims;
 
@@ -40,18 +41,28 @@ namespace PersonalProject.Controllers
                             GetCurrentUserId()
                         );
 
-                return Ok(medication);
+                return Ok(
+                    ToMedicationResponse(
+                        medication
+                    )
+                );
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -79,12 +90,19 @@ namespace PersonalProject.Controllers
                             GetCurrentUserId()
                         );
 
-                return Ok(medications);
+                return Ok(
+                    medications.Select(
+                        ToMedicationResponse
+                    )
+                );
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -110,12 +128,19 @@ namespace PersonalProject.Controllers
                             GetCurrentUserId()
                         );
 
-                return Ok(medications);
+                return Ok(
+                    medications.Select(
+                        ToMedicationResponse
+                    )
+                );
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -155,13 +180,19 @@ namespace PersonalProject.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -189,12 +220,35 @@ namespace PersonalProject.Controllers
                             GetCurrentUserId()
                         );
 
-                return Ok(logs);
+                return Ok(
+                    logs.Select(
+                        log => new
+                        {
+                            id =
+                                log.Id,
+
+                            medicationId =
+                                log.MedicationId,
+
+                            taken =
+                                log.Taken,
+
+                            notes =
+                                log.Notes,
+
+                            takenAt =
+                                log.TakenAt
+                        }
+                    )
+                );
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -228,16 +282,20 @@ namespace PersonalProject.Controllers
                 return Ok(
                     new
                     {
-                        message = dto.Taken
-                            ? "Medication marked as taken."
-                            : "Medication marked as skipped."
+                        message =
+                            dto.Taken
+                                ? "Medication marked as taken."
+                                : "Medication marked as skipped."
                     }
                 );
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message = ex.Message
+                    }
                 );
             }
             catch (UnauthorizedAccessException)
@@ -245,6 +303,110 @@ namespace PersonalProject.Controllers
                 return Forbid();
             }
         }
+
+        // =====================================================
+        // RESPONSE MAPPING
+        // =====================================================
+
+        private static object ToMedicationResponse(
+            Medication medication
+        )
+        {
+            return new
+            {
+                id =
+                    medication.Id,
+
+                patientId =
+                    medication.PatientId,
+
+                name =
+                    medication.Name,
+
+                dosage =
+                    medication.Dosage,
+
+                form =
+                    medication.Form,
+
+                instructions =
+                    medication.Instructions,
+
+                prescribedBy =
+                    medication.PrescribedBy,
+
+                conditionName =
+                    medication.ConditionName,
+
+                startDate =
+                    medication.StartDate,
+
+                endDate =
+                    medication.EndDate,
+
+                isActive =
+                    medication.IsActive,
+
+                createdAt =
+                    medication.CreatedAt,
+
+                updatedAt =
+                    medication.UpdatedAt,
+
+                schedules =
+                    medication.Schedules
+                        .Select(
+                            schedule =>
+                                new
+                                {
+                                    id =
+                                        schedule.Id,
+
+                                    medicationId =
+                                        schedule.MedicationId,
+
+                                    timeOfDay =
+                                        schedule.TimeOfDay,
+
+                                    isActive =
+                                        schedule.IsActive
+                                }
+                        )
+                        .ToList(),
+
+                logs =
+                    medication.Logs
+                        .OrderByDescending(
+                            log =>
+                                log.TakenAt
+                        )
+                        .Select(
+                            log =>
+                                new
+                                {
+                                    id =
+                                        log.Id,
+
+                                    medicationId =
+                                        log.MedicationId,
+
+                                    taken =
+                                        log.Taken,
+
+                                    notes =
+                                        log.Notes,
+
+                                    takenAt =
+                                        log.TakenAt
+                                }
+                        )
+                        .ToList()
+            };
+        }
+
+        // =====================================================
+        // CURRENT USER
+        // =====================================================
 
         private Guid GetCurrentUserId()
         {
@@ -254,7 +416,9 @@ namespace PersonalProject.Controllers
                 );
 
             if (
-                string.IsNullOrWhiteSpace(value) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
                 !Guid.TryParse(
                     value,
                     out var userId

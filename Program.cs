@@ -21,7 +21,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<PhilaLinkDbContext>(
     options =>
-        options.UseNpgsql(
+        options.UseSqlServer(
             builder.Configuration.GetConnectionString(
                 "DefaultConnection"
             )

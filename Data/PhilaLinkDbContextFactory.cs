@@ -54,7 +54,7 @@ namespace PersonalProject.Data
                     PhilaLinkDbContext
                 >();
 
-            optionsBuilder.UseNpgsql(
+            optionsBuilder.UseSqlServer(
                 connectionString
             );
 

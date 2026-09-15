@@ -13,26 +13,68 @@ namespace PersonalProject.Controllers
     {
         private readonly ISymptomAssessmentService _service;
 
-        public SymptomAssessmentController(ISymptomAssessmentService service)
+        public SymptomAssessmentController(
+            ISymptomAssessmentService service
+        )
         {
             _service = service;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(SymptomCreateDto dto)
+        public async Task<IActionResult> Create(
+            SymptomCreateDto dto
+        )
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(dto.Symptoms))
+                if (
+                    string.IsNullOrWhiteSpace(
+                        dto.Symptoms
+                    )
+                )
                 {
-                    return BadRequest(new { message = "Symptoms are required." });
+                    return BadRequest(
+                        new
+                        {
+                            message =
+                                "Symptoms are required."
+                        }
+                    );
                 }
 
-                var result = await _service.CreateForPatientAsync(GetCurrentUserId(), dto.Symptoms);
+                var result =
+                    await _service
+                        .CreateForPatientAsync(
+                            GetCurrentUserId(),
+                            dto.Symptoms
+                        );
 
-                return Ok(result);
+                return Ok(
+                    new
+                    {
+                        id =
+                            result.Id,
+
+                        patientId =
+                            result.PatientId,
+
+                        symptomsJson =
+                            result.SymptomsJson,
+
+                        result =
+                            result.Result,
+
+                        recommendation =
+                            result.Recommendation,
+
+                        createdAt =
+                            result.CreatedAt
+                    }
+                );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -43,9 +85,41 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _service.GetMyAssessmentsAsync(GetCurrentUserId()));
+                var assessments =
+                    await _service
+                        .GetMyAssessmentsAsync(
+                            GetCurrentUserId()
+                        );
+
+                return Ok(
+                    assessments.Select(
+                        assessment =>
+                            new
+                            {
+                                id =
+                                    assessment.Id,
+
+                                patientId =
+                                    assessment.PatientId,
+
+                                symptomsJson =
+                                    assessment.SymptomsJson,
+
+                                result =
+                                    assessment.Result,
+
+                                recommendation =
+                                    assessment.Recommendation,
+
+                                createdAt =
+                                    assessment.CreatedAt
+                            }
+                    )
+                );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -53,10 +127,15 @@ namespace PersonalProject.Controllers
 
         private Guid GetCurrentUserId()
         {
-            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
 
             if (
-                string.IsNullOrWhiteSpace(value) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
                 !Guid.TryParse(
                     value,
                     out var userId
