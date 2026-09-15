@@ -6,10 +6,7 @@ namespace PersonalProject.Data
 {
     public class PhilaLinkDbContext : DbContext
     {
-        public PhilaLinkDbContext(
-            DbContextOptions<PhilaLinkDbContext> options
-        )
-            : base(options)
+        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options): base(options)
         {
         }
 
