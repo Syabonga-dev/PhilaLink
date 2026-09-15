@@ -1062,9 +1062,7 @@ namespace PersonalProject.Services.Implementations
 
             if (exists)
             {
-                throw new InvalidOperationException(
-                    "An account with that ID number or phone number already exists."
-                );
+                throw new InvalidOperationException("An account with that ID number or phone number already exists.");
             }
 
             var tempPassword =
@@ -1073,25 +1071,25 @@ namespace PersonalProject.Services.Implementations
             var now = DateTime.UtcNow;
 
             var user = new User
-                {
-                    Id = Guid.NewGuid(),
-                    FullName = normalizedFullName,
-                    IdNumber = normalizedIdNumber,
-                    PhoneNumber = normalizedPhoneNumber,
-                    Email = normalizedEmail,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword( tempPassword ),
-                    Role = role,
-                    IsActive = true,
+            {
+                Id = Guid.NewGuid(),
+                FullName = normalizedFullName,
+                IdNumber = normalizedIdNumber,
+                PhoneNumber = normalizedPhoneNumber,
+                Email = normalizedEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
+                Role = role,
+                IsActive = true,
 
-                    /*
-                     * Staff accounts are created through an
-                     * authenticated administrator workflow.
-                     */
-                    IsVerified = true,
-                    VerifiedAt = now,
-                    MustChangePassword = true,
-                    CreatedAt = now
-                };
+                /*
+                 * Staff accounts are created through an
+                 * authenticated administrator workflow.
+                 */
+                IsVerified = true,
+                VerifiedAt = now,
+                MustChangePassword = true,
+                CreatedAt = now
+            };
 
             /*
              * Deliberately do NOT call SaveChanges here.
@@ -1100,9 +1098,9 @@ namespace PersonalProject.Services.Implementations
              * Nurse, or Proxy profile first and then saves the
              * complete account inside one transaction.
              */
-            _context.Users.Add( user );
+            _context.Users.Add(user);
 
-            return ( user, tempPassword);
+            return (user, tempPassword);
         }
 
         // =====================================================
