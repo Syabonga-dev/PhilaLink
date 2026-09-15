@@ -60,6 +60,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            await using var transaction =
+                await _context.Database
+                    .BeginTransactionAsync();
+
             var (user, tempPassword) =
                 await CreateUserAsync(
                     dto.FullName,
@@ -79,7 +83,7 @@ namespace PersonalProject.Services.Implementations
                         user.FullName,
 
                     Email =
-                        dto.Email,
+                        user.Email,
 
                     ClinicId =
                         dto.ClinicId,
@@ -92,7 +96,15 @@ namespace PersonalProject.Services.Implementations
                 admin
             );
 
+            /*
+             * User + Admin profile are persisted together.
+             *
+             * If either insert fails, the transaction is never
+             * committed and no orphan User account remains.
+             */
             await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -135,6 +147,33 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            var employeeNumber =
+                dto.EmployeeNumber.Trim();
+
+            var registrationNumber =
+                dto.RegistrationNumber.Trim();
+
+            var professionalIdentifierExists =
+                await _context.Nurses
+                    .AnyAsync(
+                        n =>
+                            n.EmployeeNumber ==
+                                employeeNumber ||
+                            n.RegistrationNumber ==
+                                registrationNumber
+                    );
+
+            if (professionalIdentifierExists)
+            {
+                throw new InvalidOperationException(
+                    "A nurse with that employee number or registration number already exists."
+                );
+            }
+
+            await using var transaction =
+                await _context.Database
+                    .BeginTransactionAsync();
+
             var (user, tempPassword) =
                 await CreateUserAsync(
                     dto.FullName,
@@ -154,58 +193,59 @@ namespace PersonalProject.Services.Implementations
                         user.Id,
 
                     EmployeeNumber =
-                        dto.EmployeeNumber,
+                        employeeNumber,
 
                     RegistrationNumber =
-                        dto.RegistrationNumber,
+                        registrationNumber,
 
                     Qualification =
-                        dto.Qualification,
+                        dto.Qualification.Trim(),
 
                     ClinicId =
                         dto.ClinicId,
 
                     Email =
-                        dto.Email,
+                        user.Email,
 
                     AddressLine1 =
-                        dto.AddressLine1,
+                        dto.AddressLine1.Trim(),
 
                     AddressLine2 =
-                        dto.AddressLine2,
+                        string.IsNullOrWhiteSpace(
+                            dto.AddressLine2
+                        )
+                            ? null
+                            : dto.AddressLine2.Trim(),
 
                     Suburb =
-                        dto.Suburb,
+                        dto.Suburb.Trim(),
 
                     City =
-                        dto.City,
+                        dto.City.Trim(),
 
                     Province =
-                        dto.Province,
+                        dto.Province.Trim(),
 
                     PostalCode =
-                        dto.PostalCode,
+                        dto.PostalCode.Trim(),
 
                     DateOfBirth =
                         dto.DateOfBirth,
 
                     Gender =
-                        dto.Gender,
+                        dto.Gender.Trim(),
 
                     EmploymentDate =
                         dto.EmploymentDate,
 
-                    IsActive =
-                        true,
-
                     EmergencyContactName =
-                        dto.EmergencyContactName,
+                        dto.EmergencyContactName.Trim(),
 
                     EmergencyContactPhone =
-                        dto.EmergencyContactPhone,
+                        dto.EmergencyContactPhone.Trim(),
 
                     EmergencyContactRelationship =
-                        dto.EmergencyContactRelationship,
+                        dto.EmergencyContactRelationship.Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -215,7 +255,12 @@ namespace PersonalProject.Services.Implementations
                 nurse
             );
 
+            /*
+             * User + Nurse profile are one logical operation.
+             */
             await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -237,6 +282,10 @@ namespace PersonalProject.Services.Implementations
                 performedByUserId
             );
 
+            await using var transaction =
+                await _context.Database
+                    .BeginTransactionAsync();
+
             var (user, tempPassword) =
                 await CreateUserAsync(
                     dto.FullName,
@@ -256,46 +305,47 @@ namespace PersonalProject.Services.Implementations
                         user.Id,
 
                     Email =
-                        dto.Email,
+                        user.Email,
 
                     AddressLine1 =
-                        dto.AddressLine1,
+                        dto.AddressLine1.Trim(),
 
                     AddressLine2 =
-                        dto.AddressLine2,
+                        string.IsNullOrWhiteSpace(
+                            dto.AddressLine2
+                        )
+                            ? null
+                            : dto.AddressLine2.Trim(),
 
                     Suburb =
-                        dto.Suburb,
+                        dto.Suburb.Trim(),
 
                     City =
-                        dto.City,
+                        dto.City.Trim(),
 
                     Province =
-                        dto.Province,
+                        dto.Province.Trim(),
 
                     PostalCode =
-                        dto.PostalCode,
+                        dto.PostalCode.Trim(),
 
                     DateOfBirth =
                         dto.DateOfBirth,
 
                     Gender =
-                        dto.Gender,
+                        dto.Gender.Trim(),
 
                     RelationshipToPatient =
-                        dto.RelationshipToPatient,
+                        dto.RelationshipToPatient.Trim(),
 
                     EmergencyContactName =
-                        dto.EmergencyContactName,
+                        dto.EmergencyContactName.Trim(),
 
                     EmergencyContactPhone =
-                        dto.EmergencyContactPhone,
+                        dto.EmergencyContactPhone.Trim(),
 
                     EmergencyContactRelationship =
-                        dto.EmergencyContactRelationship,
-
-                    IsActive =
-                        true,
+                        dto.EmergencyContactRelationship.Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -305,7 +355,12 @@ namespace PersonalProject.Services.Implementations
                 proxy
             );
 
+            /*
+             * User + Proxy profile are one logical operation.
+             */
             await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -882,9 +937,7 @@ namespace PersonalProject.Services.Implementations
 
             var target =
                 await _context.Users
-                    .Include(u => u.Admin)
                     .Include(u => u.Nurse)
-                    .Include(u => u.Proxy)
                     .Include(u => u.Patient)
                     .FirstOrDefaultAsync(
                         u =>
@@ -952,38 +1005,15 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * User.IsActive is the single authoritative
+             * account-state flag.
+             */
             target.IsActive =
                 isActive;
 
             target.UpdatedAt =
                 DateTime.UtcNow;
-
-            if (target.Nurse != null)
-            {
-                target.Nurse.IsActive =
-                    isActive;
-
-                target.Nurse.UpdatedAt =
-                    DateTime.UtcNow;
-            }
-
-            if (target.Proxy != null)
-            {
-                target.Proxy.IsActive =
-                    isActive;
-
-                target.Proxy.UpdatedAt =
-                    DateTime.UtcNow;
-            }
-
-            if (target.Patient != null)
-            {
-                target.Patient.IsActive =
-                    isActive;
-
-                target.Patient.UpdatedAt =
-                    DateTime.UtcNow;
-            }
 
             await _context.SaveChangesAsync();
         }
@@ -1008,14 +1038,26 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            var normalizedFullName =
+                fullName.Trim();
+
+            var normalizedIdNumber =
+                idNumber.Trim();
+
+            var normalizedPhoneNumber =
+                phoneNumber.Trim();
+
+            var normalizedEmail =
+                email.Trim();
+
             var exists =
                 await _context.Users
                     .AnyAsync(
                         u =>
                             u.IdNumber ==
-                                idNumber ||
+                                normalizedIdNumber ||
                             u.PhoneNumber ==
-                                phoneNumber
+                                normalizedPhoneNumber
                     );
 
             if (exists)
@@ -1026,10 +1068,10 @@ namespace PersonalProject.Services.Implementations
             }
 
             var tempPassword =
-                GenerateTempPassword(
-                    fullName,
-                    idNumber
-                );
+                GenerateTempPassword();
+
+            var now =
+                DateTime.UtcNow;
 
             var user =
                 new User
@@ -1038,16 +1080,16 @@ namespace PersonalProject.Services.Implementations
                         Guid.NewGuid(),
 
                     FullName =
-                        fullName.Trim(),
+                        normalizedFullName,
 
                     IdNumber =
-                        idNumber.Trim(),
+                        normalizedIdNumber,
 
                     PhoneNumber =
-                        phoneNumber.Trim(),
+                        normalizedPhoneNumber,
 
                     Email =
-                        email.Trim(),
+                        normalizedEmail,
 
                     PasswordHash =
                         BCrypt.Net.BCrypt
@@ -1061,15 +1103,30 @@ namespace PersonalProject.Services.Implementations
                     IsActive =
                         true,
 
+                    /*
+                     * Staff accounts are created through an
+                     * authenticated administrator workflow.
+                     */
+                    IsVerified =
+                        true,
+
+                    VerifiedAt =
+                        now,
+
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 };
 
+            /*
+             * Deliberately do NOT call SaveChanges here.
+             *
+             * The caller creates the corresponding Admin,
+             * Nurse, or Proxy profile first and then saves the
+             * complete account inside one transaction.
+             */
             _context.Users.Add(
                 user
             );
-
-            await _context.SaveChangesAsync();
 
             return (
                 user,
@@ -1169,10 +1226,7 @@ namespace PersonalProject.Services.Implementations
         // TEMP PASSWORD
         // =====================================================
 
-        private static string GenerateTempPassword(
-            string fullName,
-            string idNumber
-        )
+        private static string GenerateTempPassword()
         {
             const string uppercase =
                 "ABCDEFGHJKLMNPQRSTUVWXYZ";

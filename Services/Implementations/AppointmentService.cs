@@ -173,7 +173,7 @@ namespace PersonalProject.Services.Implementations
             appointment.Reason = dto.Reason.Trim();
             appointment.ProviderName = string.IsNullOrWhiteSpace(dto.ProviderName) ? null : dto.ProviderName.Trim();
             appointment.Mode = NormalizeMode(dto.Mode);
-            appointment.Status = AppointmentStatuses.Normalize(dto.Status );
+            appointment.Status = AppointmentStatuses.Normalize(dto.Status);
             appointment.Notes = dto.Notes;
             appointment.UpdatedAt = DateTime.UtcNow;
 

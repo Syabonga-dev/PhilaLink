@@ -17,7 +17,10 @@ namespace PersonalProject.Services.Implementations
         private readonly PhilaLinkDbContext _context;
         private readonly IConfiguration _config;
 
-        public AuthService(PhilaLinkDbContext context, IConfiguration config)
+        public AuthService(
+            PhilaLinkDbContext context,
+            IConfiguration config
+        )
         {
             _context = context;
             _config = config;
@@ -27,9 +30,19 @@ namespace PersonalProject.Services.Implementations
         // PATIENT SELF-REGISTRATION
         // =====================================================
 
-        public async Task<RegisterResponseDto> RegisterAsync(RegisterDto dto)
+        public async Task<RegisterResponseDto> RegisterAsync(
+            RegisterDto dto
+        )
         {
-            var exists = await _context.Users.AnyAsync(u => u.IdNumber == dto.IdNumber.Trim() || u.PhoneNumber == dto.PhoneNumber.Trim());
+            var idNumber = dto.IdNumber.Trim();
+            var phoneNumber = dto.PhoneNumber.Trim();
+
+            var exists =
+                await _context.Users.AnyAsync(
+                    u =>
+                        u.IdNumber == idNumber ||
+                        u.PhoneNumber == phoneNumber
+                );
 
             if (exists)
             {
@@ -38,7 +51,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
 
             var user = new User
             {
@@ -46,13 +60,16 @@ namespace PersonalProject.Services.Implementations
 
                 FullName = dto.FullName.Trim(),
 
-                IdNumber = dto.IdNumber.Trim(),
+                IdNumber = idNumber,
 
-                PhoneNumber = dto.PhoneNumber.Trim(),
+                PhoneNumber = phoneNumber,
 
                 Email = dto.Email.Trim(),
 
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                PasswordHash =
+                    BCrypt.Net.BCrypt.HashPassword(
+                        dto.Password
+                    ),
 
                 Role = RoleNames.Patient,
 
@@ -73,11 +90,10 @@ namespace PersonalProject.Services.Implementations
 
                 UserId = user.Id,
 
-                PatientNumber = await GeneratePatientNumberAsync(),
+                PatientNumber =
+                    await GeneratePatientNumberAsync(),
 
                 Email = user.Email,
-
-                IsActive = true,
 
                 IsProfileComplete = false,
 
@@ -129,12 +145,18 @@ namespace PersonalProject.Services.Implementations
         // LOGIN
         // =====================================================
 
-        public async Task<LoginResponseDto> LoginAsync(LoginDto dto)
+        public async Task<LoginResponseDto> LoginAsync(
+            LoginDto dto
+        )
         {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(
-                    u => u.IdNumber == dto.IdNumber
-                );
+            var idNumber = dto.IdNumber.Trim();
+
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.IdNumber == idNumber
+                    );
 
             /*
              * Keep one generic authentication failure message.
@@ -165,12 +187,12 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
- * Patient self-registration must complete verification
- * before a JWT can be issued.
- *
- * Administrator-created staff accounts are already trusted
- * through their controlled creation workflow.
- */
+             * Patient self-registration must complete verification
+             * before a JWT can be issued.
+             *
+             * Administrator-created staff accounts are already trusted
+             * through their controlled creation workflow.
+             */
             if (
                 user.Role == RoleNames.Patient &&
                 !user.IsVerified
@@ -182,7 +204,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             // =================================================
-            // LEGACY ROLE PROTECTION
+            // ROLE PROTECTION
             // =================================================
 
             /*
@@ -235,7 +257,8 @@ namespace PersonalProject.Services.Implementations
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
-                        u => u.Id == userId
+                        u =>
+                            u.Id == userId
                     );
 
             if (
@@ -257,29 +280,21 @@ namespace PersonalProject.Services.Implementations
 
             return new UserResponseDto
             {
-                Id =
-                    user.Id,
+                Id = user.Id,
 
-                FullName =
-                    user.FullName,
+                FullName = user.FullName,
 
-                IdNumber =
-                    user.IdNumber,
+                IdNumber = user.IdNumber,
 
-                PhoneNumber =
-                    user.PhoneNumber,
+                PhoneNumber = user.PhoneNumber,
 
-                Email =
-                    user.Email,
+                Email = user.Email,
 
-                Role =
-                    user.Role,
+                Role = user.Role,
 
-                IsActive =
-                    user.IsActive,
+                IsActive = user.IsActive,
 
-                IsVerified =
-                    user.IsVerified
+                IsVerified = user.IsVerified
             };
         }
 
@@ -287,8 +302,7 @@ namespace PersonalProject.Services.Implementations
         // PATIENT NUMBER
         // =====================================================
 
-        private async Task<string>
-            GeneratePatientNumberAsync()
+        private async Task<string> GeneratePatientNumberAsync()
         {
             string patientNumber;
 
@@ -305,8 +319,7 @@ namespace PersonalProject.Services.Implementations
             while (
                 await _context.Patients.AnyAsync(
                     p =>
-                        p.PatientNumber ==
-                        patientNumber
+                        p.PatientNumber == patientNumber
                 )
             );
 
@@ -371,20 +384,19 @@ namespace PersonalProject.Services.Implementations
                         claims,
 
                     expires:
-                        DateTime.UtcNow
-                            .AddHours(1),
+                        DateTime.UtcNow.AddHours(1),
 
                     signingCredentials:
                         new SigningCredentials(
                             new SymmetricSecurityKey(
                                 key
                             ),
-                            SecurityAlgorithms
-                                .HmacSha256
+                            SecurityAlgorithms.HmacSha256
                         )
                 );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return new JwtSecurityTokenHandler()
+                .WriteToken(token);
         }
     }
 }

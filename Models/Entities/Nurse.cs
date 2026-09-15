@@ -4,27 +4,42 @@ namespace PersonalProject.Models.Entities
     {
         public Guid Id { get; set; }
 
-        // User Relationship
+        // =====================================================
+        // USER
+        // =====================================================
+
         public Guid UserId { get; set; }
 
         public User User { get; set; } = null!;
 
-        // Professional Information
+        // =====================================================
+        // PROFESSIONAL INFORMATION
+        // =====================================================
+
         public string EmployeeNumber { get; set; } = string.Empty;
 
         public string RegistrationNumber { get; set; } = string.Empty;
 
         public string Qualification { get; set; } = string.Empty;
 
-        // Clinic
+        // =====================================================
+        // CLINIC
+        // =====================================================
+
         public Guid ClinicId { get; set; }
 
         public Clinic Clinic { get; set; } = null!;
 
-        // Contact Information
+        // =====================================================
+        // CONTACT
+        // =====================================================
+
         public string Email { get; set; } = string.Empty;
 
-        // Address
+        // =====================================================
+        // ADDRESS
+        // =====================================================
+
         public string AddressLine1 { get; set; } = string.Empty;
 
         public string? AddressLine2 { get; set; }
@@ -37,24 +52,34 @@ namespace PersonalProject.Models.Entities
 
         public string PostalCode { get; set; } = string.Empty;
 
-        // Personal Information
+        // =====================================================
+        // PERSONAL INFORMATION
+        // =====================================================
+
         public DateOnly DateOfBirth { get; set; }
 
         public string Gender { get; set; } = string.Empty;
 
-        // Employment
+        // =====================================================
+        // EMPLOYMENT
+        // =====================================================
+
         public DateTime EmploymentDate { get; set; }
 
-        public bool IsActive { get; set; } = true;
+        // =====================================================
+        // EMERGENCY CONTACT
+        // =====================================================
 
-        // Emergency Contact
         public string EmergencyContactName { get; set; } = string.Empty;
 
         public string EmergencyContactPhone { get; set; } = string.Empty;
 
         public string EmergencyContactRelationship { get; set; } = string.Empty;
 
-        // Audit
+        // =====================================================
+        // AUDIT
+        // =====================================================
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

@@ -13,6 +13,7 @@ namespace PersonalProject.Models.Entities
         public User User { get; set; } = null!;
 
         public string PatientNumber { get; set; } = string.Empty;
+
         public bool IsProfileComplete { get; set; }
 
         public DateTime? ProfileCompletedAt { get; set; }
@@ -21,15 +22,6 @@ namespace PersonalProject.Models.Entities
         // CLINIC
         // =====================================================
 
-        /*
-         * Nullable during registration/onboarding.
-         *
-         * A patient may create an account before a clinic
-         * has officially been assigned to them.
-         *
-         * Once linked by clinic staff, this identifies their
-         * primary clinic.
-         */
         public Guid? ClinicId { get; set; }
 
         public Clinic? Clinic { get; set; }
@@ -75,19 +67,6 @@ namespace PersonalProject.Models.Entities
         public string EmergencyContactRelationship { get; set; } = string.Empty;
 
         // =====================================================
-        // LEGACY PROFILE STATUS
-        // =====================================================
-
-        /*
-         * Kept temporarily because existing services currently
-         * reference Patient.IsActive.
-         *
-         * User.IsActive becomes the authoritative account-level
-         * status as the architecture migration continues.
-         */
-        public bool IsActive { get; set; } = true;
-
-        // =====================================================
         // AUDIT
         // =====================================================
 
@@ -109,7 +88,7 @@ namespace PersonalProject.Models.Entities
             = new List<ProxyLink>();
 
         public ICollection<HealthMetric> HealthMetrics { get; set; }
-    = new List<HealthMetric>();
+            = new List<HealthMetric>();
 
         public ICollection<HealthRecord> HealthRecords { get; set; }
             = new List<HealthRecord>();

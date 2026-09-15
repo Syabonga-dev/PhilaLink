@@ -13,34 +13,22 @@ namespace PersonalProject.Services.Implementations
         private readonly PhilaLinkDbContext _context;
         private readonly IChatbotProvider _provider;
 
-        public ChatbotService(PhilaLinkDbContext context,IChatbotProvider provider)
+        public ChatbotService(PhilaLinkDbContext context, IChatbotProvider provider)
         {
             _context = context;
             _provider = provider;
         }
 
-        public async Task<ChatbotMessageResponseDto> SendMessageAsync(
-            Guid userId,
-            ChatbotMessageRequestDto dto
-        )
+        public async Task<ChatbotMessageResponseDto> SendMessageAsync(Guid userId, ChatbotMessageRequestDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Message))
             {
-                throw new InvalidOperationException(
-                    "Message is required."
-                );
+                throw new InvalidOperationException("Message is required.");
             }
 
             var patient = await GetActivePatientAsync(userId);
 
-            var conversation =
-                await _context.ChatConversations
-                    .Include(c => c.Messages)
-                    .FirstOrDefaultAsync(
-                        c =>
-                            c.PatientId == patient.Id &&
-                            c.IsActive
-                    );
+            var conversation = await _context.ChatConversations.Include(c => c.Messages).FirstOrDefaultAsync(c => c.PatientId == patient.Id && c.IsActive);
 
             if (conversation == null)
             {
@@ -72,13 +60,9 @@ namespace PersonalProject.Services.Implementations
 
             await _context.SaveChangesAsync();
 
-            var patientContext =
-                await BuildPatientContextAsync(
-                    patient.Id
-                );
+            var patientContext = await BuildPatientContextAsync(patient.Id);
 
-            var messages =
-                conversation.Messages
+            var messages = conversation.Messages
                     .OrderBy(m => m.CreatedAt)
                     .ToList();
 
@@ -90,8 +74,7 @@ namespace PersonalProject.Services.Implementations
 
             if (string.IsNullOrWhiteSpace(responseText))
             {
-                responseText =
-                    "I could not generate a response right now.";
+                responseText = "I could not generate a response right now.";
             }
 
             var assistantMessage = new ChatMessage

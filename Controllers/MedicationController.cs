@@ -10,11 +10,11 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/medications")]
     [Authorize(Policy = "ClinicStaff")]
-    public class MedicationController :ControllerBase
+    public class MedicationController : ControllerBase
     {
         private readonly IMedicationService _medicationService;
 
-        public MedicationController(IMedicationService medicationService )
+        public MedicationController(IMedicationService medicationService)
         {
             _medicationService = medicationService;
         }
@@ -83,7 +83,7 @@ namespace PersonalProject.Controllers
 
         [HttpPost("{medicationId:guid}/schedule")]
         [Authorize(Roles = RoleNames.Nurse)]
-        public async Task<IActionResult>AddSchedule(Guid medicationId,MedicationScheduleDto dto)
+        public async Task<IActionResult> AddSchedule(Guid medicationId, MedicationScheduleDto dto)
         {
             try
             {

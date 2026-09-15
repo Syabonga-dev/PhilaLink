@@ -4,11 +4,23 @@ namespace PersonalProject.Models.Entities
     {
         public Guid Id { get; set; }
 
+        // =====================================================
+        // USER
+        // =====================================================
+
         public Guid UserId { get; set; }
 
         public User User { get; set; } = null!;
 
+        // =====================================================
+        // CONTACT
+        // =====================================================
+
         public string Email { get; set; } = string.Empty;
+
+        // =====================================================
+        // ADDRESS
+        // =====================================================
 
         public string AddressLine1 { get; set; } = string.Empty;
 
@@ -22,11 +34,19 @@ namespace PersonalProject.Models.Entities
 
         public string PostalCode { get; set; } = string.Empty;
 
+        // =====================================================
+        // PERSONAL INFORMATION
+        // =====================================================
+
         public DateOnly DateOfBirth { get; set; }
 
         public string Gender { get; set; } = string.Empty;
 
         public string RelationshipToPatient { get; set; } = string.Empty;
+
+        // =====================================================
+        // EMERGENCY CONTACT
+        // =====================================================
 
         public string EmergencyContactName { get; set; } = string.Empty;
 
@@ -34,11 +54,17 @@ namespace PersonalProject.Models.Entities
 
         public string EmergencyContactRelationship { get; set; } = string.Empty;
 
-        public bool IsActive { get; set; } = true;
+        // =====================================================
+        // AUDIT
+        // =====================================================
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+
+        // =====================================================
+        // RELATIONSHIPS
+        // =====================================================
 
         public ICollection<ProxyLink> ProxyLinksAsProxy { get; set; }
             = new List<ProxyLink>();
