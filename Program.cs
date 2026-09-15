@@ -21,7 +21,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<PhilaLinkDbContext>(
     options =>
-        options.UseSqlServer(
+        options.UseNpgsql(
             builder.Configuration.GetConnectionString(
                 "DefaultConnection"
             )
@@ -206,11 +206,6 @@ builder.Services
 builder.Services.AddAuthorization(
     options =>
     {
-        /*
-         * Any endpoint using plain [Authorize] requires
-         * authentication AND a completed temporary-password
-         * change.
-         */
         options.DefaultPolicy =
             new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
@@ -220,17 +215,12 @@ builder.Services.AddAuthorization(
                 )
                 .Build();
 
-        /*
-         * Used only by endpoints that must remain available
-         * while an account still has a temporary password.
-         */
         options.AddPolicy(
             "PasswordChangeAllowed",
             policy =>
                 policy.RequireAuthenticatedUser()
         );
 
-        // System-wide administration only.
         options.AddPolicy(
             "SuperAdminOnly",
             policy =>
@@ -244,7 +234,6 @@ builder.Services.AddAuthorization(
                     )
         );
 
-        // Both administrative roles.
         options.AddPolicy(
             "AdminOnly",
             policy =>
@@ -259,7 +248,6 @@ builder.Services.AddAuthorization(
                     )
         );
 
-        // Clinic operations.
         options.AddPolicy(
             "ClinicStaff",
             policy =>
