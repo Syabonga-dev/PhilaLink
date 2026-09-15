@@ -7,7 +7,8 @@ using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class AuditLogService : IAuditLogService
+    public class AuditLogService :
+        IAuditLogService
     {
         private readonly PhilaLinkDbContext _context;
 
@@ -15,8 +16,13 @@ namespace PersonalProject.Services.Implementations
             PhilaLinkDbContext context
         )
         {
-            _context = context;
+            _context =
+                context;
         }
+
+        // =====================================================
+        // WRITE AUDIT LOG
+        // =====================================================
 
         public async Task LogAsync(
             string action,
@@ -25,12 +31,15 @@ namespace PersonalProject.Services.Implementations
             Guid? clinicId = null
         )
         {
-            var user = await _context.Users
-                .Include(u => u.Admin)
-                .Include(u => u.Nurse)
-                .FirstOrDefaultAsync(
-                    u => u.Id == userId
-                );
+            var user =
+                await _context.Users
+                    .Include(u => u.Admin)
+                    .Include(u => u.Nurse)
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id ==
+                            userId
+                    );
 
             if (user == null)
             {
@@ -40,21 +49,25 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * If caller didn't explicitly supply a clinic,
-             * infer it from the authenticated staff account.
+             * If the caller does not explicitly provide a clinic,
+             * infer clinic scope from the authenticated staff
+             * profile.
              */
             if (clinicId == null)
             {
                 if (
-                    user.Role == RoleNames.ClinicAdmin &&
-                    user.Admin?.ClinicId != null
+                    user.Role ==
+                        RoleNames.ClinicAdmin &&
+                    user.Admin?.ClinicId !=
+                        null
                 )
                 {
                     clinicId =
                         user.Admin.ClinicId;
                 }
                 else if (
-                    user.Role == RoleNames.Nurse &&
+                    user.Role ==
+                        RoleNames.Nurse &&
                     user.Nurse != null
                 )
                 {
@@ -63,41 +76,54 @@ namespace PersonalProject.Services.Implementations
                 }
             }
 
-            var log = new AuditLog
-            {
-                Id = Guid.NewGuid(),
+            var log =
+                new AuditLog
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                Action = action,
+                    Action =
+                        action,
 
-                PerformedByUserId =
-                    userId,
+                    PerformedByUserId =
+                        userId,
 
-                ClinicId =
-                    clinicId,
+                    ClinicId =
+                        clinicId,
 
-                Details =
-                    details ?? string.Empty,
+                    Details =
+                        details ??
+                        string.Empty,
 
-                Timestamp =
-                    DateTime.UtcNow
-            };
+                    Timestamp =
+                        DateTime.UtcNow
+                };
 
-            _context.AuditLogs.Add(log);
+            _context.AuditLogs.Add(
+                log
+            );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
         }
+
+        // =====================================================
+        // READ AUDIT LOG
+        // =====================================================
 
         public async Task<List<AuditLogResponseDto>>
             GetVisibleLogsAsync(
                 Guid requestingUserId
             )
         {
-            var user = await _context.Users
-                .Include(u => u.Admin)
-                .Include(u => u.Nurse)
-                .FirstOrDefaultAsync(
-                    u => u.Id == requestingUserId
-                );
+            var user =
+                await _context.Users
+                    .Include(u => u.Admin)
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id ==
+                            requestingUserId
+                    );
 
             if (
                 user == null ||
@@ -109,73 +135,78 @@ namespace PersonalProject.Services.Implementations
 
             IQueryable<AuditLog> query =
                 _context.AuditLogs
-                    .Include(a => a.PerformedByUser)
-                    .Include(a => a.Clinic);
+                    .Include(
+                        a =>
+                            a.PerformedByUser
+                    )
+                    .Include(
+                        a =>
+                            a.Clinic
+                    );
 
             if (
                 user.Role ==
                 RoleNames.SuperAdmin
             )
             {
-                // SuperAdmin can see system-wide logs.
+                /*
+                 * SuperAdmin has system-wide audit visibility.
+                 */
             }
             else if (
                 user.Role ==
                     RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId != null
+                user.Admin?.ClinicId !=
+                    null
             )
             {
                 var clinicId =
                     user.Admin.ClinicId.Value;
 
-                query = query.Where(
-                    a => a.ClinicId == clinicId
-                );
-            }
-            else if (
-                user.Role ==
-                    RoleNames.Nurse &&
-                user.Nurse != null
-            )
-            {
-                var clinicId =
-                    user.Nurse.ClinicId;
-
-                query = query.Where(
-                    a => a.ClinicId == clinicId
-                );
+                query =
+                    query.Where(
+                        a =>
+                            a.ClinicId ==
+                            clinicId
+                    );
             }
             else
             {
+                /*
+                 * Nurses, Patients, Proxies and unsupported
+                 * roles must never read the audit history.
+                 */
                 throw new UnauthorizedAccessException();
             }
 
             return await query
                 .OrderByDescending(
-                    a => a.Timestamp
+                    a =>
+                        a.Timestamp
                 )
-                .Select(a =>
-                    new AuditLogResponseDto
-                    {
-                        Id =
-                            a.Id,
+                .Select(
+                    a =>
+                        new AuditLogResponseDto
+                        {
+                            Id =
+                                a.Id,
 
-                        Action =
-                            a.Action,
+                            Action =
+                                a.Action,
 
-                        PerformedBy =
-                            a.PerformedByUser ==
+                            PerformedBy =
+                                a.PerformedByUser ==
                                     null
-                                ? "System"
-                                : a.PerformedByUser
-                                    .FullName,
+                                    ? "System"
+                                    : a.PerformedByUser
+                                        .FullName,
 
-                        Details =
-                            a.Details,
+                            Details =
+                                a.Details,
 
-                        Timestamp =
-                            a.Timestamp
-                    }
+                            Timestamp =
+                                a.Timestamp
+                        }
                 )
                 .ToListAsync();
         }

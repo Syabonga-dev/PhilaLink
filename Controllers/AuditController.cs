@@ -8,7 +8,7 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/audit")]
     [Route("api/audit-log")]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public class AuditController : ControllerBase
     {
         private readonly IAuditLogService _service;
@@ -17,21 +17,25 @@ namespace PersonalProject.Controllers
             IAuditLogService service
         )
         {
-            _service = service;
+            _service =
+                service;
         }
 
         [HttpGet]
-        [Authorize(
-            Roles =
-                "SuperAdmin,ClinicAdmin,Nurse"
-        )]
         public async Task<IActionResult> GetAll()
         {
             try
             {
-                return Ok(await _service.GetVisibleLogsAsync(GetCurrentUserId()));
+                return Ok(
+                    await _service
+                        .GetVisibleLogsAsync(
+                            GetCurrentUserId()
+                        )
+                );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -45,7 +49,9 @@ namespace PersonalProject.Controllers
                 );
 
             if (
-                string.IsNullOrWhiteSpace(value) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
                 !Guid.TryParse(
                     value,
                     out var userId

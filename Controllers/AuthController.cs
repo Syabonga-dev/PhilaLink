@@ -18,8 +18,11 @@ namespace PersonalProject.Controllers
             IOtpVerificationService otpService
         )
         {
-            _authService = authService;
-            _otpService = otpService;
+            _authService =
+                authService;
+
+            _otpService =
+                otpService;
         }
 
         // =====================================================
@@ -42,7 +45,9 @@ namespace PersonalProject.Controllers
                     result
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
@@ -74,7 +79,9 @@ namespace PersonalProject.Controllers
                     result
                 );
             }
-            catch (UnauthorizedAccessException ex)
+            catch (
+                UnauthorizedAccessException ex
+            )
             {
                 return Unauthorized(
                     new
@@ -90,19 +97,29 @@ namespace PersonalProject.Controllers
         // CURRENT USER
         // =====================================================
 
+        /*
+         * Temporary-password accounts may call /me so the
+         * client can inspect MustChangePassword.
+         */
         [HttpGet("me")]
-        [Authorize]
+        [Authorize(
+            Policy =
+                "PasswordChangeAllowed"
+        )]
         public async Task<IActionResult> Me()
         {
             try
             {
                 return Ok(
-                    await _authService.GetMeAsync(
-                        GetCurrentUserId()
-                    )
+                    await _authService
+                        .GetMeAsync(
+                            GetCurrentUserId()
+                        )
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Unauthorized();
             }
@@ -112,11 +129,19 @@ namespace PersonalProject.Controllers
         // CHANGE PASSWORD
         // =====================================================
 
+        /*
+         * This endpoint intentionally does not require
+         * MustChangePassword = false.
+         */
         [HttpPost("change-password")]
-        [Authorize]
-        public async Task<IActionResult> ChangePassword(
-            ChangePasswordDto dto
-        )
+        [Authorize(
+            Policy =
+                "PasswordChangeAllowed"
+        )]
+        public async Task<IActionResult>
+            ChangePassword(
+                ChangePasswordDto dto
+            )
         {
             try
             {
@@ -131,7 +156,9 @@ namespace PersonalProject.Controllers
                     result
                 );
             }
-            catch (UnauthorizedAccessException ex)
+            catch (
+                UnauthorizedAccessException ex
+            )
             {
                 return Unauthorized(
                     new
@@ -141,7 +168,9 @@ namespace PersonalProject.Controllers
                     }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
@@ -158,17 +187,19 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("otp/generate")]
-        public async Task<IActionResult> GenerateOtp(
-            Guid userId
-        )
+        public async Task<IActionResult>
+            GenerateOtp(
+                Guid userId
+            )
         {
             try
             {
                 var expiresAt =
-                    await _otpService.GenerateAsync(
-                        userId,
-                        "AccountVerification"
-                    );
+                    await _otpService
+                        .GenerateAsync(
+                            userId,
+                            "AccountVerification"
+                        );
 
                 return Ok(
                     new
@@ -180,7 +211,9 @@ namespace PersonalProject.Controllers
                     }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
@@ -193,17 +226,19 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPost("otp/verify")]
-        public async Task<IActionResult> VerifyOtp(
-            Guid userId,
-            string code
-        )
+        public async Task<IActionResult>
+            VerifyOtp(
+                Guid userId,
+                string code
+            )
         {
             var verified =
-                await _otpService.VerifyAsync(
-                    userId,
-                    code,
-                    "AccountVerification"
-                );
+                await _otpService
+                    .VerifyAsync(
+                        userId,
+                        code,
+                        "AccountVerification"
+                    );
 
             if (!verified)
             {

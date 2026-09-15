@@ -1,5 +1,6 @@
 using BCrypt.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -12,14 +13,20 @@ using PersonalProject.Services.Implementations;
 using PersonalProject.Services.Interfaces;
 using System.Text;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 // =====================================================
 // DATABASE
 // =====================================================
 
-builder.Services.AddDbContext<PhilaLinkDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContext<PhilaLinkDbContext>(
+    options =>
+        options.UseSqlServer(
+            builder.Configuration.GetConnectionString(
+                "DefaultConnection"
+            )
+        )
+);
 
 // =====================================================
 // DEPENDENCY INJECTION
@@ -45,7 +52,8 @@ builder.Services.AddScoped<IChatbotService, ChatbotService>();
 builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
     client =>
     {
-        client.Timeout = TimeSpan.FromSeconds(20);
+        client.Timeout =
+            TimeSpan.FromSeconds(20);
     }
 );
 
@@ -73,62 +81,73 @@ builder.Services.AddEndpointsApiExplorer();
 // SWAGGER
 // =====================================================
 
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
+builder.Services.AddSwaggerGen(
+    options =>
     {
-        Title = "PhilaLink API",
-        Version = "v1"
-    });
+        options.SwaggerDoc(
+            "v1",
+            new OpenApiInfo
+            {
+                Title = "PhilaLink API",
+                Version = "v1"
+            }
+        );
 
-    options.AddSecurityDefinition("Bearer",
-        new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "Bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Enter JWT token like: Bearer {token}"
-        }
-    );
+        options.AddSecurityDefinition(
+            "Bearer",
+            new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description =
+                    "Enter JWT token like: Bearer {token}"
+            }
+        );
 
-    options.AddSecurityRequirement(document =>
-        new OpenApiSecurityRequirement
-        {
-            [
-                new OpenApiSecuritySchemeReference(
-                    "Bearer",
-                    document
-                )
-            ] = new List<string>()
-        }
-    );
-});
+        options.AddSecurityRequirement(
+            document =>
+                new OpenApiSecurityRequirement
+                {
+                    [
+                        new OpenApiSecuritySchemeReference(
+                            "Bearer",
+                            document
+                        )
+                    ] = new List<string>()
+                }
+        );
+    }
+);
 
 // =====================================================
 // CORS
 // =====================================================
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(
-        "AllowAll",
-        policy =>
-        {
-            policy
-                .AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader();
-        }
-    );
-});
+builder.Services.AddCors(
+    options =>
+    {
+        options.AddPolicy(
+            "AllowAll",
+            policy =>
+            {
+                policy
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            }
+        );
+    }
+);
 
 // =====================================================
 // JWT AUTHENTICATION
 // =====================================================
 
-var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtKey =
+    builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
@@ -137,185 +156,315 @@ if (string.IsNullOrWhiteSpace(jwtKey))
     );
 }
 
-var key = Encoding.UTF8.GetBytes(jwtKey);
+var key =
+    Encoding.UTF8.GetBytes(
+        jwtKey
+    );
 
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters =
-            new TokenValidationParameters
-            {
-                ValidateIssuer = true,
+    .AddAuthentication(
+        JwtBearerDefaults.AuthenticationScheme
+    )
+    .AddJwtBearer(
+        options =>
+        {
+            options.TokenValidationParameters =
+                new TokenValidationParameters
+                {
+                    ValidateIssuer =
+                        true,
 
-                ValidateAudience = false,
+                    ValidateAudience =
+                        false,
 
-                ValidateIssuerSigningKey = true,
+                    ValidateIssuerSigningKey =
+                        true,
 
-                ValidateLifetime = true,
+                    ValidateLifetime =
+                        true,
 
-                ClockSkew = TimeSpan.Zero,
+                    ClockSkew =
+                        TimeSpan.Zero,
 
-                ValidIssuer =
-                    builder.Configuration["Jwt:Issuer"],
+                    ValidIssuer =
+                        builder.Configuration[
+                            "Jwt:Issuer"
+                        ],
 
-                IssuerSigningKey =
-                    new SymmetricSecurityKey(key)
-            };
-    });
+                    IssuerSigningKey =
+                        new SymmetricSecurityKey(
+                            key
+                        )
+                };
+        }
+    );
 
 // =====================================================
 // AUTHORIZATION POLICIES
 // =====================================================
 
-builder.Services.AddAuthorization(options =>
-{
-    // System-wide administration only.
-    options.AddPolicy(
-        "SuperAdminOnly",
-        policy =>
-            policy.RequireRole(RoleNames.SuperAdmin)
-    );
+builder.Services.AddAuthorization(
+    options =>
+    {
+        /*
+         * Any endpoint using plain [Authorize] requires
+         * authentication AND a completed temporary-password
+         * change.
+         */
+        options.DefaultPolicy =
+            new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .RequireClaim(
+                    "mustChangePassword",
+                    "false"
+                )
+                .Build();
 
-    // Both administrative roles.
-    options.AddPolicy(
-        "AdminOnly",
-        policy =>
-            policy.RequireRole(
-                RoleNames.SuperAdmin,
-                RoleNames.ClinicAdmin
-            )
-    );
+        /*
+         * Used only by endpoints that must remain available
+         * while an account still has a temporary password.
+         */
+        options.AddPolicy(
+            "PasswordChangeAllowed",
+            policy =>
+                policy.RequireAuthenticatedUser()
+        );
 
-    // Clinic operations.
-    options.AddPolicy(
-        "ClinicStaff",
-        policy =>
-            policy.RequireRole(
-                RoleNames.ClinicAdmin,
-                RoleNames.Nurse
-            )
-    );
+        // System-wide administration only.
+        options.AddPolicy(
+            "SuperAdminOnly",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.SuperAdmin
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
 
-    options.AddPolicy(
-        "PatientOnly",
-        policy =>
-            policy.RequireRole(RoleNames.Patient)
-    );
+        // Both administrative roles.
+        options.AddPolicy(
+            "AdminOnly",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.SuperAdmin,
+                        RoleNames.ClinicAdmin
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
 
-    options.AddPolicy(
-        "ProxyOnly",
-        policy =>
-            policy.RequireRole(RoleNames.Proxy)
-    );
+        // Clinic operations.
+        options.AddPolicy(
+            "ClinicStaff",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.ClinicAdmin,
+                        RoleNames.Nurse
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
 
-    // Useful for endpoints that may be accessed by
-    // either the patient or their authorised proxy.
-    options.AddPolicy(
-        "PatientOrProxy",
-        policy =>
-            policy.RequireRole(
-                RoleNames.Patient,
-                RoleNames.Proxy
-            )
-    );
-});
+        options.AddPolicy(
+            "PatientOnly",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.Patient
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
 
-var app = builder.Build();
+        options.AddPolicy(
+            "ProxyOnly",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.Proxy
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
+
+        options.AddPolicy(
+            "PatientOrProxy",
+            policy =>
+                policy
+                    .RequireRole(
+                        RoleNames.Patient,
+                        RoleNames.Proxy
+                    )
+                    .RequireClaim(
+                        "mustChangePassword",
+                        "false"
+                    )
+        );
+    }
+);
+
+var app =
+    builder.Build();
 
 // =====================================================
 // SUPER ADMIN SEED
 // =====================================================
 
-using (var scope = app.Services.CreateScope())
+using (
+    var scope =
+        app.Services.CreateScope()
+)
 {
-    var context = scope.ServiceProvider.GetRequiredService<PhilaLinkDbContext>();
+    var context =
+        scope.ServiceProvider
+            .GetRequiredService<
+                PhilaLinkDbContext
+            >();
 
-    /*
-     * During the architecture migration there may still be an old
-     * User with Role = "Admin".
-     *
-     * We no longer create new generic Admin users.
-     */
-
-    var superAdminExists = await context.Users.AnyAsync(u => u.Role == RoleNames.SuperAdmin);
+    var superAdminExists =
+        await context.Users.AnyAsync(
+            u =>
+                u.Role ==
+                RoleNames.SuperAdmin
+        );
 
     if (!superAdminExists)
     {
         var seedFullName =
-            builder.Configuration["Seed:SuperAdminFullName"];
+            builder.Configuration[
+                "Seed:SuperAdminFullName"
+            ];
 
         var seedIdNumber =
-            builder.Configuration["Seed:SuperAdminIdNumber"];
+            builder.Configuration[
+                "Seed:SuperAdminIdNumber"
+            ];
 
         var seedPhone =
-            builder.Configuration["Seed:SuperAdminPhoneNumber"];
+            builder.Configuration[
+                "Seed:SuperAdminPhoneNumber"
+            ];
 
         var seedEmail =
-            builder.Configuration["Seed:SuperAdminEmail"];
+            builder.Configuration[
+                "Seed:SuperAdminEmail"
+            ];
 
         var seedPassword =
-            builder.Configuration["Seed:SuperAdminPassword"];
+            builder.Configuration[
+                "Seed:SuperAdminPassword"
+            ];
 
-        /*
-         * We don't store a SuperAdmin password in source code.
-         *
-         * If seed configuration has not been supplied,
-         * simply skip automatic account creation.
-         */
         var seedConfigured =
-            !string.IsNullOrWhiteSpace(seedFullName) &&
-            !string.IsNullOrWhiteSpace(seedIdNumber) &&
-            !string.IsNullOrWhiteSpace(seedPhone) &&
-            !string.IsNullOrWhiteSpace(seedEmail) &&
-            !string.IsNullOrWhiteSpace(seedPassword);
+            !string.IsNullOrWhiteSpace(
+                seedFullName
+            ) &&
+            !string.IsNullOrWhiteSpace(
+                seedIdNumber
+            ) &&
+            !string.IsNullOrWhiteSpace(
+                seedPhone
+            ) &&
+            !string.IsNullOrWhiteSpace(
+                seedEmail
+            ) &&
+            !string.IsNullOrWhiteSpace(
+                seedPassword
+            );
 
         if (seedConfigured)
         {
-            var adminUserId = Guid.NewGuid();
+            var now =
+                DateTime.UtcNow;
 
-            var adminUser = new User
-            {
-                Id = adminUserId,
+            var adminUserId =
+                Guid.NewGuid();
 
-                FullName = seedFullName!,
+            var adminUser =
+                new User
+                {
+                    Id =
+                        adminUserId,
 
-                IdNumber = seedIdNumber!,
+                    FullName =
+                        seedFullName!,
 
-                PhoneNumber = seedPhone!,
+                    IdNumber =
+                        seedIdNumber!,
 
-                Email = seedEmail!,
+                    PhoneNumber =
+                        seedPhone!,
 
-                PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(
-                        seedPassword!
-                    ),
+                    Email =
+                        seedEmail!,
 
-                Role = RoleNames.SuperAdmin,
+                    PasswordHash =
+                        BCrypt.Net.BCrypt
+                            .HashPassword(
+                                seedPassword!
+                            ),
 
-                IsActive = true,
+                    Role =
+                        RoleNames.SuperAdmin,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    IsActive =
+                        true,
 
-            var admin = new Admin
-            {
-                UserId = adminUserId,
+                    IsVerified =
+                        true,
 
-                FullName = seedFullName!,
+                    VerifiedAt =
+                        now,
 
-                Email = seedEmail!,
+                    MustChangePassword =
+                        false,
 
-                // SuperAdmin is not clinic-scoped.
-                ClinicId = null,
+                    CreatedAt =
+                        now
+                };
 
-                CreatedAt = DateTime.UtcNow
-            };
+            var admin =
+                new Admin
+                {
+                    UserId =
+                        adminUserId,
 
-            context.Users.Add(adminUser);
-            context.Admins.Add(admin);
+                    FullName =
+                        seedFullName!,
 
-            await context.SaveChangesAsync();
+                    Email =
+                        seedEmail!,
+
+                    ClinicId =
+                        null,
+
+                    CreatedAt =
+                        now
+                };
+
+            context.Users.Add(
+                adminUser
+            );
+
+            context.Admins.Add(
+                admin
+            );
+
+            await context
+                .SaveChangesAsync();
         }
         else
         {
@@ -341,7 +490,9 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseCors("AllowAll");
+app.UseCors(
+    "AllowAll"
+);
 
 app.UseAuthentication();
 
