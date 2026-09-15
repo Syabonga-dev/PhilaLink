@@ -22,5 +22,7 @@ namespace PersonalProject.Models.DTOs
         public bool IsActive { get; set; }
 
         public bool IsVerified { get; set; }
+
+        public bool MustChangePassword { get; set; }
     }
 }

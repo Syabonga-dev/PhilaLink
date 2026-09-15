@@ -22,31 +22,34 @@ namespace PersonalProject.Models.Entities
         public string Role { get; set; } =
             string.Empty;
 
-        /*
-         * Administrative account state.
-         *
-         * False means the account has been deactivated.
-         *
-         * Do not use this property for OTP/email verification.
-         */
+        // =====================================================
+        // ACCOUNT STATE
+        // =====================================================
+
         public bool IsActive { get; set; } = true;
 
-        /*
-         * Identity/contact verification state.
-         *
-         * Staff accounts created by administrators are considered
-         * verified unless explicitly changed during creation.
-         *
-         * Patient self-registration overrides this to false.
-         */
         public bool IsVerified { get; set; } = true;
 
         public DateTime? VerifiedAt { get; set; }
+
+        /*
+         * Administrator-created accounts receive a temporary
+         * password and must replace it before normal API use.
+         */
+        public bool MustChangePassword { get; set; }
+
+        // =====================================================
+        // AUDIT
+        // =====================================================
 
         public DateTime CreatedAt { get; set; } =
             DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+
+        // =====================================================
+        // PROFILES
+        // =====================================================
 
         public Patient? Patient { get; set; }
 

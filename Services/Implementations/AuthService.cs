@@ -34,8 +34,15 @@ namespace PersonalProject.Services.Implementations
             RegisterDto dto
         )
         {
-            var idNumber = dto.IdNumber.Trim();
-            var phoneNumber = dto.PhoneNumber.Trim();
+            ValidatePasswordStrength(
+                dto.Password
+            );
+
+            var idNumber =
+                dto.IdNumber.Trim();
+
+            var phoneNumber =
+                dto.PhoneNumber.Trim();
 
             var exists =
                 await _context.Users.AnyAsync(
@@ -52,78 +59,114 @@ namespace PersonalProject.Services.Implementations
             }
 
             await using var transaction =
-                await _context.Database.BeginTransactionAsync();
+                await _context.Database
+                    .BeginTransactionAsync();
 
             var user = new User
             {
-                Id = Guid.NewGuid(),
+                Id =
+                    Guid.NewGuid(),
 
-                FullName = dto.FullName.Trim(),
+                FullName =
+                    dto.FullName.Trim(),
 
-                IdNumber = idNumber,
+                IdNumber =
+                    idNumber,
 
-                PhoneNumber = phoneNumber,
+                PhoneNumber =
+                    phoneNumber,
 
-                Email = dto.Email.Trim(),
+                Email =
+                    dto.Email.Trim(),
 
                 PasswordHash =
                     BCrypt.Net.BCrypt.HashPassword(
                         dto.Password
                     ),
 
-                Role = RoleNames.Patient,
+                Role =
+                    RoleNames.Patient,
 
-                IsActive = true,
+                IsActive =
+                    true,
 
-                IsVerified = false,
+                IsVerified =
+                    false,
 
-                VerifiedAt = null,
+                VerifiedAt =
+                    null,
 
-                CreatedAt = DateTime.UtcNow
+                MustChangePassword =
+                    false,
+
+                CreatedAt =
+                    DateTime.UtcNow
             };
 
-            _context.Users.Add(user);
+            _context.Users.Add(
+                user
+            );
 
-            var patient = new Patient
-            {
-                Id = Guid.NewGuid(),
+            var patient =
+                new Patient
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                UserId = user.Id,
+                    UserId =
+                        user.Id,
 
-                PatientNumber =
-                    await GeneratePatientNumberAsync(),
+                    PatientNumber =
+                        await GeneratePatientNumberAsync(),
 
-                Email = user.Email,
+                    Email =
+                        user.Email,
 
-                IsProfileComplete = false,
+                    IsProfileComplete =
+                        false,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Patients.Add(patient);
+            _context.Patients.Add(
+                patient
+            );
 
-            var preference = new PatientPreference
-            {
-                Id = Guid.NewGuid(),
+            var preference =
+                new PatientPreference
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                PatientId = patient.Id,
+                    PatientId =
+                        patient.Id,
 
-                MedicationReminders = true,
+                    MedicationReminders =
+                        true,
 
-                AppointmentReminders = true,
+                    AppointmentReminders =
+                        true,
 
-                ClinicNotifications = true,
+                    ClinicNotifications =
+                        true,
 
-                HealthUpdates = false,
+                    HealthUpdates =
+                        false,
 
-                ShareHealthData = true,
+                    ShareHealthData =
+                        true,
 
-                AllowChatbotProfileAccess = true,
+                    AllowChatbotProfileAccess =
+                        true,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.PatientPreferences.Add(preference);
+            _context.PatientPreferences.Add(
+                preference
+            );
 
             await _context.SaveChangesAsync();
 
@@ -131,13 +174,17 @@ namespace PersonalProject.Services.Implementations
 
             return new RegisterResponseDto
             {
-                UserId = user.Id,
+                UserId =
+                    user.Id,
 
-                FullName = user.FullName,
+                FullName =
+                    user.FullName,
 
-                Role = user.Role,
+                Role =
+                    user.Role,
 
-                RequiresVerification = true
+                RequiresVerification =
+                    true
             };
         }
 
@@ -149,19 +196,17 @@ namespace PersonalProject.Services.Implementations
             LoginDto dto
         )
         {
-            var idNumber = dto.IdNumber.Trim();
+            var idNumber =
+                dto.IdNumber.Trim();
 
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
                         u =>
-                            u.IdNumber == idNumber
+                            u.IdNumber ==
+                            idNumber
                     );
 
-            /*
-             * Keep one generic authentication failure message.
-             * Do not reveal whether an ID number exists.
-             */
             if (
                 user == null ||
                 !BCrypt.Net.BCrypt.Verify(
@@ -175,10 +220,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // =================================================
-            // ACCOUNT STATUS
-            // =================================================
-
             if (!user.IsActive)
             {
                 throw new UnauthorizedAccessException(
@@ -186,15 +227,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * Patient self-registration must complete verification
-             * before a JWT can be issued.
-             *
-             * Administrator-created staff accounts are already trusted
-             * through their controlled creation workflow.
-             */
             if (
-                user.Role == RoleNames.Patient &&
+                user.Role ==
+                    RoleNames.Patient &&
                 !user.IsVerified
             )
             {
@@ -203,17 +238,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // =================================================
-            // ROLE PROTECTION
-            // =================================================
-
-            /*
-             * The old architecture used Role = "Admin".
-             *
-             * Generic Admin is no longer a valid runtime role.
-             * Existing database rows must eventually be migrated
-             * to SuperAdmin or ClinicAdmin.
-             */
             if (!RoleNames.IsValid(user.Role))
             {
                 throw new UnauthorizedAccessException(
@@ -221,29 +245,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return new LoginResponseDto
-            {
-                Token = GenerateToken(user),
-
-                User = new UserResponseDto
-                {
-                    Id = user.Id,
-
-                    FullName = user.FullName,
-
-                    IdNumber = user.IdNumber,
-
-                    PhoneNumber = user.PhoneNumber,
-
-                    Email = user.Email,
-
-                    Role = user.Role,
-
-                    IsActive = user.IsActive,
-
-                    IsVerified = user.IsVerified
-                }
-            };
+            return CreateLoginResponse(
+                user
+            );
         }
 
         // =====================================================
@@ -258,7 +262,8 @@ namespace PersonalProject.Services.Implementations
                 await _context.Users
                     .FirstOrDefaultAsync(
                         u =>
-                            u.Id == userId
+                            u.Id ==
+                            userId
                     );
 
             if (
@@ -278,31 +283,105 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return new UserResponseDto
+            return CreateUserResponse(
+                user
+            );
+        }
+
+        // =====================================================
+        // CHANGE PASSWORD
+        // =====================================================
+
+        public async Task<LoginResponseDto>
+            ChangePasswordAsync(
+                Guid userId,
+                ChangePasswordDto dto
+            )
+        {
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        u =>
+                            u.Id ==
+                            userId
+                    );
+
+            if (
+                user == null ||
+                !user.IsActive
+            )
             {
-                Id = user.Id,
+                throw new UnauthorizedAccessException(
+                    "Account is not available."
+                );
+            }
 
-                FullName = user.FullName,
+            if (
+                !BCrypt.Net.BCrypt.Verify(
+                    dto.CurrentPassword,
+                    user.PasswordHash
+                )
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Current password is incorrect."
+                );
+            }
 
-                IdNumber = user.IdNumber,
+            if (
+                dto.NewPassword !=
+                dto.ConfirmNewPassword
+            )
+            {
+                throw new InvalidOperationException(
+                    "New password and confirmation do not match."
+                );
+            }
 
-                PhoneNumber = user.PhoneNumber,
+            ValidatePasswordStrength(
+                dto.NewPassword
+            );
 
-                Email = user.Email,
+            if (
+                BCrypt.Net.BCrypt.Verify(
+                    dto.NewPassword,
+                    user.PasswordHash
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "The new password must be different from the current password."
+                );
+            }
 
-                Role = user.Role,
+            user.PasswordHash =
+                BCrypt.Net.BCrypt.HashPassword(
+                    dto.NewPassword
+                );
 
-                IsActive = user.IsActive,
+            user.MustChangePassword =
+                false;
 
-                IsVerified = user.IsVerified
-            };
+            user.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            /*
+             * Return a fresh JWT whose password-change claim
+             * reflects the new account state.
+             */
+            return CreateLoginResponse(
+                user
+            );
         }
 
         // =====================================================
         // PATIENT NUMBER
         // =====================================================
 
-        private async Task<string> GeneratePatientNumberAsync()
+        private async Task<string>
+            GeneratePatientNumberAsync()
         {
             string patientNumber;
 
@@ -319,11 +398,120 @@ namespace PersonalProject.Services.Implementations
             while (
                 await _context.Patients.AnyAsync(
                     p =>
-                        p.PatientNumber == patientNumber
+                        p.PatientNumber ==
+                        patientNumber
                 )
             );
 
             return patientNumber;
+        }
+
+        // =====================================================
+        // PASSWORD POLICY
+        // =====================================================
+
+        private static void ValidatePasswordStrength(
+            string password
+        )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    password
+                ) ||
+                password.Length < 12
+            )
+            {
+                throw new InvalidOperationException(
+                    "Password must contain at least 12 characters."
+                );
+            }
+
+            if (!password.Any(char.IsUpper))
+            {
+                throw new InvalidOperationException(
+                    "Password must contain at least one uppercase letter."
+                );
+            }
+
+            if (!password.Any(char.IsLower))
+            {
+                throw new InvalidOperationException(
+                    "Password must contain at least one lowercase letter."
+                );
+            }
+
+            if (!password.Any(char.IsDigit))
+            {
+                throw new InvalidOperationException(
+                    "Password must contain at least one number."
+                );
+            }
+
+            if (
+                !password.Any(
+                    c =>
+                        !char.IsLetterOrDigit(c)
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Password must contain at least one special character."
+                );
+            }
+        }
+
+        // =====================================================
+        // RESPONSES
+        // =====================================================
+
+        private LoginResponseDto CreateLoginResponse(
+            User user
+        )
+        {
+            return new LoginResponseDto
+            {
+                Token =
+                    GenerateToken(user),
+
+                User =
+                    CreateUserResponse(user)
+            };
+        }
+
+        private static UserResponseDto
+            CreateUserResponse(
+                User user
+            )
+        {
+            return new UserResponseDto
+            {
+                Id =
+                    user.Id,
+
+                FullName =
+                    user.FullName,
+
+                IdNumber =
+                    user.IdNumber,
+
+                PhoneNumber =
+                    user.PhoneNumber,
+
+                Email =
+                    user.Email,
+
+                Role =
+                    user.Role,
+
+                IsActive =
+                    user.IsActive,
+
+                IsVerified =
+                    user.IsVerified,
+
+                MustChangePassword =
+                    user.MustChangePassword
+            };
         }
 
         // =====================================================
@@ -349,28 +537,36 @@ namespace PersonalProject.Services.Implementations
                     jwtKey
                 );
 
-            var claims = new[]
-            {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    user.Id.ToString()
-                ),
+            var claims =
+                new[]
+                {
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        user.Id.ToString()
+                    ),
 
-                new Claim(
-                    ClaimTypes.Name,
-                    user.FullName
-                ),
+                    new Claim(
+                        ClaimTypes.Name,
+                        user.FullName
+                    ),
 
-                new Claim(
-                    ClaimTypes.Role,
-                    user.Role
-                ),
+                    new Claim(
+                        ClaimTypes.Role,
+                        user.Role
+                    ),
 
-                new Claim(
-                    "idNumber",
-                    user.IdNumber
-                )
-            };
+                    new Claim(
+                        "idNumber",
+                        user.IdNumber
+                    ),
+
+                    new Claim(
+                        "mustChangePassword",
+                        user.MustChangePassword
+                            ? "true"
+                            : "false"
+                    )
+                };
 
             var token =
                 new JwtSecurityToken(
@@ -384,19 +580,23 @@ namespace PersonalProject.Services.Implementations
                         claims,
 
                     expires:
-                        DateTime.UtcNow.AddHours(1),
+                        DateTime.UtcNow
+                            .AddHours(1),
 
                     signingCredentials:
                         new SigningCredentials(
                             new SymmetricSecurityKey(
                                 key
                             ),
-                            SecurityAlgorithms.HmacSha256
+                            SecurityAlgorithms
+                                .HmacSha256
                         )
                 );
 
             return new JwtSecurityTokenHandler()
-                .WriteToken(token);
+                .WriteToken(
+                    token
+                );
         }
     }
 }

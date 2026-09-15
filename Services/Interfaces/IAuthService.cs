@@ -15,5 +15,10 @@ namespace PersonalProject.Services.Interfaces
         Task<UserResponseDto> GetMeAsync(
             Guid userId
         );
+
+        Task<LoginResponseDto> ChangePasswordAsync(
+            Guid userId,
+            ChangePasswordDto dto
+        );
     }
 }

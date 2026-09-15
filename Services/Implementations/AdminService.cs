@@ -1070,51 +1070,27 @@ namespace PersonalProject.Services.Implementations
             var tempPassword =
                 GenerateTempPassword();
 
-            var now =
-                DateTime.UtcNow;
+            var now = DateTime.UtcNow;
 
-            var user =
-                new User
+            var user = new User
                 {
-                    Id =
-                        Guid.NewGuid(),
-
-                    FullName =
-                        normalizedFullName,
-
-                    IdNumber =
-                        normalizedIdNumber,
-
-                    PhoneNumber =
-                        normalizedPhoneNumber,
-
-                    Email =
-                        normalizedEmail,
-
-                    PasswordHash =
-                        BCrypt.Net.BCrypt
-                            .HashPassword(
-                                tempPassword
-                            ),
-
-                    Role =
-                        role,
-
-                    IsActive =
-                        true,
+                    Id = Guid.NewGuid(),
+                    FullName = normalizedFullName,
+                    IdNumber = normalizedIdNumber,
+                    PhoneNumber = normalizedPhoneNumber,
+                    Email = normalizedEmail,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword( tempPassword ),
+                    Role = role,
+                    IsActive = true,
 
                     /*
                      * Staff accounts are created through an
                      * authenticated administrator workflow.
                      */
-                    IsVerified =
-                        true,
-
-                    VerifiedAt =
-                        now,
-
-                    CreatedAt =
-                        now
+                    IsVerified = true,
+                    VerifiedAt = now,
+                    MustChangePassword = true,
+                    CreatedAt = now
                 };
 
             /*
@@ -1124,14 +1100,9 @@ namespace PersonalProject.Services.Implementations
              * Nurse, or Proxy profile first and then saves the
              * complete account inside one transaction.
              */
-            _context.Users.Add(
-                user
-            );
+            _context.Users.Add( user );
 
-            return (
-                user,
-                tempPassword
-            );
+            return ( user, tempPassword);
         }
 
         // =====================================================
