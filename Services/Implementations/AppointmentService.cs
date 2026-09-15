@@ -206,14 +206,47 @@ namespace PersonalProject.Services.Implementations
             return appointment?.ToDto();
         }
 
-        public async Task<List<AppointmentResponseDto>>
-            GetClinicAppointmentsAsync(
-                Guid performedByUserId
-            )
+        public async Task<List<AppointmentResponseDto>>GetClinicAppointmentsAsync(Guid performedByUserId)
         {
             var clinicId = await GetStaffClinicIdAsync(performedByUserId);
 
             var appointments = await GetAppointmentQuery().Where(a => a.ClinicId == clinicId).OrderBy(a => a.ScheduledAt).ToListAsync();
+
+            return appointments
+                .Select(a => a.ToDto())
+                .ToList();
+        }
+
+        public async Task<List<AppointmentResponseDto>>
+    GetPatientAppointmentsAsync(
+        Guid patientUserId
+    )
+        {
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.UserId == patientUserId &&
+                            p.User.Role == RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (patient == null)
+            {
+                throw new KeyNotFoundException(
+                    "Active patient profile not found."
+                );
+            }
+
+            var appointments =
+                await GetAppointmentQuery()
+                    .Where(
+                        a =>
+                            a.PatientId == patient.Id
+                    )
+                    .OrderBy(a => a.ScheduledAt)
+                    .ToListAsync();
 
             return appointments
                 .Select(a => a.ToDto())
