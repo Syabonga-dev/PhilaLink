@@ -6,13 +6,19 @@ namespace PersonalProject.Models.DTOs
 
         public Guid PatientId { get; set; }
 
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; } =
+            string.Empty;
 
-        public string Dosage { get; set; } = string.Empty;
+        public string Dosage { get; set; } =
+            string.Empty;
 
-        public string Form { get; set; } = string.Empty;
+        public string Form { get; set; } =
+            string.Empty;
 
-        public string Instructions { get; set; } = string.Empty;
+        public string Instructions { get; set; } =
+            string.Empty;
+
+        public decimal? UnitsPerDose { get; set; }
 
         public string? PrescribedBy { get; set; }
 
@@ -24,7 +30,8 @@ namespace PersonalProject.Models.DTOs
 
         public bool IsActive { get; set; }
 
-        public List<string> ScheduleTimes { get; set; } = new();
+        public List<string> ScheduleTimes { get; set; } =
+            new();
 
         public DateTime? NextDoseAt { get; set; }
     }

@@ -8,13 +8,19 @@ namespace PersonalProject.Models.Entities
 
         public Patient Patient { get; set; } = null!;
 
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; } =
+            string.Empty;
 
-        public string Dosage { get; set; } = string.Empty;
+        public string Dosage { get; set; } =
+            string.Empty;
 
-        public string Form { get; set; } = string.Empty;
+        public string Form { get; set; } =
+            string.Empty;
 
-        public string Instructions { get; set; } = string.Empty;
+        public string Instructions { get; set; } =
+            string.Empty;
+
+        public decimal? UnitsPerDose { get; set; }
 
         public string? PrescribedBy { get; set; }
 
@@ -26,14 +32,19 @@ namespace PersonalProject.Models.Entities
 
         public bool IsActive { get; set; } = true;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 
-        public ICollection<MedicationSchedule> Schedules { get; set; }
-            = new List<MedicationSchedule>();
+        public ICollection<MedicationSchedule>
+            Schedules
+        { get; set; } =
+            new List<MedicationSchedule>();
 
-        public ICollection<MedicationLog> Logs { get; set; }
-            = new List<MedicationLog>();
+        public ICollection<MedicationLog>
+            Logs
+        { get; set; } =
+            new List<MedicationLog>();
     }
 }

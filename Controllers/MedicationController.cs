@@ -11,15 +11,18 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/medications")]
     [Authorize]
-    public class MedicationController : ControllerBase
+    public class MedicationController :
+        ControllerBase
     {
-        private readonly IMedicationService _medicationService;
+        private readonly IMedicationService
+            _medicationService;
 
         public MedicationController(
             IMedicationService medicationService
         )
         {
-            _medicationService = medicationService;
+            _medicationService =
+                medicationService;
         }
 
         // =====================================================
@@ -28,9 +31,10 @@ namespace PersonalProject.Controllers
 
         [HttpPost]
         [Authorize(Roles = RoleNames.Nurse)]
-        public async Task<IActionResult> Create(
-            MedicationCreateDto dto
-        )
+        public async Task<IActionResult>
+            Create(
+                MedicationCreateDto dto
+            )
         {
             try
             {
@@ -47,25 +51,33 @@ namespace PersonalProject.Controllers
                     )
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -75,11 +87,16 @@ namespace PersonalProject.Controllers
         // CLINIC STAFF: PATIENT MEDICATIONS
         // =====================================================
 
-        [HttpGet("patient/{patientId:guid}")]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> GetByPatient(
-            Guid patientId
-        )
+        [HttpGet(
+            "patient/{patientId:guid}"
+        )]
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            GetByPatient(
+                Guid patientId
+            )
         {
             try
             {
@@ -96,16 +113,21 @@ namespace PersonalProject.Controllers
                     )
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -116,7 +138,9 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("me")]
-        [Authorize(Roles = RoleNames.Patient)]
+        [Authorize(
+            Roles = RoleNames.Patient
+        )]
         public async Task<IActionResult>
             GetMyMedications()
         {
@@ -134,16 +158,21 @@ namespace PersonalProject.Controllers
                     )
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -153,12 +182,17 @@ namespace PersonalProject.Controllers
         // CLINIC STAFF: ADD SCHEDULE
         // =====================================================
 
-        [HttpPost("{medicationId:guid}/schedule")]
-        [Authorize(Roles = RoleNames.Nurse)]
-        public async Task<IActionResult> AddSchedule(
-            Guid medicationId,
-            MedicationScheduleDto dto
-        )
+        [HttpPost(
+            "{medicationId:guid}/schedule"
+        )]
+        [Authorize(
+            Roles = RoleNames.Nurse
+        )]
+        public async Task<IActionResult>
+            AddSchedule(
+                Guid medicationId,
+                MedicationScheduleDto dto
+            )
         {
             try
             {
@@ -177,25 +211,33 @@ namespace PersonalProject.Controllers
                     }
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -205,11 +247,16 @@ namespace PersonalProject.Controllers
         // CLINIC STAFF: MEDICATION LOGS
         // =====================================================
 
-        [HttpGet("{medicationId:guid}/logs")]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> GetLogs(
-            Guid medicationId
-        )
+        [HttpGet(
+            "{medicationId:guid}/logs"
+        )]
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            GetLogs(
+                Guid medicationId
+            )
         {
             try
             {
@@ -222,47 +269,57 @@ namespace PersonalProject.Controllers
 
                 return Ok(
                     logs.Select(
-                        log => new
-                        {
-                            id =
-                                log.Id,
+                        log =>
+                            new
+                            {
+                                id =
+                                    log.Id,
 
-                            medicationId =
-                                log.MedicationId,
+                                medicationId =
+                                    log.MedicationId,
 
-                            taken =
-                                log.Taken,
+                                taken =
+                                    log.Taken,
 
-                            notes =
-                                log.Notes,
+                                notes =
+                                    log.Notes,
 
-                            takenAt =
-                                log.TakenAt
-                        }
+                                takenAt =
+                                    log.TakenAt
+                            }
                     )
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
 
         // =====================================================
-        // PATIENT: MARK MEDICATION TAKEN / SKIPPED
+        // PATIENT: MARK TAKEN / SKIPPED
         // =====================================================
 
-        [HttpPost("{medicationId:guid}/log")]
-        [Authorize(Roles = RoleNames.Patient)]
+        [HttpPost(
+            "{medicationId:guid}/log"
+        )]
+        [Authorize(
+            Roles = RoleNames.Patient
+        )]
         public async Task<IActionResult>
             LogMedication(
                 Guid medicationId,
@@ -289,16 +346,21 @@ namespace PersonalProject.Controllers
                     }
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -308,9 +370,10 @@ namespace PersonalProject.Controllers
         // RESPONSE MAPPING
         // =====================================================
 
-        private static object ToMedicationResponse(
-            Medication medication
-        )
+        private static object
+            ToMedicationResponse(
+                Medication medication
+            )
         {
             return new
             {
@@ -331,6 +394,9 @@ namespace PersonalProject.Controllers
 
                 instructions =
                     medication.Instructions,
+
+                unitsPerDose =
+                    medication.UnitsPerDose,
 
                 prescribedBy =
                     medication.PrescribedBy,
@@ -408,7 +474,8 @@ namespace PersonalProject.Controllers
         // CURRENT USER
         // =====================================================
 
-        private Guid GetCurrentUserId()
+        private Guid
+            GetCurrentUserId()
         {
             var value =
                 User.FindFirstValue(

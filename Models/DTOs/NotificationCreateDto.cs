@@ -4,6 +4,7 @@ namespace PersonalProject.Models.DTOs
     {
         public Guid UserId { get; set; }
 
-        public string Message { get; set; } = string.Empty;
+        public string Message { get; set; } =
+            string.Empty;
     }
 }

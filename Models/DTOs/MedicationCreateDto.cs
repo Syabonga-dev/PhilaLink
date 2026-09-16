@@ -4,13 +4,19 @@ namespace PersonalProject.Models.DTOs
     {
         public Guid PatientId { get; set; }
 
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; } =
+            string.Empty;
 
-        public string Dosage { get; set; } = string.Empty;
+        public string Dosage { get; set; } =
+            string.Empty;
 
-        public string Form { get; set; } = string.Empty;
+        public string Form { get; set; } =
+            string.Empty;
 
-        public string Instructions { get; set; } = string.Empty;
+        public string Instructions { get; set; } =
+            string.Empty;
+
+        public decimal? UnitsPerDose { get; set; }
 
         public string? PrescribedBy { get; set; }
 

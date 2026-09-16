@@ -26,15 +26,31 @@ namespace PersonalProject.Services.Implementations
         // CLINIC STAFF: CREATE
         // =====================================================
 
-        public async Task<Medication>CreateMedicationAsync(MedicationCreateDto dto,  Guid performedByUserId )
+        public async Task<Medication>
+            CreateMedicationAsync(
+                MedicationCreateDto dto,
+                Guid performedByUserId
+            )
         {
-            var clinicId =  await GetStaffClinicIdAsync(performedByUserId);
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
 
-            var patient = await _context.Patients.Include(p => p.User).FirstOrDefaultAsync( p => p.Id == dto.PatientId &&p.User.IsActive );
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.Id == dto.PatientId &&
+                            p.User.IsActive
+                    );
 
             if (patient == null)
             {
-                throw new KeyNotFoundException(  "Patient not found." );
+                throw new KeyNotFoundException(
+                    "Patient not found."
+                );
             }
 
             if (
@@ -61,6 +77,16 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            if (
+                dto.UnitsPerDose != null &&
+                dto.UnitsPerDose <= 0
+            )
+            {
+                throw new InvalidOperationException(
+                    "Units per dose must be greater than zero."
+                );
+            }
+
             var medication =
                 new Medication
                 {
@@ -81,6 +107,9 @@ namespace PersonalProject.Services.Implementations
 
                     Instructions =
                         dto.Instructions.Trim(),
+
+                    UnitsPerDose =
+                        dto.UnitsPerDose,
 
                     PrescribedBy =
                         string.IsNullOrWhiteSpace(
@@ -115,7 +144,8 @@ namespace PersonalProject.Services.Implementations
                 medication
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "MedicationCreated",
@@ -127,17 +157,22 @@ namespace PersonalProject.Services.Implementations
             return medication;
         }
 
+        // =====================================================
+        // PATIENT: OWN MEDICATIONS
+        // =====================================================
+
         public async Task<List<Medication>>
-    GetPatientMedicationsByUserIdAsync(
-        Guid patientUserId
-    )
+            GetPatientMedicationsByUserIdAsync(
+                Guid patientUserId
+            )
         {
             var patient =
                 await _context.Patients
                     .Include(p => p.User)
                     .FirstOrDefaultAsync(
                         p =>
-                            p.UserId == patientUserId &&
+                            p.UserId ==
+                                patientUserId &&
                             p.User.Role ==
                                 RoleNames.Patient &&
                             p.User.IsActive
@@ -150,15 +185,21 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return await _context.Medications
+            return await _context
+                .Medications
                 .Include(m => m.Schedules)
                 .Include(m => m.Logs)
                 .Where(
                     m =>
-                        m.PatientId == patient.Id
+                        m.PatientId ==
+                        patient.Id
                 )
-                .OrderByDescending(m => m.IsActive)
-                .ThenBy(m => m.Name)
+                .OrderByDescending(
+                    m => m.IsActive
+                )
+                .ThenBy(
+                    m => m.Name
+                )
                 .ToListAsync();
         }
 
@@ -180,7 +221,9 @@ namespace PersonalProject.Services.Implementations
             var patient =
                 await _context.Patients
                     .FirstOrDefaultAsync(
-                        p => p.Id == patientId
+                        p =>
+                            p.Id ==
+                            patientId
                     );
 
             if (patient == null)
@@ -191,7 +234,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                patient.ClinicId != clinicId
+                patient.ClinicId !=
+                clinicId
             )
             {
                 throw new UnauthorizedAccessException(
@@ -199,7 +243,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return await _context.Medications
+            return await _context
+                .Medications
                 .Include(m => m.Schedules)
                 .Include(m => m.Logs)
                 .Where(
@@ -207,7 +252,9 @@ namespace PersonalProject.Services.Implementations
                         m.PatientId ==
                         patientId
                 )
-                .OrderBy(m => m.Name)
+                .OrderBy(
+                    m => m.Name
+                )
                 .ToListAsync();
         }
 
@@ -228,7 +275,9 @@ namespace PersonalProject.Services.Implementations
 
             var medication =
                 await _context.Medications
-                    .Include(m => m.Patient)
+                    .Include(
+                        m => m.Patient
+                    )
                     .FirstOrDefaultAsync(
                         m =>
                             m.Id ==
@@ -299,11 +348,14 @@ namespace PersonalProject.Services.Implementations
                         true
                 };
 
-            _context.MedicationSchedules.Add(
-                schedule
-            );
+            _context
+                .MedicationSchedules
+                .Add(
+                    schedule
+                );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "MedicationScheduleAdded",
@@ -330,7 +382,9 @@ namespace PersonalProject.Services.Implementations
 
             var medication =
                 await _context.Medications
-                    .Include(m => m.Patient)
+                    .Include(
+                        m => m.Patient
+                    )
                     .FirstOrDefaultAsync(
                         m =>
                             m.Id ==
@@ -354,7 +408,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return await _context.MedicationLogs
+            return await _context
+                .MedicationLogs
                 .Where(
                     l =>
                         l.MedicationId ==
@@ -437,11 +492,14 @@ namespace PersonalProject.Services.Implementations
                         DateTime.UtcNow
                 };
 
-            _context.MedicationLogs.Add(
-                log
-            );
+            _context
+                .MedicationLogs
+                .Add(
+                    log
+                );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 taken
@@ -467,7 +525,9 @@ namespace PersonalProject.Services.Implementations
                     .Include(u => u.Admin)
                     .Include(u => u.Nurse)
                     .FirstOrDefaultAsync(
-                        u => u.Id == userId
+                        u =>
+                            u.Id ==
+                            userId
                     );
 
             if (
@@ -483,7 +543,8 @@ namespace PersonalProject.Services.Implementations
             if (
                 user.Role ==
                     RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId != null
+                user.Admin?.ClinicId !=
+                    null
             )
             {
                 return user.Admin
@@ -496,7 +557,8 @@ namespace PersonalProject.Services.Implementations
                 user.Nurse != null
             )
             {
-                return user.Nurse.ClinicId;
+                return user.Nurse
+                    .ClinicId;
             }
 
             throw new UnauthorizedAccessException(
