@@ -40,4 +40,24 @@
 
         public DateTime AssignedAt { get; set; }
     }
+
+    public class PatientAssignedWorkerDto
+    {
+        public Guid ProxyLinkId { get; set; }
+
+        public Guid ProxyId { get; set; }
+
+        public string FullName { get; set; } =
+            string.Empty;
+
+        public string PhoneNumber { get; set; } =
+            string.Empty;
+
+        public string Email { get; set; } =
+            string.Empty;
+
+        public DateTime AssignedAt { get; set; }
+
+        public bool IsActive { get; set; }
+    }
 }

@@ -30,9 +30,7 @@ namespace PersonalProject.Controllers
             }
             catch (KeyNotFoundException ex)
             {
-                return NotFound(
-                    new { message = ex.Message }
-                );
+                return NotFound(new { message = ex.Message } );
             }
             catch (InvalidOperationException ex)
             {
@@ -61,6 +59,29 @@ namespace PersonalProject.Controllers
                 );
             }
             catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+
+        [HttpGet("me")]
+        [Authorize(Policy = "PatientOnly")]
+        public async Task<IActionResult>GetMyAssignedWorker()
+        {
+            try
+            {
+                var worker =
+                    await _proxyService
+                        .GetMyAssignedWorkerAsync(
+                            GetCurrentUserId()
+                        );
+
+                return Ok(worker);
+            }
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }

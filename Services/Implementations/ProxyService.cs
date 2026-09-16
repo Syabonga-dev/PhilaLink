@@ -27,17 +27,12 @@ namespace PersonalProject.Services.Implementations
             Guid performedByUserId
         )
         {
-            var actor =
-                await GetStaffActorAsync(
-                    performedByUserId
-                );
+            var actor = await GetStaffActorAsync(performedByUserId);
 
-            var patient =
-                await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p => p.Id == patientId
-                    );
+            var patient =await _context.Patients
+                            .Include(p => p.User)
+                            .FirstOrDefaultAsync(
+                                p => p.Id == patientId);
 
             if (patient == null)
             {
@@ -340,10 +335,7 @@ namespace PersonalProject.Services.Implementations
                 .ToListAsync();
         }
 
-        private async Task<StaffActor>
-            GetStaffActorAsync(
-                Guid userId
-            )
+        private async Task<StaffActor>GetStaffActorAsync(Guid userId)
         {
             var user =
                 await _context.Users
@@ -410,6 +402,76 @@ namespace PersonalProject.Services.Implementations
             }
 
             throw new UnauthorizedAccessException();
+        }
+
+        public async Task<PatientAssignedWorkerDto?>
+    GetMyAssignedWorkerAsync(
+        Guid patientUserId
+    )
+        {
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.UserId ==
+                                patientUserId &&
+                            p.User.Role ==
+                                RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (patient == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active patient profile not found."
+                );
+            }
+
+            return await _context.ProxyLinks
+                .Include(pl => pl.Proxy)
+                    .ThenInclude(p => p.User)
+                .Where(
+                    pl =>
+                        pl.PatientId ==
+                            patient.Id &&
+                        pl.IsActive &&
+                        pl.Proxy.User.IsActive &&
+                        pl.Proxy.User.Role ==
+                            RoleNames.Proxy
+                )
+                .OrderByDescending(
+                    pl => pl.AssignedAt
+                )
+                .Select(
+                    pl =>
+                        new PatientAssignedWorkerDto
+                        {
+                            ProxyLinkId =
+                                pl.Id,
+
+                            ProxyId =
+                                pl.ProxyId,
+
+                            FullName =
+                                pl.Proxy.User
+                                    .FullName,
+
+                            PhoneNumber =
+                                pl.Proxy.User
+                                    .PhoneNumber,
+
+                            Email =
+                                pl.Proxy.Email,
+
+                            AssignedAt =
+                                pl.AssignedAt,
+
+                            IsActive =
+                                pl.IsActive
+                        }
+                )
+                .FirstOrDefaultAsync();
         }
 
         private class StaffActor
