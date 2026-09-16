@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace PersonalProject.Models.Entities
 {
     public class Medication
@@ -20,6 +22,7 @@ namespace PersonalProject.Models.Entities
         public string Instructions { get; set; } =
             string.Empty;
 
+        [Precision(18, 4)]
         public decimal? UnitsPerDose { get; set; }
 
         public string? PrescribedBy { get; set; }
