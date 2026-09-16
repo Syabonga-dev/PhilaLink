@@ -5,12 +5,24 @@ namespace PersonalProject.Services.Interfaces
     public interface IWeatherService
     {
         Task<CurrentWeatherDto>
-            GetCurrentForPatientAsync(Guid userId);
+            GetCurrentForPatientAsync(
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
+            );
 
         Task<List<WeatherForecastItemDto>>
-            GetForecastForPatientAsync(Guid userId);
+            GetForecastForPatientAsync(
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
+            );
 
         Task<WeatherTipResultDto>
-            GenerateWeatherTipAsync(Guid userId);
+            GenerateWeatherTipAsync(
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
+            );
     }
 }

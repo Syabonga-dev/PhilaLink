@@ -22,38 +22,157 @@ namespace PersonalProject.Controllers
 
         [HttpGet("me/current")]
         public async Task<IActionResult>
-            GetCurrent()
+            GetCurrent(
+                [FromQuery] double? latitude = null,
+                [FromQuery] double? longitude = null
+            )
         {
+            var validationError =
+                ValidateCoordinates(
+                    latitude,
+                    longitude
+                );
+
+            if (validationError != null)
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            validationError
+                    }
+                );
+            }
+
             return Ok(
                 await _weatherService
                     .GetCurrentForPatientAsync(
-                        GetCurrentUserId()
+                        GetCurrentUserId(),
+                        latitude,
+                        longitude
                     )
             );
         }
 
         [HttpGet("me/forecast")]
         public async Task<IActionResult>
-            GetForecast()
+            GetForecast(
+                [FromQuery] double? latitude = null,
+                [FromQuery] double? longitude = null
+            )
         {
+            var validationError =
+                ValidateCoordinates(
+                    latitude,
+                    longitude
+                );
+
+            if (validationError != null)
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            validationError
+                    }
+                );
+            }
+
             return Ok(
                 await _weatherService
                     .GetForecastForPatientAsync(
-                        GetCurrentUserId()
+                        GetCurrentUserId(),
+                        latitude,
+                        longitude
                     )
             );
         }
 
         [HttpPost("me/tips")]
         public async Task<IActionResult>
-            GenerateTip()
+            GenerateTip(
+                [FromQuery] double? latitude = null,
+                [FromQuery] double? longitude = null
+            )
         {
+            var validationError =
+                ValidateCoordinates(
+                    latitude,
+                    longitude
+                );
+
+            if (validationError != null)
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            validationError
+                    }
+                );
+            }
+
             return Ok(
                 await _weatherService
                     .GenerateWeatherTipAsync(
-                        GetCurrentUserId()
+                        GetCurrentUserId(),
+                        latitude,
+                        longitude
                     )
             );
+        }
+
+        private static string?
+            ValidateCoordinates(
+                double? latitude,
+                double? longitude
+            )
+        {
+            if (
+                latitude == null &&
+                longitude == null
+            )
+            {
+                // No device coordinates supplied.
+                // WeatherService will use the
+                // patient's assigned clinic.
+                return null;
+            }
+
+            if (
+                latitude == null ||
+                longitude == null
+            )
+            {
+                return
+                    "Latitude and longitude must be supplied together.";
+            }
+
+            if (
+                !double.IsFinite(
+                    latitude.Value
+                ) ||
+                latitude.Value < -90 ||
+                latitude.Value > 90
+            )
+            {
+                return
+                    "Latitude must be between -90 and 90.";
+            }
+
+            if (
+                !double.IsFinite(
+                    longitude.Value
+                ) ||
+                longitude.Value < -180 ||
+                longitude.Value > 180
+            )
+            {
+                return
+                    "Longitude must be between -180 and 180.";
+            }
+
+            return null;
         }
 
         private Guid GetCurrentUserId()

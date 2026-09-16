@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
@@ -33,24 +34,120 @@ namespace PersonalProject.Services.Implementations
 
         public async Task<CurrentWeatherDto>
             GetCurrentForPatientAsync(
-                Guid userId
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
             )
         {
-            var patient =
-                await GetPatientAsync(userId);
+            var location =
+                await ResolveWeatherLocationAsync(
+                    userId,
+                    latitude,
+                    longitude
+                );
 
-            var clinic =
-                patient.Clinic!;
+            return await GetCurrentWeatherAsync(
+                location.Latitude,
+                location.Longitude,
+                location.FallbackName
+            );
+        }
 
+        public async Task<List<WeatherForecastItemDto>>
+            GetForecastForPatientAsync(
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
+            )
+        {
+            var location =
+                await ResolveWeatherLocationAsync(
+                    userId,
+                    latitude,
+                    longitude
+                );
+
+            return await GetForecastAsync(
+                location.Latitude,
+                location.Longitude
+            );
+        }
+
+        public async Task<WeatherTipResultDto>
+            GenerateWeatherTipAsync(
+                Guid userId,
+                double? latitude = null,
+                double? longitude = null
+            )
+        {
+            var location =
+                await ResolveWeatherLocationAsync(
+                    userId,
+                    latitude,
+                    longitude
+                );
+
+            var current =
+                await GetCurrentWeatherAsync(
+                    location.Latitude,
+                    location.Longitude,
+                    location.FallbackName
+                );
+
+            var forecast =
+                await GetForecastAsync(
+                    location.Latitude,
+                    location.Longitude
+                );
+
+            var message =
+                BuildWeatherTip(
+                    current,
+                    forecast
+                );
+
+            if (message == null)
+            {
+                return new WeatherTipResultDto
+                {
+                    NotificationCreated = false,
+                    Message = null
+                };
+            }
+
+            var created =
+                await _notificationService
+                    .CreateSystemForPatientAsync(
+                        userId,
+                        message
+                    );
+
+            return new WeatherTipResultDto
+            {
+                NotificationCreated =
+                    created,
+
+                Message =
+                    message
+            };
+        }
+
+        private async Task<CurrentWeatherDto>
+            GetCurrentWeatherAsync(
+                double latitude,
+                double longitude,
+                string fallbackName
+            )
+        {
             var apiKey =
                 GetApiKey();
 
             var url =
-                $"/data/2.5/weather" +
-                $"?lat={clinic.Latitude}" +
-                $"&lon={clinic.Longitude}" +
-                $"&appid={apiKey}" +
-                $"&units=metric";
+                "/data/2.5/weather" +
+                $"?lat={FormatCoordinate(latitude)}" +
+                $"&lon={FormatCoordinate(longitude)}" +
+                $"&appid={Uri.EscapeDataString(apiKey)}" +
+                "&units=metric";
 
             using var response =
                 await _httpClient.GetAsync(url);
@@ -83,8 +180,9 @@ namespace PersonalProject.Services.Implementations
                         "name",
                         out var name
                     )
-                        ? name.GetString() ?? clinic.Name
-                        : clinic.Name,
+                        ? name.GetString()
+                            ?? fallbackName
+                        : fallbackName,
 
                 TemperatureC =
                     main.GetProperty("temp")
@@ -109,33 +207,29 @@ namespace PersonalProject.Services.Implementations
                 Description =
                     weather.GetProperty(
                         "description"
-                    ).GetString() ?? string.Empty,
+                    ).GetString()
+                    ?? string.Empty,
 
                 ObservedAtUtc =
                     DateTime.UtcNow
             };
         }
 
-        public async Task<List<WeatherForecastItemDto>>
-            GetForecastForPatientAsync(
-                Guid userId
+        private async Task<List<WeatherForecastItemDto>>
+            GetForecastAsync(
+                double latitude,
+                double longitude
             )
         {
-            var patient =
-                await GetPatientAsync(userId);
-
-            var clinic =
-                patient.Clinic!;
-
             var apiKey =
                 GetApiKey();
 
             var url =
-                $"/data/2.5/forecast" +
-                $"?lat={clinic.Latitude}" +
-                $"&lon={clinic.Longitude}" +
-                $"&appid={apiKey}" +
-                $"&units=metric";
+                "/data/2.5/forecast" +
+                $"?lat={FormatCoordinate(latitude)}" +
+                $"&lon={FormatCoordinate(longitude)}" +
+                $"&appid={Uri.EscapeDataString(apiKey)}" +
+                "&units=metric";
 
             using var response =
                 await _httpClient.GetAsync(url);
@@ -222,51 +316,97 @@ namespace PersonalProject.Services.Implementations
             return results;
         }
 
-        public async Task<WeatherTipResultDto>
-            GenerateWeatherTipAsync(
-                Guid userId
+        private async Task<WeatherLocation>
+            ResolveWeatherLocationAsync(
+                Guid userId,
+                double? latitude,
+                double? longitude
             )
         {
-            var current =
-                await GetCurrentForPatientAsync(
+            var patient =
+                await GetPatientAsync(
                     userId
                 );
 
-            var forecast =
-                await GetForecastForPatientAsync(
-                    userId
-                );
-
-            var message =
-                BuildWeatherTip(
-                    current,
-                    forecast
-                );
-
-            if (message == null)
+            if (
+                latitude.HasValue &&
+                longitude.HasValue
+            )
             {
-                return new WeatherTipResultDto
-                {
-                    NotificationCreated = false,
-                    Message = null
-                };
+                ValidateCoordinates(
+                    latitude.Value,
+                    longitude.Value
+                );
+
+                return new WeatherLocation(
+                    latitude.Value,
+                    longitude.Value,
+                    "Current location"
+                );
             }
 
-            var created =
-                await _notificationService
-                    .CreateSystemForPatientAsync(
-                        userId,
-                        message
-                    );
-
-            return new WeatherTipResultDto
+            if (
+                patient.ClinicId == null ||
+                patient.Clinic == null
+            )
             {
-                NotificationCreated =
-                    created,
+                throw new InvalidOperationException(
+                    "Current location was not supplied and the patient does not have an assigned clinic for weather fallback."
+                );
+            }
 
-                Message =
-                    message
-            };
+            ValidateCoordinates(
+                patient.Clinic.Latitude,
+                patient.Clinic.Longitude
+            );
+
+            return new WeatherLocation(
+                patient.Clinic.Latitude,
+                patient.Clinic.Longitude,
+                patient.Clinic.Name
+            );
+        }
+
+        private static void
+            ValidateCoordinates(
+                double latitude,
+                double longitude
+            )
+        {
+            if (
+                !double.IsFinite(latitude) ||
+                latitude < -90 ||
+                latitude > 90
+            )
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(latitude),
+                    "Latitude must be between -90 and 90."
+                );
+            }
+
+            if (
+                !double.IsFinite(longitude) ||
+                longitude < -180 ||
+                longitude > 180
+            )
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(longitude),
+                    "Longitude must be between -180 and 180."
+                );
+            }
+        }
+
+        private static string
+            FormatCoordinate(
+                double value
+            )
+        {
+            return value.ToString(
+                "0.######",
+                CultureInfo.InvariantCulture
+            );
         }
 
         private static string?
@@ -399,17 +539,13 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (
-                patient.ClinicId == null ||
-                patient.Clinic == null
-            )
-            {
-                throw new InvalidOperationException(
-                    "Patient does not have an assigned clinic."
-                );
-            }
-
             return patient;
         }
+
+        private sealed record WeatherLocation(
+            double Latitude,
+            double Longitude,
+            string FallbackName
+        );
     }
 }
