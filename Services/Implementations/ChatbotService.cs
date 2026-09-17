@@ -5,6 +5,7 @@ using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.AI;
 using PersonalProject.Services.Interfaces;
+using System.Text;
 
 namespace PersonalProject.Services.Implementations
 {
@@ -18,7 +19,8 @@ namespace PersonalProject.Services.Implementations
         private const string UrgentResponse =
             "Your message contains symptoms that should be assessed promptly by a healthcare professional. " +
             "Please contact your clinic, an urgent care service, or another qualified healthcare provider as soon as possible. " +
-            "If you are struggling to breathe, develop chest pain, faint, become confused, have severe bleeding, or your symptoms rapidly worsen, seek emergency medical help immediately.";
+            "If you are struggling to breathe, develop chest pain, faint, become confused, have severe bleeding, " +
+            "or your symptoms rapidly worsen, seek emergency medical help immediately.";
 
         private readonly PhilaLinkDbContext _context;
         private readonly IChatbotProvider _provider;
@@ -59,7 +61,9 @@ namespace PersonalProject.Services.Implementations
 
             var conversation =
                 await _context.ChatConversations
-                    .Include(c => c.Messages)
+                    .Include(
+                        c => c.Messages
+                    )
                     .FirstOrDefaultAsync(
                         c =>
                             c.PatientId ==
@@ -123,6 +127,11 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 DateTime.UtcNow;
 
+            /*
+             * Emergency and urgent messages are handled
+             * locally before the external AI provider is
+             * contacted.
+             */
             if (
                 ContainsAny(
                     cleanMessage,
@@ -149,8 +158,19 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Save the user's message before calling Gemini.
+             */
             await _context.SaveChangesAsync();
 
+            /*
+             * Build the latest patient context from PhilaLink.
+             *
+             * This now includes:
+             * - stored profile data
+             * - medication supply
+             * - latest symptom assessment
+             */
             var patientContext =
                 await BuildPatientContextAsync(
                     patient.Id
@@ -159,7 +179,8 @@ namespace PersonalProject.Services.Implementations
             var messages =
                 conversation.Messages
                     .OrderBy(
-                        m => m.CreatedAt
+                        message =>
+                            message.CreatedAt
                     )
                     .ToList();
 
@@ -216,7 +237,9 @@ namespace PersonalProject.Services.Implementations
 
             var conversation =
                 await _context.ChatConversations
-                    .Include(c => c.Messages)
+                    .Include(
+                        c => c.Messages
+                    )
                     .FirstOrDefaultAsync(
                         c =>
                             c.PatientId ==
@@ -243,23 +266,24 @@ namespace PersonalProject.Services.Implementations
                 Messages =
                     conversation.Messages
                         .OrderBy(
-                            m => m.CreatedAt
+                            message =>
+                                message.CreatedAt
                         )
                         .Select(
-                            m =>
+                            message =>
                                 new ChatbotHistoryMessageDto
                                 {
                                     Id =
-                                        m.Id,
+                                        message.Id,
 
                                     Role =
-                                        m.Role,
+                                        message.Role,
 
                                     Content =
-                                        m.Content,
+                                        message.Content,
 
                                     CreatedAt =
-                                        m.CreatedAt
+                                        message.CreatedAt
                                 }
                         )
                         .ToList()
@@ -278,10 +302,10 @@ namespace PersonalProject.Services.Implementations
             var conversations =
                 await _context.ChatConversations
                     .Where(
-                        c =>
-                            c.PatientId ==
+                        conversation =>
+                            conversation.PatientId ==
                                 patient.Id &&
-                            c.IsActive
+                            conversation.IsActive
                     )
                     .ToListAsync();
 
@@ -338,14 +362,17 @@ namespace PersonalProject.Services.Implementations
         {
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
+                    .Include(
+                        patient =>
+                            patient.User
+                    )
                     .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                        patient =>
+                            patient.UserId ==
                                 userId &&
-                            p.User.Role ==
+                            patient.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
+                            patient.User.IsActive
                     );
 
             if (patient == null)
@@ -358,6 +385,19 @@ namespace PersonalProject.Services.Implementations
             return patient;
         }
 
+        /*
+         * =====================================================
+         * PATIENT CONTEXT
+         * =====================================================
+         *
+         * The Gemini provider receives this information as
+         * trusted PhilaLink context.
+         *
+         * Stored patient-profile data and temporary assessment
+         * data are intentionally labelled separately because a
+         * patient may type assessment information that differs
+         * from their permanent profile.
+         */
         private async Task<string>
             BuildPatientContextAsync(
                 Guid patientId
@@ -365,65 +405,516 @@ namespace PersonalProject.Services.Implementations
         {
             var medications =
                 await _context.Medications
-                    .Where(
-                        m =>
-                            m.PatientId ==
-                                patientId &&
-                            m.IsActive
+                    .Include(
+                        medication =>
+                            medication.Schedules
                     )
-                    .Select(
-                        m =>
-                            new
-                            {
-                                m.Name,
-                                m.Dosage,
-                                m.Form,
-                                m.Instructions
-                            }
+                    .Where(
+                        medication =>
+                            medication.PatientId ==
+                                patientId &&
+                            medication.IsActive
+                    )
+                    .OrderBy(
+                        medication =>
+                            medication.Name
                     )
                     .ToListAsync();
 
             var allergies =
                 await _context.Allergies
                     .Where(
-                        a =>
-                            a.PatientId ==
+                        allergy =>
+                            allergy.PatientId ==
                             patientId
                     )
+                    .OrderBy(
+                        allergy =>
+                            allergy.AllergyName
+                    )
                     .Select(
-                        a =>
-                            a.AllergyName
+                        allergy =>
+                            allergy.AllergyName
                     )
                     .ToListAsync();
 
             var conditions =
                 await _context.MedicalConditions
                     .Where(
-                        c =>
-                            c.PatientId ==
-                                patientId
+                        condition =>
+                            condition.PatientId ==
+                            patientId
+                    )
+                    .OrderBy(
+                        condition =>
+                            condition.ConditionName
                     )
                     .Select(
-                        c =>
-                            c.ConditionName
+                        condition =>
+                            condition.ConditionName
                     )
                     .ToListAsync();
 
-            var medicationSummary =
-                medications.Count == 0
-                    ? "None recorded"
-                    : string.Join(
-                        "; ",
-                        medications.Select(
-                            m =>
-                                $"{m.Name} {m.Dosage} {m.Form}".Trim()
+            /*
+             * Latest symptom assessment.
+             *
+             * SymptomsJson already contains the structured
+             * assessment information:
+             *
+             * symptoms
+             * age
+             * duration
+             * allergies
+             * medications
+             * conditions
+             */
+            var latestAssessment =
+                await _context.SymptomAssessments
+                    .Where(
+                        assessment =>
+                            assessment.PatientId ==
+                            patientId
+                    )
+                    .OrderByDescending(
+                        assessment =>
+                            assessment.CreatedAt
+                    )
+                    .FirstOrDefaultAsync();
+
+            /*
+             * Medication collections are loaded using the same
+             * rules as MedicationSupplyController.
+             */
+            var completedCollections =
+                await _context
+                    .MedicationCollections
+                    .Include(
+                        collection =>
+                            collection.Items
+                    )
+                    .Where(
+                        collection =>
+                            collection.PatientId ==
+                                patientId &&
+                            collection.Status ==
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.CollectedAt !=
+                                null
+                    )
+                    .OrderByDescending(
+                        collection =>
+                            collection.CollectedAt
+                    )
+                    .ToListAsync();
+
+            var builder =
+                new StringBuilder();
+
+            builder.AppendLine(
+                "PHILALINK PATIENT CONTEXT"
+            );
+
+            builder.AppendLine();
+            builder.AppendLine(
+                "STORED PATIENT PROFILE"
+            );
+
+            builder.AppendLine(
+                "The information in this section comes from the patient's stored PhilaLink profile."
+            );
+
+            builder.AppendLine(
+                $"Active medications: {FormatMedicationList(medications)}"
+            );
+
+            builder.AppendLine(
+                $"Allergies: {FormatStringList(allergies)}"
+            );
+
+            builder.AppendLine(
+                $"Medical conditions: {FormatStringList(conditions)}"
+            );
+
+            builder.AppendLine();
+            builder.AppendLine(
+                "MEDICATION SUPPLY"
+            );
+
+            builder.AppendLine(
+                "Medication supply values are estimates calculated by PhilaLink from recorded collections, dose size and active schedules."
+            );
+
+            if (medications.Count == 0)
+            {
+                builder.AppendLine(
+                    "No active medications are recorded."
+                );
+            }
+            else
+            {
+                var now =
+                    DateTime.UtcNow;
+
+                foreach (
+                    var medication
+                    in medications
+                )
+                {
+                    builder.AppendLine(
+                        BuildMedicationSupplyContext(
+                            medication,
+                            completedCollections,
+                            now
                         )
                     );
+                }
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(
+                "LATEST SYMPTOM ASSESSMENT"
+            );
+
+            builder.AppendLine(
+                "This section contains information the patient entered during their latest PhilaChatBot symptom assessment. " +
+                "It may differ from the permanent stored patient profile. " +
+                "Treat it as assessment-session information and do not claim that it changed the permanent profile."
+            );
+
+            if (latestAssessment == null)
+            {
+                builder.AppendLine(
+                    "No symptom assessment is recorded."
+                );
+            }
+            else
+            {
+                builder.AppendLine(
+                    $"Assessment recorded at UTC: {latestAssessment.CreatedAt:O}"
+                );
+
+                builder.AppendLine(
+                    $"Triage result: {latestAssessment.Result}"
+                );
+
+                builder.AppendLine(
+                    $"Assessment recommendation: {latestAssessment.Recommendation}"
+                );
+
+                builder.AppendLine(
+                    $"Assessment details JSON: {latestAssessment.SymptomsJson}"
+                );
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(
+                "CONTEXT RULES"
+            );
+
+            builder.AppendLine(
+                "- When the patient asks about symptoms from their assessment, use the latest symptom assessment above."
+            );
+
+            builder.AppendLine(
+                "- When the patient asks how much medication they have left, use the Medication Supply section above."
+            );
+
+            builder.AppendLine(
+                "- Clearly describe medication supply as an estimate."
+            );
+
+            builder.AppendLine(
+                "- Do not ask the patient for collection quantities or collection dates when PhilaLink already provides them above."
+            );
+
+            builder.AppendLine(
+                "- If medication supply is unavailable because required data is missing, explain which recorded information is missing."
+            );
+
+            builder.AppendLine(
+                "- Do not treat assessment-entered medications, allergies or conditions as permanent profile records unless they also appear in the stored profile section."
+            );
+
+            builder.AppendLine(
+                "- Never claim that the symptom assessment establishes a confirmed diagnosis."
+            );
+
+            return builder
+                .ToString()
+                .Trim();
+        }
+
+        private static string FormatMedicationList(
+            IReadOnlyCollection<Medication> medications
+        )
+        {
+            if (medications.Count == 0)
+            {
+                return "None recorded";
+            }
+
+            return string.Join(
+                "; ",
+                medications.Select(
+                    medication =>
+                    {
+                        var parts =
+                            new[]
+                            {
+                                medication.Name,
+                                medication.Dosage,
+                                medication.Form
+                            }
+                            .Where(
+                                value =>
+                                    !string.IsNullOrWhiteSpace(
+                                        value
+                                    )
+                            );
+
+                        return string.Join(
+                            " ",
+                            parts
+                        );
+                    }
+                )
+            );
+        }
+
+        private static string FormatStringList(
+            IReadOnlyCollection<string> values
+        )
+        {
+            if (values.Count == 0)
+            {
+                return "None recorded";
+            }
+
+            return string.Join(
+                ", ",
+                values
+            );
+        }
+
+        /*
+         * =====================================================
+         * MEDICATION SUPPLY CONTEXT
+         * =====================================================
+         *
+         * This mirrors MedicationSupplyController so Gemini is
+         * given the same supply estimate shown elsewhere in
+         * PhilaLink.
+         */
+        private static string
+            BuildMedicationSupplyContext(
+                Medication medication,
+                IReadOnlyList<
+                    MedicationCollection
+                > completedCollections,
+                DateTime now
+            )
+        {
+            var activeSchedules =
+                medication.Schedules
+                    .Where(
+                        schedule =>
+                            schedule.IsActive
+                    )
+                    .OrderBy(
+                        schedule =>
+                            schedule.TimeOfDay
+                    )
+                    .ToList();
+
+            var latestCollection =
+                completedCollections
+                    .FirstOrDefault(
+                        collection =>
+                            collection.Items.Any(
+                                item =>
+                                    item.MedicationId ==
+                                    medication.Id
+                            )
+                    );
+
+            var medicationLabel =
+                string.Join(
+                    " ",
+                    new[]
+                    {
+                        medication.Name,
+                        medication.Dosage,
+                        medication.Form
+                    }
+                    .Where(
+                        value =>
+                            !string.IsNullOrWhiteSpace(
+                                value
+                            )
+                    )
+                );
+
+            if (
+                latestCollection == null ||
+                latestCollection.CollectedAt ==
+                    null
+            )
+            {
+                return
+                    $"- {medicationLabel}: " +
+                    "days remaining unavailable because no completed collection is recorded.";
+            }
+
+            var dispensedQuantity =
+                latestCollection.Items
+                    .Where(
+                        item =>
+                            item.MedicationId ==
+                            medication.Id
+                    )
+                    .Sum(
+                        item =>
+                            item.Quantity
+                    );
+
+            if (
+                medication.UnitsPerDose ==
+                    null ||
+                medication.UnitsPerDose <= 0
+            )
+            {
+                return
+                    $"- {medicationLabel}: " +
+                    "days remaining unavailable because units per dose are missing. " +
+                    $"Last dispensed quantity: {dispensedQuantity}.";
+            }
+
+            if (
+                activeSchedules.Count == 0
+            )
+            {
+                return
+                    $"- {medicationLabel}: " +
+                    "days remaining unavailable because no active dosing schedule is recorded. " +
+                    $"Last dispensed quantity: {dispensedQuantity}.";
+            }
+
+            var collectedAt =
+                latestCollection
+                    .CollectedAt.Value;
+
+            var scheduledDosesUsed =
+                CountScheduledDoses(
+                    collectedAt,
+                    now,
+                    activeSchedules
+                );
+
+            var estimatedUnitsUsed =
+                scheduledDosesUsed *
+                medication
+                    .UnitsPerDose.Value;
+
+            var estimatedRemaining =
+                Math.Max(
+                    0m,
+                    dispensedQuantity -
+                    estimatedUnitsUsed
+                );
+
+            var unitsPerDay =
+                activeSchedules.Count *
+                medication
+                    .UnitsPerDose.Value;
+
+            int? daysRemaining =
+                null;
+
+            if (unitsPerDay > 0)
+            {
+                daysRemaining =
+                    (int)Math.Floor(
+                        estimatedRemaining /
+                        unitsPerDay
+                    );
+            }
+
+            if (!daysRemaining.HasValue)
+            {
+                return
+                    $"- {medicationLabel}: " +
+                    "days remaining could not be calculated.";
+            }
 
             return
-                $"Active medications: {medicationSummary}\n" +
-                $"Allergies: {(allergies.Count == 0 ? "None recorded" : string.Join(", ", allergies))}\n" +
-                $"Medical conditions: {(conditions.Count == 0 ? "None recorded" : string.Join(", ", conditions))}";
+                $"- {medicationLabel}: " +
+                $"approximately {daysRemaining.Value} day(s) remaining; " +
+                $"estimated remaining quantity {estimatedRemaining:0.##} unit(s); " +
+                $"dispensed quantity {dispensedQuantity}; " +
+                $"units per dose {medication.UnitsPerDose.Value:0.####}; " +
+                $"doses per day {activeSchedules.Count}; " +
+                $"last collected {collectedAt:yyyy-MM-dd}.";
+        }
+
+        /*
+         * This is intentionally the same scheduled-dose
+         * calculation used by MedicationSupplyController.
+         */
+        private static int CountScheduledDoses(
+            DateTime from,
+            DateTime to,
+            IReadOnlyList<
+                MedicationSchedule
+            > schedules
+        )
+        {
+            if (
+                schedules.Count == 0 ||
+                to <= from
+            )
+            {
+                return 0;
+            }
+
+            var count =
+                0;
+
+            var date =
+                from.Date;
+
+            var lastDate =
+                to.Date;
+
+            while (
+                date <= lastDate
+            )
+            {
+                foreach (
+                    var schedule
+                    in schedules
+                )
+                {
+                    var occurrence =
+                        date +
+                        schedule.TimeOfDay;
+
+                    if (
+                        occurrence >
+                            from &&
+                        occurrence <=
+                            to
+                    )
+                    {
+                        count++;
+                    }
+                }
+
+                date =
+                    date.AddDays(1);
+            }
+
+            return count;
         }
 
         private static bool ContainsAny(
