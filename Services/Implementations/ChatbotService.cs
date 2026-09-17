@@ -15,6 +15,11 @@ namespace PersonalProject.Services.Implementations
             "Please seek emergency medical help now or go to the nearest emergency facility. " +
             "Do not rely on PhilaLink or the chatbot for emergency treatment.";
 
+        private const string UrgentResponse =
+            "Your message contains symptoms that should be assessed promptly by a healthcare professional. " +
+            "Please contact your clinic, an urgent care service, or another qualified healthcare provider as soon as possible. " +
+            "If you are struggling to breathe, develop chest pain, faint, become confused, have severe bleeding, or your symptoms rapidly worsen, seek emergency medical help immediately.";
+
         private readonly PhilaLinkDbContext _context;
         private readonly IChatbotProvider _provider;
 
@@ -27,17 +32,17 @@ namespace PersonalProject.Services.Implementations
             _provider = provider;
         }
 
-        // =====================================================
-        // SEND MESSAGE
-        // =====================================================
-
         public async Task<ChatbotMessageResponseDto>
             SendMessageAsync(
                 Guid userId,
                 ChatbotMessageRequestDto dto
             )
         {
-            if (string.IsNullOrWhiteSpace(dto.Message))
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Message
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Message is required."
@@ -118,44 +123,32 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 DateTime.UtcNow;
 
-            /*
-             * Emergency messages are intercepted locally.
-             *
-             * The external AI provider is deliberately not
-             * called when an emergency warning phrase is
-             * detected.
-             */
-            if (ContainsEmergencyWarning(cleanMessage))
+            if (
+                ContainsAny(
+                    cleanMessage,
+                    EmergencyKeywords
+                )
+            )
             {
-                var emergencyMessage =
-                    CreateAssistantMessage(
-                        conversation.Id,
-                        EmergencyResponse
-                    );
-
-                _context.ChatMessages.Add(
-                    emergencyMessage
-                );
-
-                conversation.Messages.Add(
-                    emergencyMessage
-                );
-
-                conversation.UpdatedAt =
-                    emergencyMessage.CreatedAt;
-
-                await _context.SaveChangesAsync();
-
-                return CreateResponse(
+                return await SaveInterceptedResponseAsync(
                     conversation,
-                    emergencyMessage
+                    EmergencyResponse
                 );
             }
 
-            /*
-             * Persist the user's non-emergency message before
-             * contacting the external AI provider.
-             */
+            if (
+                ContainsAny(
+                    cleanMessage,
+                    UrgentKeywords
+                )
+            )
+            {
+                return await SaveInterceptedResponseAsync(
+                    conversation,
+                    UrgentResponse
+                );
+            }
+
             await _context.SaveChangesAsync();
 
             var patientContext =
@@ -176,7 +169,11 @@ namespace PersonalProject.Services.Implementations
                     messages
                 );
 
-            if (string.IsNullOrWhiteSpace(responseText))
+            if (
+                string.IsNullOrWhiteSpace(
+                    responseText
+                )
+            )
             {
                 responseText =
                     "I could not generate a response right now.";
@@ -206,10 +203,6 @@ namespace PersonalProject.Services.Implementations
                 assistantMessage
             );
         }
-
-        // =====================================================
-        // HISTORY
-        // =====================================================
 
         public async Task<ChatbotHistoryDto?>
             GetHistoryAsync(
@@ -273,10 +266,6 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
-        // =====================================================
-        // CLEAR HISTORY
-        // =====================================================
-
         public async Task ClearHistoryAsync(
             Guid userId
         )
@@ -311,9 +300,36 @@ namespace PersonalProject.Services.Implementations
             await _context.SaveChangesAsync();
         }
 
-        // =====================================================
-        // ACTIVE PATIENT
-        // =====================================================
+        private async Task<ChatbotMessageResponseDto>
+            SaveInterceptedResponseAsync(
+                ChatConversation conversation,
+                string responseText
+            )
+        {
+            var assistantMessage =
+                CreateAssistantMessage(
+                    conversation.Id,
+                    responseText
+                );
+
+            _context.ChatMessages.Add(
+                assistantMessage
+            );
+
+            conversation.Messages.Add(
+                assistantMessage
+            );
+
+            conversation.UpdatedAt =
+                assistantMessage.CreatedAt;
+
+            await _context.SaveChangesAsync();
+
+            return CreateResponse(
+                conversation,
+                assistantMessage
+            );
+        }
 
         private async Task<Patient>
             GetActivePatientAsync(
@@ -342,10 +358,6 @@ namespace PersonalProject.Services.Implementations
             return patient;
         }
 
-        // =====================================================
-        // PATIENT CONTEXT
-        // =====================================================
-
         private async Task<string>
             BuildPatientContextAsync(
                 Guid patientId
@@ -360,7 +372,14 @@ namespace PersonalProject.Services.Implementations
                             m.IsActive
                     )
                     .Select(
-                        m => m.Name
+                        m =>
+                            new
+                            {
+                                m.Name,
+                                m.Dosage,
+                                m.Form,
+                                m.Instructions
+                            }
                     )
                     .ToListAsync();
 
@@ -390,43 +409,52 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
+            var medicationSummary =
+                medications.Count == 0
+                    ? "None recorded"
+                    : string.Join(
+                        "; ",
+                        medications.Select(
+                            m =>
+                                $"{m.Name} {m.Dosage} {m.Form}".Trim()
+                        )
+                    );
+
             return
-                $"Active medications: {string.Join(", ", medications)}\n" +
-                $"Allergies: {string.Join(", ", allergies)}\n" +
-                $"Medical conditions: {string.Join(", ", conditions)}";
+                $"Active medications: {medicationSummary}\n" +
+                $"Allergies: {(allergies.Count == 0 ? "None recorded" : string.Join(", ", allergies))}\n" +
+                $"Medical conditions: {(conditions.Count == 0 ? "None recorded" : string.Join(", ", conditions))}";
         }
 
-        // =====================================================
-        // EMERGENCY INTERCEPTION
-        // =====================================================
-
-        private static bool ContainsEmergencyWarning(
-            string message
+        private static bool ContainsAny(
+            string text,
+            IEnumerable<string> keywords
         )
         {
-            return EmergencyKeywords.Any(
+            return keywords.Any(
                 keyword =>
-                    message.Contains(
+                    text.Contains(
                         keyword,
                         StringComparison.OrdinalIgnoreCase
                     )
             );
         }
 
-        /*
-         * Keep these aligned with the deterministic symptom
-         * assessment emergency rules.
-         */
         private static readonly string[]
             EmergencyKeywords =
         {
             "chest pain",
             "cannot breathe",
             "can't breathe",
+            "unable to breathe",
+            "not breathing",
             "difficulty breathing",
             "severe shortness of breath",
+            "gasping",
+            "blue lips",
+            "blue face",
             "unconscious",
-            "not breathing",
+            "unresponsive",
             "severe bleeding",
             "bleeding heavily",
             "seizure",
@@ -441,9 +469,27 @@ namespace PersonalProject.Services.Implementations
             "suicide"
         };
 
-        // =====================================================
-        // RESPONSE HELPERS
-        // =====================================================
+        private static readonly string[]
+            UrgentKeywords =
+        {
+            "shortness of breath",
+            "breathless",
+            "breathlessness",
+            "wheezing",
+            "worsening asthma",
+            "high fever",
+            "persistent fever",
+            "persistent vomiting",
+            "vomiting repeatedly",
+            "blood in stool",
+            "blood in urine",
+            "coughing blood",
+            "fainting",
+            "passed out",
+            "severe pain",
+            "dehydration",
+            "dehydrated"
+        };
 
         private static ChatMessage
             CreateAssistantMessage(

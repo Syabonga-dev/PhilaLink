@@ -46,7 +46,7 @@ namespace PersonalProject.Controllers
                     await _service
                         .CreateForPatientAsync(
                             GetCurrentUserId(),
-                            dto.Symptoms
+                            dto
                         );
 
                 return Ok(
@@ -77,6 +77,17 @@ namespace PersonalProject.Controllers
             )
             {
                 return Forbid();
+            }
+            catch (
+                ArgumentException ex
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message = ex.Message
+                    }
+                );
             }
         }
 
