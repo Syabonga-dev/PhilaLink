@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
-using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
@@ -32,6 +31,10 @@ namespace PersonalProject.Services.Implementations
             _logger = logger;
         }
 
+        // =====================================================
+        // CURRENT WEATHER
+        // =====================================================
+
         public async Task<CurrentWeatherDto>
             GetCurrentForPatientAsync(
                 Guid userId,
@@ -53,6 +56,10 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // FORECAST
+        // =====================================================
+
         public async Task<List<WeatherForecastItemDto>>
             GetForecastForPatientAsync(
                 Guid userId,
@@ -72,6 +79,10 @@ namespace PersonalProject.Services.Implementations
                 location.Longitude
             );
         }
+
+        // =====================================================
+        // WEATHER HEALTH TIP
+        // =====================================================
 
         public async Task<WeatherTipResultDto>
             GenerateWeatherTipAsync(
@@ -132,6 +143,10 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
+        // =====================================================
+        // OPENWEATHER CURRENT WEATHER
+        // =====================================================
+
         private async Task<CurrentWeatherDto>
             GetCurrentWeatherAsync(
                 double latitude,
@@ -150,7 +165,9 @@ namespace PersonalProject.Services.Implementations
                 "&units=metric";
 
             using var response =
-                await _httpClient.GetAsync(url);
+                await _httpClient.GetAsync(
+                    url
+                );
 
             response.EnsureSuccessStatusCode();
 
@@ -159,19 +176,27 @@ namespace PersonalProject.Services.Implementations
                     .ReadAsStringAsync();
 
             using var document =
-                JsonDocument.Parse(json);
+                JsonDocument.Parse(
+                    json
+                );
 
             var root =
                 document.RootElement;
 
             var main =
-                root.GetProperty("main");
+                root.GetProperty(
+                    "main"
+                );
 
             var wind =
-                root.GetProperty("wind");
+                root.GetProperty(
+                    "wind"
+                );
 
             var weather =
-                root.GetProperty("weather")[0];
+                root.GetProperty(
+                    "weather"
+                )[0];
 
             return new CurrentWeatherDto
             {
@@ -185,16 +210,22 @@ namespace PersonalProject.Services.Implementations
                         : fallbackName,
 
                 TemperatureC =
-                    main.GetProperty("temp")
-                        .GetDouble(),
+                    main.GetProperty(
+                        "temp"
+                    )
+                    .GetDouble(),
 
                 FeelsLikeC =
-                    main.GetProperty("feels_like")
-                        .GetDouble(),
+                    main.GetProperty(
+                        "feels_like"
+                    )
+                    .GetDouble(),
 
                 Humidity =
-                    main.GetProperty("humidity")
-                        .GetInt32(),
+                    main.GetProperty(
+                        "humidity"
+                    )
+                    .GetInt32(),
 
                 WindSpeed =
                     wind.TryGetProperty(
@@ -207,13 +238,18 @@ namespace PersonalProject.Services.Implementations
                 Description =
                     weather.GetProperty(
                         "description"
-                    ).GetString()
+                    )
+                    .GetString()
                     ?? string.Empty,
 
                 ObservedAtUtc =
                     DateTime.UtcNow
             };
         }
+
+        // =====================================================
+        // OPENWEATHER FORECAST
+        // =====================================================
 
         private async Task<List<WeatherForecastItemDto>>
             GetForecastAsync(
@@ -232,7 +268,9 @@ namespace PersonalProject.Services.Implementations
                 "&units=metric";
 
             using var response =
-                await _httpClient.GetAsync(url);
+                await _httpClient.GetAsync(
+                    url
+                );
 
             response.EnsureSuccessStatusCode();
 
@@ -241,16 +279,19 @@ namespace PersonalProject.Services.Implementations
                     .ReadAsStringAsync();
 
             using var document =
-                JsonDocument.Parse(json);
+                JsonDocument.Parse(
+                    json
+                );
 
             var results =
                 new List<WeatherForecastItemDto>();
 
             if (
-                !document.RootElement.TryGetProperty(
-                    "list",
-                    out var list
-                )
+                !document.RootElement
+                    .TryGetProperty(
+                        "list",
+                        out var list
+                    )
             )
             {
                 return results;
@@ -258,21 +299,31 @@ namespace PersonalProject.Services.Implementations
 
             foreach (
                 var item in
-                list.EnumerateArray().Take(16)
+                    list
+                        .EnumerateArray()
+                        .Take(16)
             )
             {
                 var main =
-                    item.GetProperty("main");
+                    item.GetProperty(
+                        "main"
+                    );
 
                 var weather =
-                    item.GetProperty("weather")[0];
+                    item.GetProperty(
+                        "weather"
+                    )[0];
 
                 var wind =
-                    item.GetProperty("wind");
+                    item.GetProperty(
+                        "wind"
+                    );
 
                 var unixTime =
-                    item.GetProperty("dt")
-                        .GetInt64();
+                    item.GetProperty(
+                        "dt"
+                    )
+                    .GetInt64();
 
                 results.Add(
                     new WeatherForecastItemDto
@@ -285,16 +336,22 @@ namespace PersonalProject.Services.Implementations
                                 .UtcDateTime,
 
                         TemperatureC =
-                            main.GetProperty("temp")
-                                .GetDouble(),
+                            main.GetProperty(
+                                "temp"
+                            )
+                            .GetDouble(),
 
                         FeelsLikeC =
-                            main.GetProperty("feels_like")
-                                .GetDouble(),
+                            main.GetProperty(
+                                "feels_like"
+                            )
+                            .GetDouble(),
 
                         Humidity =
-                            main.GetProperty("humidity")
-                                .GetInt32(),
+                            main.GetProperty(
+                                "humidity"
+                            )
+                            .GetInt32(),
 
                         WindSpeed =
                             wind.TryGetProperty(
@@ -305,9 +362,11 @@ namespace PersonalProject.Services.Implementations
                                 : 0,
 
                         Description =
-                            weather.GetProperty(
-                                "description"
-                            ).GetString()
+                            weather
+                                .GetProperty(
+                                    "description"
+                                )
+                                .GetString()
                             ?? string.Empty
                     }
                 );
@@ -316,6 +375,10 @@ namespace PersonalProject.Services.Implementations
             return results;
         }
 
+        // =====================================================
+        // LOCATION RESOLUTION
+        // =====================================================
+
         private async Task<WeatherLocation>
             ResolveWeatherLocationAsync(
                 Guid userId,
@@ -323,11 +386,16 @@ namespace PersonalProject.Services.Implementations
                 double? longitude
             )
         {
-            var patient =
-                await GetPatientAsync(
-                    userId
-                );
-
+            /*
+             * DEVICE LOCATION PATH
+             *
+             * When coordinates are supplied we do not need
+             * Patient/Clinic entity graphs.
+             *
+             * We still verify that the Patient account exists,
+             * has the Patient role and is active. This preserves
+             * the previous authorization behaviour.
+             */
             if (
                 latitude.HasValue &&
                 longitude.HasValue
@@ -338,6 +406,26 @@ namespace PersonalProject.Services.Implementations
                     longitude.Value
                 );
 
+                var activePatientExists =
+                    await _context.Patients
+                        .AsNoTracking()
+                        .AnyAsync(
+                            patient =>
+                                patient.UserId ==
+                                    userId &&
+                                patient.User.Role ==
+                                    RoleNames.Patient &&
+                                patient.User.IsActive
+                        );
+
+                if (!activePatientExists)
+                {
+                    throw new
+                        UnauthorizedAccessException(
+                            "Active patient profile not found."
+                        );
+                }
+
                 return new WeatherLocation(
                     latitude.Value,
                     longitude.Value,
@@ -345,27 +433,116 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * CLINIC FALLBACK PATH
+             *
+             * No device coordinates were supplied.
+             *
+             * Retrieve only:
+             * - ClinicId
+             * - Clinic name
+             * - Latitude
+             * - Longitude
+             *
+             * This replaces the previous loading of complete
+             * Patient, User and Clinic entities.
+             */
+            var patientLocation =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId ==
+                                userId &&
+                            patient.User.Role ==
+                                RoleNames.Patient &&
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            new
+                            {
+                                patient.ClinicId,
+
+                                ClinicName =
+                                    patient.Clinic ==
+                                        null
+                                        ? null
+                                        : patient
+                                            .Clinic
+                                            .Name,
+
+                                Latitude =
+                                    patient.Clinic ==
+                                        null
+                                        ? (double?)null
+                                        : patient
+                                            .Clinic
+                                            .Latitude,
+
+                                Longitude =
+                                    patient.Clinic ==
+                                        null
+                                        ? (double?)null
+                                        : patient
+                                            .Clinic
+                                            .Longitude
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (patientLocation == null)
+            {
+                throw new
+                    UnauthorizedAccessException(
+                        "Active patient profile not found."
+                    );
+            }
+
             if (
-                patient.ClinicId == null ||
-                patient.Clinic == null
+                patientLocation.ClinicId ==
+                    null ||
+                patientLocation.Latitude ==
+                    null ||
+                patientLocation.Longitude ==
+                    null ||
+                string.IsNullOrWhiteSpace(
+                    patientLocation.ClinicName
+                )
             )
             {
-                throw new InvalidOperationException(
-                    "Current location was not supplied and the patient does not have an assigned clinic for weather fallback."
-                );
+                throw new
+                    InvalidOperationException(
+                        "Current location was not supplied and the patient does not have an assigned clinic for weather fallback."
+                    );
             }
 
             ValidateCoordinates(
-                patient.Clinic.Latitude,
-                patient.Clinic.Longitude
+                patientLocation
+                    .Latitude
+                    .Value,
+                patientLocation
+                    .Longitude
+                    .Value
             );
 
             return new WeatherLocation(
-                patient.Clinic.Latitude,
-                patient.Clinic.Longitude,
-                patient.Clinic.Name
+                patientLocation
+                    .Latitude
+                    .Value,
+
+                patientLocation
+                    .Longitude
+                    .Value,
+
+                patientLocation
+                    .ClinicName
             );
         }
+
+        // =====================================================
+        // COORDINATE VALIDATION
+        // =====================================================
 
         private static void
             ValidateCoordinates(
@@ -374,29 +551,39 @@ namespace PersonalProject.Services.Implementations
             )
         {
             if (
-                !double.IsFinite(latitude) ||
+                !double.IsFinite(
+                    latitude
+                ) ||
                 latitude < -90 ||
                 latitude > 90
             )
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(latitude),
-                    "Latitude must be between -90 and 90."
-                );
+                throw new
+                    ArgumentOutOfRangeException(
+                        nameof(latitude),
+                        "Latitude must be between -90 and 90."
+                    );
             }
 
             if (
-                !double.IsFinite(longitude) ||
+                !double.IsFinite(
+                    longitude
+                ) ||
                 longitude < -180 ||
                 longitude > 180
             )
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(longitude),
-                    "Longitude must be between -180 and 180."
-                );
+                throw new
+                    ArgumentOutOfRangeException(
+                        nameof(longitude),
+                        "Longitude must be between -180 and 180."
+                    );
             }
         }
+
+        // =====================================================
+        // COORDINATE FORMATTING
+        // =====================================================
 
         private static string
             FormatCoordinate(
@@ -409,16 +596,24 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // HEALTH TIP GENERATION
+        // =====================================================
+
         private static string?
             BuildWeatherTip(
                 CurrentWeatherDto current,
-                List<WeatherForecastItemDto> forecast
+                List<WeatherForecastItemDto>
+                    forecast
             )
         {
             if (
-                current.TemperatureC >= 32 ||
+                current.TemperatureC >=
+                    32 ||
                 forecast.Any(
-                    f => f.TemperatureC >= 32
+                    item =>
+                        item.TemperatureC >=
+                            32
                 )
             )
             {
@@ -429,9 +624,12 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                current.TemperatureC <= 8 ||
+                current.TemperatureC <=
+                    8 ||
                 forecast.Any(
-                    f => f.TemperatureC <= 8
+                    item =>
+                        item.TemperatureC <=
+                            8
                 )
             )
             {
@@ -447,13 +645,13 @@ namespace PersonalProject.Services.Implementations
                     "rain"
                 ) ||
                 forecast.Any(
-                    f =>
+                    item =>
                         ContainsWeatherCondition(
-                            f.Description,
+                            item.Description,
                             "rain"
                         ) ||
                         ContainsWeatherCondition(
-                            f.Description,
+                            item.Description,
                             "thunderstorm"
                         )
                 );
@@ -467,9 +665,12 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                current.WindSpeed >= 10 ||
+                current.WindSpeed >=
+                    10 ||
                 forecast.Any(
-                    f => f.WindSpeed >= 10
+                    item =>
+                        item.WindSpeed >=
+                            10
                 )
             )
             {
@@ -494,6 +695,10 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // CONFIGURATION
+        // =====================================================
+
         private string GetApiKey()
         {
             var apiKey =
@@ -507,40 +712,18 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                throw new InvalidOperationException(
-                    "OpenWeather API key is missing."
-                );
+                throw new
+                    InvalidOperationException(
+                        "OpenWeather API key is missing."
+                    );
             }
 
             return apiKey;
         }
 
-        private async Task<Patient>
-            GetPatientAsync(
-                Guid userId
-            )
-        {
-            var patient =
-                await _context.Patients
-                    .Include(p => p.User)
-                    .Include(p => p.Clinic)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId == userId &&
-                            p.User.Role ==
-                                RoleNames.Patient &&
-                            p.User.IsActive
-                    );
-
-            if (patient == null)
-            {
-                throw new UnauthorizedAccessException(
-                    "Active patient profile not found."
-                );
-            }
-
-            return patient;
-        }
+        // =====================================================
+        // INTERNAL LOCATION MODEL
+        // =====================================================
 
         private sealed record WeatherLocation(
             double Latitude,
