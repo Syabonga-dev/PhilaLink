@@ -24,7 +24,15 @@ builder.Services.AddDbContext<PhilaLinkDbContext>(
         options.UseNpgsql(
             builder.Configuration.GetConnectionString(
                 "DefaultConnection"
-            )
+            ),
+            npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null
+                );
+            }
         )
 );
 
@@ -472,10 +480,6 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
-else
-{
-    app.UseHttpsRedirection();
 }
 
 app.UseCors(
