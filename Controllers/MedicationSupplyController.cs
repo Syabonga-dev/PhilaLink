@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
@@ -12,8 +12,7 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/medications/me/supply")]
     [Authorize(Roles = RoleNames.Patient)]
-    public class MedicationSupplyController :
-        ControllerBase
+    public class MedicationSupplyController : ControllerBase
     {
         private readonly PhilaLinkDbContext _context;
 
@@ -25,23 +24,40 @@ namespace PersonalProject.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetMySupply()
+        public async Task<IActionResult> GetMySupply(
+            CancellationToken cancellationToken
+        )
         {
             var userId =
                 GetCurrentUserId();
 
-            var patient =
+            /*
+             * Only retrieve the Patient ID.
+             *
+             * The old implementation loaded the complete
+             * Patient + User entity even though this endpoint
+             * only needs Patient.Id.
+             */
+            var patientId =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId == userId &&
-                            p.User.Role ==
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId ==
+                                userId &&
+                            patient.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            (Guid?)patient.Id
+                    )
+                    .FirstOrDefaultAsync(
+                        cancellationToken
                     );
 
-            if (patient == null)
+            if (patientId == null)
             {
                 return NotFound(
                     new
@@ -52,41 +68,162 @@ namespace PersonalProject.Controllers
                 );
             }
 
+            /*
+             * Only active medications are required.
+             *
+             * Only active schedules are loaded.
+             * Tracking is unnecessary for this read-only request.
+             */
             var medications =
                 await _context.Medications
+                    .AsNoTracking()
                     .Include(
-                        m => m.Schedules
+                        medication =>
+                            medication.Schedules
+                                .Where(
+                                    schedule =>
+                                        schedule.IsActive
+                                )
                     )
                     .Where(
-                        m =>
-                            m.PatientId ==
-                                patient.Id &&
-                            m.IsActive
+                        medication =>
+                            medication.PatientId ==
+                                patientId.Value &&
+                            medication.IsActive
                     )
                     .OrderBy(
-                        m => m.Name
+                        medication =>
+                            medication.Name
                     )
-                    .ToListAsync();
+                    .ToListAsync(
+                        cancellationToken
+                    );
 
-            var completedCollections =
+            if (medications.Count == 0)
+            {
+                return Ok(
+                    Array.Empty<
+                        MedicationSupplyDto
+                    >()
+                );
+            }
+
+            var medicationIds =
+                medications
+                    .Select(
+                        medication =>
+                            medication.Id
+                    )
+                    .ToList();
+
+            /*
+             * The old implementation loaded every completed
+             * MedicationCollection entity plus its Items.
+             *
+             * We only need:
+             * - collection ID
+             * - medication ID
+             * - quantity
+             * - collected timestamp
+             */
+            var collectedItems =
                 await _context
-                    .MedicationCollections
-                    .Include(
-                        c => c.Items
-                    )
+                    .MedicationCollectionItems
+                    .AsNoTracking()
                     .Where(
-                        c =>
-                            c.PatientId ==
-                                patient.Id &&
-                            c.Status ==
-                                MedicationCollectionStatuses
-                                    .Collected &&
-                            c.CollectedAt != null
+                        item =>
+                            medicationIds.Contains(
+                                item.MedicationId
+                            ) &&
+                            item
+                                .MedicationCollection
+                                .PatientId ==
+                                    patientId.Value &&
+                            item
+                                .MedicationCollection
+                                .Status ==
+                                    MedicationCollectionStatuses
+                                        .Collected &&
+                            item
+                                .MedicationCollection
+                                .CollectedAt !=
+                                    null
                     )
-                    .OrderByDescending(
-                        c => c.CollectedAt
+                    .Select(
+                        item =>
+                            new CollectedItemRow
+                            {
+                                CollectionId =
+                                    item
+                                        .MedicationCollectionId,
+
+                                MedicationId =
+                                    item.MedicationId,
+
+                                Quantity =
+                                    item.Quantity,
+
+                                CollectedAt =
+                                    item
+                                        .MedicationCollection
+                                        .CollectedAt!
+                                        .Value
+                            }
                     )
-                    .ToListAsync();
+                    .ToListAsync(
+                        cancellationToken
+                    );
+
+            /*
+             * Find only the latest completed collection
+             * for each medication.
+             */
+            var latestDispenseByMedication =
+                collectedItems
+                    .GroupBy(
+                        item =>
+                            item.MedicationId
+                    )
+                    .ToDictionary(
+                        medicationGroup =>
+                            medicationGroup.Key,
+
+                        medicationGroup =>
+                        {
+                            var latestCollection =
+                                medicationGroup
+                                    .GroupBy(
+                                        item =>
+                                            new
+                                            {
+                                                item.CollectionId,
+                                                item.CollectedAt
+                                            }
+                                    )
+                                    .OrderByDescending(
+                                        collectionGroup =>
+                                            collectionGroup
+                                                .Key
+                                                .CollectedAt
+                                    )
+                                    .First();
+
+                            return new LatestDispense
+                            {
+                                CollectedAt =
+                                    latestCollection
+                                        .Key
+                                        .CollectedAt,
+
+                                Quantity =
+                                    latestCollection
+                                        .Sum(
+                                            item =>
+                                                item.Quantity
+                                        )
+                            };
+                        }
+                    );
 
             var now =
                 DateTime.UtcNow;
@@ -95,11 +232,19 @@ namespace PersonalProject.Controllers
                 medications
                     .Select(
                         medication =>
-                            BuildSupplyDto(
+                        {
+                            latestDispenseByMedication
+                                .TryGetValue(
+                                    medication.Id,
+                                    out var latestDispense
+                                );
+
+                            return BuildSupplyDto(
                                 medication,
-                                completedCollections,
+                                latestDispense,
                                 now
-                            )
+                            );
+                        }
                     )
                     .ToList();
 
@@ -109,9 +254,7 @@ namespace PersonalProject.Controllers
         private static MedicationSupplyDto
             BuildSupplyDto(
                 Medication medication,
-                IReadOnlyList<
-                    MedicationCollection
-                > completedCollections,
+                LatestDispense? latestDispense,
                 DateTime now
             )
         {
@@ -127,22 +270,7 @@ namespace PersonalProject.Controllers
                     )
                     .ToList();
 
-            var latestCollection =
-                completedCollections
-                    .FirstOrDefault(
-                        collection =>
-                            collection.Items.Any(
-                                item =>
-                                    item.MedicationId ==
-                                    medication.Id
-                            )
-                    );
-
-            if (
-                latestCollection == null ||
-                latestCollection.CollectedAt ==
-                    null
-            )
+            if (latestDispense == null)
             {
                 return new MedicationSupplyDto
                 {
@@ -182,21 +310,13 @@ namespace PersonalProject.Controllers
             }
 
             var dispensedQuantity =
-                latestCollection.Items
-                    .Where(
-                        item =>
-                            item.MedicationId ==
-                            medication.Id
-                    )
-                    .Sum(
-                        item =>
-                            item.Quantity
-                    );
+                latestDispense.Quantity;
 
             if (
                 medication.UnitsPerDose ==
                     null ||
-                medication.UnitsPerDose <= 0
+                medication.UnitsPerDose <=
+                    0
             )
             {
                 return new MedicationSupplyDto
@@ -229,7 +349,7 @@ namespace PersonalProject.Controllers
                         null,
 
                     LastCollectedAt =
-                        latestCollection
+                        latestDispense
                             .CollectedAt,
 
                     CalculationStatus =
@@ -238,7 +358,8 @@ namespace PersonalProject.Controllers
             }
 
             if (
-                activeSchedules.Count == 0
+                activeSchedules.Count ==
+                    0
             )
             {
                 return new MedicationSupplyDto
@@ -271,7 +392,7 @@ namespace PersonalProject.Controllers
                         null,
 
                     LastCollectedAt =
-                        latestCollection
+                        latestDispense
                             .CollectedAt,
 
                     CalculationStatus =
@@ -280,8 +401,8 @@ namespace PersonalProject.Controllers
             }
 
             var collectedAt =
-                latestCollection
-                    .CollectedAt.Value;
+                latestDispense
+                    .CollectedAt;
 
             var scheduledDosesUsed =
                 CountScheduledDoses(
@@ -293,7 +414,8 @@ namespace PersonalProject.Controllers
             var estimatedUnitsUsed =
                 scheduledDosesUsed *
                 medication
-                    .UnitsPerDose.Value;
+                    .UnitsPerDose
+                    .Value;
 
             var estimatedRemaining =
                 Math.Max(
@@ -305,7 +427,8 @@ namespace PersonalProject.Controllers
             var unitsPerDay =
                 activeSchedules.Count *
                 medication
-                    .UnitsPerDose.Value;
+                    .UnitsPerDose
+                    .Value;
 
             int? daysRemaining =
                 null;
@@ -365,7 +488,8 @@ namespace PersonalProject.Controllers
         )
         {
             if (
-                schedules.Count == 0 ||
+                schedules.Count ==
+                    0 ||
                 to <= from
             )
             {
@@ -386,7 +510,8 @@ namespace PersonalProject.Controllers
             )
             {
                 foreach (
-                    var schedule in schedules
+                    var schedule
+                    in schedules
                 )
                 {
                     var occurrence =
@@ -405,7 +530,9 @@ namespace PersonalProject.Controllers
                 }
 
                 date =
-                    date.AddDays(1);
+                    date.AddDays(
+                        1
+                    );
             }
 
             return count;
@@ -415,7 +542,8 @@ namespace PersonalProject.Controllers
         {
             var value =
                 User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
+                    ClaimTypes
+                        .NameIdentifier
                 );
 
             if (
@@ -428,10 +556,55 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                throw new UnauthorizedAccessException();
+                throw new
+                    UnauthorizedAccessException();
             }
 
             return userId;
+        }
+
+        private sealed class
+            CollectedItemRow
+        {
+            public Guid CollectionId
+            {
+                get;
+                init;
+            }
+
+            public Guid MedicationId
+            {
+                get;
+                init;
+            }
+
+            public int Quantity
+            {
+                get;
+                init;
+            }
+
+            public DateTime CollectedAt
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class
+            LatestDispense
+        {
+            public int Quantity
+            {
+                get;
+                init;
+            }
+
+            public DateTime CollectedAt
+            {
+                get;
+                init;
+            }
         }
     }
 }
