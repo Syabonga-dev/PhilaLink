@@ -51,24 +51,29 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var patient =
-                await GetActivePatientAsync(
+            var patientId =
+                await GetActivePatientIdAsync(
                     userId
                 );
 
             var cleanMessage =
                 dto.Message.Trim();
 
+            /*
+             * Tracking is required here because the active
+             * conversation is updated and new messages are added.
+             */
             var conversation =
                 await _context.ChatConversations
                     .Include(
-                        c => c.Messages
+                        conversation =>
+                            conversation.Messages
                     )
                     .FirstOrDefaultAsync(
-                        c =>
-                            c.PatientId ==
-                                patient.Id &&
-                            c.IsActive
+                        conversation =>
+                            conversation.PatientId ==
+                                patientId &&
+                            conversation.IsActive
                     );
 
             if (conversation == null)
@@ -80,7 +85,7 @@ namespace PersonalProject.Services.Implementations
                             Guid.NewGuid(),
 
                         PatientId =
-                            patient.Id,
+                            patientId,
 
                         StartedAt =
                             DateTime.UtcNow,
@@ -127,11 +132,6 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 DateTime.UtcNow;
 
-            /*
-             * Emergency and urgent messages are handled
-             * locally before the external AI provider is
-             * contacted.
-             */
             if (
                 ContainsAny(
                     cleanMessage,
@@ -159,21 +159,14 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * Save the user's message before calling Gemini.
+             * Preserve the current behavior: persist the user's
+             * message before calling the external AI provider.
              */
             await _context.SaveChangesAsync();
 
-            /*
-             * Build the latest patient context from PhilaLink.
-             *
-             * This now includes:
-             * - stored profile data
-             * - medication supply
-             * - latest symptom assessment
-             */
             var patientContext =
                 await BuildPatientContextAsync(
-                    patient.Id
+                    patientId
                 );
 
             var messages =
@@ -230,21 +223,23 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
-            var patient =
-                await GetActivePatientAsync(
+            var patientId =
+                await GetActivePatientIdAsync(
                     userId
                 );
 
             var conversation =
                 await _context.ChatConversations
+                    .AsNoTracking()
                     .Include(
-                        c => c.Messages
+                        conversation =>
+                            conversation.Messages
                     )
                     .FirstOrDefaultAsync(
-                        c =>
-                            c.PatientId ==
-                                patient.Id &&
-                            c.IsActive
+                        conversation =>
+                            conversation.PatientId ==
+                                patientId &&
+                            conversation.IsActive
                     );
 
             if (conversation == null)
@@ -294,17 +289,21 @@ namespace PersonalProject.Services.Implementations
             Guid userId
         )
         {
-            var patient =
-                await GetActivePatientAsync(
+            var patientId =
+                await GetActivePatientIdAsync(
                     userId
                 );
 
+            /*
+             * Tracking is intentionally kept because these rows
+             * are updated before SaveChangesAsync.
+             */
             var conversations =
                 await _context.ChatConversations
                     .Where(
                         conversation =>
                             conversation.PatientId ==
-                                patient.Id &&
+                                patientId &&
                             conversation.IsActive
                     )
                     .ToListAsync();
@@ -355,59 +354,65 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        private async Task<Patient>
-            GetActivePatientAsync(
+        private async Task<Guid>
+            GetActivePatientIdAsync(
                 Guid userId
             )
         {
-            var patient =
+            /*
+             * Chatbot methods only need Patient.Id here. Avoid
+             * loading the full Patient + User entity graph.
+             */
+            var patientId =
                 await _context.Patients
-                    .Include(
-                        patient =>
-                            patient.User
-                    )
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         patient =>
                             patient.UserId ==
                                 userId &&
                             patient.User.Role ==
                                 RoleNames.Patient &&
                             patient.User.IsActive
-                    );
+                    )
+                    .Select(
+                        patient =>
+                            (Guid?)patient.Id
+                    )
+                    .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (patientId == null)
             {
                 throw new UnauthorizedAccessException(
                     "Active Patient account required."
                 );
             }
 
-            return patient;
+            return patientId.Value;
         }
 
-        /*
-         * =====================================================
-         * PATIENT CONTEXT
-         * =====================================================
-         *
-         * The Gemini provider receives this information as
-         * trusted PhilaLink context.
-         *
-         * Stored patient-profile data and temporary assessment
-         * data are intentionally labelled separately because a
-         * patient may type assessment information that differs
-         * from their permanent profile.
-         */
+        // =====================================================
+        // PATIENT CONTEXT
+        // =====================================================
+
         private async Task<string>
             BuildPatientContextAsync(
                 Guid patientId
             )
         {
+            /*
+             * These queries are prompt-building reads only, so
+             * they do not need change tracking.
+             */
             var medications =
                 await _context.Medications
+                    .AsNoTracking()
                     .Include(
                         medication =>
                             medication.Schedules
+                                .Where(
+                                    schedule =>
+                                        schedule.IsActive
+                                )
                     )
                     .Where(
                         medication =>
@@ -423,10 +428,11 @@ namespace PersonalProject.Services.Implementations
 
             var allergies =
                 await _context.Allergies
+                    .AsNoTracking()
                     .Where(
                         allergy =>
                             allergy.PatientId ==
-                            patientId
+                                patientId
                     )
                     .OrderBy(
                         allergy =>
@@ -440,10 +446,11 @@ namespace PersonalProject.Services.Implementations
 
             var conditions =
                 await _context.MedicalConditions
+                    .AsNoTracking()
                     .Where(
                         condition =>
                             condition.PatientId ==
-                            patientId
+                                patientId
                     )
                     .OrderBy(
                         condition =>
@@ -455,25 +462,13 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
-            /*
-             * Latest symptom assessment.
-             *
-             * SymptomsJson already contains the structured
-             * assessment information:
-             *
-             * symptoms
-             * age
-             * duration
-             * allergies
-             * medications
-             * conditions
-             */
             var latestAssessment =
                 await _context.SymptomAssessments
+                    .AsNoTracking()
                     .Where(
                         assessment =>
                             assessment.PatientId ==
-                            patientId
+                                patientId
                     )
                     .OrderByDescending(
                         assessment =>
@@ -481,13 +476,9 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            /*
-             * Medication collections are loaded using the same
-             * rules as MedicationSupplyController.
-             */
             var completedCollections =
-                await _context
-                    .MedicationCollections
+                await _context.MedicationCollections
+                    .AsNoTracking()
                     .Include(
                         collection =>
                             collection.Items
@@ -697,21 +688,15 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        /*
-         * =====================================================
-         * MEDICATION SUPPLY CONTEXT
-         * =====================================================
-         *
-         * This mirrors MedicationSupplyController so Gemini is
-         * given the same supply estimate shown elsewhere in
-         * PhilaLink.
-         */
+        // =====================================================
+        // MEDICATION SUPPLY CONTEXT
+        // =====================================================
+
         private static string
             BuildMedicationSupplyContext(
                 Medication medication,
-                IReadOnlyList<
-                    MedicationCollection
-                > completedCollections,
+                IReadOnlyList<MedicationCollection>
+                    completedCollections,
                 DateTime now
             )
         {
@@ -734,7 +719,7 @@ namespace PersonalProject.Services.Implementations
                             collection.Items.Any(
                                 item =>
                                     item.MedicationId ==
-                                    medication.Id
+                                        medication.Id
                             )
                     );
 
@@ -771,7 +756,7 @@ namespace PersonalProject.Services.Implementations
                     .Where(
                         item =>
                             item.MedicationId ==
-                            medication.Id
+                                medication.Id
                     )
                     .Sum(
                         item =>
@@ -857,16 +842,11 @@ namespace PersonalProject.Services.Implementations
                 $"last collected {collectedAt:yyyy-MM-dd}.";
         }
 
-        /*
-         * This is intentionally the same scheduled-dose
-         * calculation used by MedicationSupplyController.
-         */
         private static int CountScheduledDoses(
             DateTime from,
             DateTime to,
-            IReadOnlyList<
-                MedicationSchedule
-            > schedules
+            IReadOnlyList<MedicationSchedule>
+                schedules
         )
         {
             if (

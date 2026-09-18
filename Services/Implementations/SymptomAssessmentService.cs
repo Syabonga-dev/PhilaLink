@@ -13,18 +13,12 @@ namespace PersonalProject.Services.Implementations
     {
         private readonly PhilaLinkDbContext _context;
 
-        public SymptomAssessmentService(
-            PhilaLinkDbContext context
-        )
+        public SymptomAssessmentService(PhilaLinkDbContext context)
         {
             _context = context;
         }
 
-        public async Task<SymptomAssessment>
-            CreateForPatientAsync(
-                Guid userId,
-                SymptomCreateDto dto
-            )
+        public async Task<SymptomAssessment>CreateForPatientAsync(Guid userId, SymptomCreateDto dto)
         {
             if (
                 string.IsNullOrWhiteSpace(
@@ -52,8 +46,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var patient =
-                await GetPatientAsync(userId);
+            var patientId =
+                await GetActivePatientIdAsync(
+                    userId
+                );
 
             var cleanSymptoms =
                 dto.Symptoms.Trim();
@@ -95,7 +91,7 @@ namespace PersonalProject.Services.Implementations
                         Guid.NewGuid(),
 
                     PatientId =
-                        patient.Id,
+                        patientId,
 
                     SymptomsJson =
                         JsonSerializer.Serialize(
@@ -142,20 +138,56 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
-            var patient =
-                await GetPatientAsync(userId);
+            var patientId =
+                await GetActivePatientIdAsync(
+                    userId
+                );
 
             return await _context
                 .SymptomAssessments
+                .AsNoTracking()
                 .Where(
-                    s =>
-                        s.PatientId ==
-                        patient.Id
+                    assessment =>
+                        assessment.PatientId ==
+                            patientId
                 )
                 .OrderByDescending(
-                    s => s.CreatedAt
+                    assessment =>
+                        assessment.CreatedAt
                 )
                 .ToListAsync();
+        }
+
+        private async Task<Guid>
+            GetActivePatientIdAsync(
+                Guid userId
+            )
+        {
+            var patientId =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId ==
+                                userId &&
+                            patient.User.Role ==
+                                RoleNames.Patient &&
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            (Guid?)patient.Id
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (patientId == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active Patient profile not found."
+                );
+            }
+
+            return patientId.Value;
         }
 
         private static SymptomTriageResult
@@ -163,7 +195,8 @@ namespace PersonalProject.Services.Implementations
                 string symptoms,
                 int? age,
                 string? duration,
-                IReadOnlyCollection<string> conditions
+                IReadOnlyCollection<string>
+                    conditions
             )
         {
             var text =
@@ -230,7 +263,8 @@ namespace PersonalProject.Services.Implementations
                             highRisk =>
                                 condition.Contains(
                                     highRisk,
-                                    StringComparison.OrdinalIgnoreCase
+                                    StringComparison
+                                        .OrdinalIgnoreCase
                                 )
                         )
                 ) &&
@@ -311,14 +345,16 @@ namespace PersonalProject.Services.Implementations
                 keyword =>
                     text.Contains(
                         keyword,
-                        StringComparison.OrdinalIgnoreCase
+                        StringComparison
+                            .OrdinalIgnoreCase
                     )
             );
         }
 
-        private static List<string> CleanList(
-            IEnumerable<string>? values
-        )
+        private static List<string>
+            CleanList(
+                IEnumerable<string>? values
+            )
         {
             if (values == null)
             {
@@ -337,36 +373,10 @@ namespace PersonalProject.Services.Implementations
                         value.Trim()
                 )
                 .Distinct(
-                    StringComparer.OrdinalIgnoreCase
+                    StringComparer
+                        .OrdinalIgnoreCase
                 )
                 .ToList();
-        }
-
-        private async Task<Patient>
-            GetPatientAsync(
-                Guid userId
-            )
-        {
-            var patient =
-                await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
-                                userId &&
-                            p.User.Role ==
-                                RoleNames.Patient &&
-                            p.User.IsActive
-                    );
-
-            if (patient == null)
-            {
-                throw new UnauthorizedAccessException(
-                    "Active Patient profile not found."
-                );
-            }
-
-            return patient;
         }
 
         private static readonly string[]
@@ -488,11 +498,17 @@ namespace PersonalProject.Services.Implementations
 
         private class SymptomTriageResult
         {
-            public string Result { get; set; } =
-                string.Empty;
+            public string Result
+            {
+                get;
+                set;
+            } = string.Empty;
 
-            public string Recommendation { get; set; } =
-                string.Empty;
+            public string Recommendation
+            {
+                get;
+                set;
+            } = string.Empty;
         }
     }
 }

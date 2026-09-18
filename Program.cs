@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Npgsql;
 using PersonalProject.Data;
 using PersonalProject.Models;
 using PersonalProject.Models.Constants;
@@ -19,17 +20,58 @@ var builder = WebApplication.CreateBuilder(args);
 // DATABASE
 // =====================================================
 
+var configuredConnectionString =
+    builder.Configuration.GetConnectionString(
+        "DefaultConnection"
+    );
+
+if (
+    string.IsNullOrWhiteSpace(
+        configuredConnectionString
+    )
+)
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is missing."
+    );
+}
+
+/*
+ * Keep the current retry policy, but make pooled PostgreSQL
+ * connections less likely to sit stale for long periods.
+ *
+ * The command timeout is intentionally left at its existing
+ * default. The Render logs showed read stalls timing out and
+ * the same SQL succeeding in milliseconds on retry, so making
+ * the command timeout longer would only make a bad stall last
+ * longer.
+ */
+var connectionStringBuilder =
+    new NpgsqlConnectionStringBuilder(
+        configuredConnectionString
+    )
+    {
+        KeepAlive =
+            30,
+
+        ConnectionIdleLifetime =
+            300,
+
+        ConnectionPruningInterval =
+            10
+    };
+
 builder.Services.AddDbContext<PhilaLinkDbContext>(
     options =>
         options.UseNpgsql(
-            builder.Configuration.GetConnectionString(
-                "DefaultConnection"
-            ),
+            connectionStringBuilder
+                .ConnectionString,
             npgsqlOptions =>
             {
                 npgsqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    maxRetryDelay:
+                        TimeSpan.FromSeconds(5),
                     errorCodesToAdd: null
                 );
             }
@@ -319,11 +361,58 @@ var app =
 // SUPER ADMIN SEED
 // =====================================================
 
-using (
-    var scope =
-        app.Services.CreateScope()
-)
+/*
+ * Check configuration before opening PostgreSQL. On Render the
+ * seed values are normally not configured, so this avoids an
+ * unnecessary database round-trip on every cold start.
+ */
+var seedFullName =
+    builder.Configuration[
+        "Seed:SuperAdminFullName"
+    ];
+
+var seedIdNumber =
+    builder.Configuration[
+        "Seed:SuperAdminIdNumber"
+    ];
+
+var seedPhone =
+    builder.Configuration[
+        "Seed:SuperAdminPhoneNumber"
+    ];
+
+var seedEmail =
+    builder.Configuration[
+        "Seed:SuperAdminEmail"
+    ];
+
+var seedPassword =
+    builder.Configuration[
+        "Seed:SuperAdminPassword"
+    ];
+
+var seedConfigured =
+    !string.IsNullOrWhiteSpace(
+        seedFullName
+    ) &&
+    !string.IsNullOrWhiteSpace(
+        seedIdNumber
+    ) &&
+    !string.IsNullOrWhiteSpace(
+        seedPhone
+    ) &&
+    !string.IsNullOrWhiteSpace(
+        seedEmail
+    ) &&
+    !string.IsNullOrWhiteSpace(
+        seedPassword
+    );
+
+if (seedConfigured)
 {
+    using var scope =
+        app.Services.CreateScope();
+
     var context =
         scope.ServiceProvider
             .GetRequiredService<
@@ -331,145 +420,101 @@ using (
             >();
 
     var superAdminExists =
-        await context.Users.AnyAsync(
-            u =>
-                u.Role ==
-                RoleNames.SuperAdmin
-        );
+        await context.Users
+            .AsNoTracking()
+            .AnyAsync(
+                user =>
+                    user.Role ==
+                        RoleNames.SuperAdmin
+            );
 
     if (!superAdminExists)
     {
-        var seedFullName =
-            builder.Configuration[
-                "Seed:SuperAdminFullName"
-            ];
+        var now =
+            DateTime.UtcNow;
 
-        var seedIdNumber =
-            builder.Configuration[
-                "Seed:SuperAdminIdNumber"
-            ];
+        var adminUserId =
+            Guid.NewGuid();
 
-        var seedPhone =
-            builder.Configuration[
-                "Seed:SuperAdminPhoneNumber"
-            ];
+        var adminUser =
+            new User
+            {
+                Id =
+                    adminUserId,
 
-        var seedEmail =
-            builder.Configuration[
-                "Seed:SuperAdminEmail"
-            ];
+                FullName =
+                    seedFullName!,
 
-        var seedPassword =
-            builder.Configuration[
-                "Seed:SuperAdminPassword"
-            ];
+                IdNumber =
+                    seedIdNumber!,
 
-        var seedConfigured =
-            !string.IsNullOrWhiteSpace(
-                seedFullName
-            ) &&
-            !string.IsNullOrWhiteSpace(
-                seedIdNumber
-            ) &&
-            !string.IsNullOrWhiteSpace(
-                seedPhone
-            ) &&
-            !string.IsNullOrWhiteSpace(
-                seedEmail
-            ) &&
-            !string.IsNullOrWhiteSpace(
-                seedPassword
-            );
+                PhoneNumber =
+                    seedPhone!,
 
-        if (seedConfigured)
-        {
-            var now =
-                DateTime.UtcNow;
+                Email =
+                    seedEmail!,
 
-            var adminUserId =
-                Guid.NewGuid();
+                PasswordHash =
+                    BCrypt.Net.BCrypt
+                        .HashPassword(
+                            seedPassword!
+                        ),
 
-            var adminUser =
-                new User
-                {
-                    Id =
-                        adminUserId,
+                Role =
+                    RoleNames.SuperAdmin,
 
-                    FullName =
-                        seedFullName!,
+                IsActive =
+                    true,
 
-                    IdNumber =
-                        seedIdNumber!,
+                IsVerified =
+                    true,
 
-                    PhoneNumber =
-                        seedPhone!,
+                VerifiedAt =
+                    now,
 
-                    Email =
-                        seedEmail!,
+                MustChangePassword =
+                    false,
 
-                    PasswordHash =
-                        BCrypt.Net.BCrypt
-                            .HashPassword(
-                                seedPassword!
-                            ),
+                CreatedAt =
+                    now
+            };
 
-                    Role =
-                        RoleNames.SuperAdmin,
+        var admin =
+            new Admin
+            {
+                UserId =
+                    adminUserId,
 
-                    IsActive =
-                        true,
+                FullName =
+                    seedFullName!,
 
-                    IsVerified =
-                        true,
+                Email =
+                    seedEmail!,
 
-                    VerifiedAt =
-                        now,
+                ClinicId =
+                    null,
 
-                    MustChangePassword =
-                        false,
+                CreatedAt =
+                    now
+            };
 
-                    CreatedAt =
-                        now
-                };
+        context.Users.Add(
+            adminUser
+        );
 
-            var admin =
-                new Admin
-                {
-                    UserId =
-                        adminUserId,
+        context.Admins.Add(
+            admin
+        );
 
-                    FullName =
-                        seedFullName!,
-
-                    Email =
-                        seedEmail!,
-
-                    ClinicId =
-                        null,
-
-                    CreatedAt =
-                        now
-                };
-
-            context.Users.Add(
-                adminUser
-            );
-
-            context.Admins.Add(
-                admin
-            );
-
-            await context
-                .SaveChangesAsync();
-        }
-        else
-        {
-            Console.WriteLine(
-                "SuperAdmin seed skipped. " +
-                "Seed:SuperAdmin* configuration is incomplete."
-            );
-        }
+        await context.SaveChangesAsync();
     }
+}
+else
+{
+    Console.WriteLine(
+        "SuperAdmin seed skipped. " +
+        "Seed:SuperAdmin* configuration is incomplete."
+    );
 }
 
 // =====================================================
@@ -489,6 +534,27 @@ app.UseCors(
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+/*
+ * Lightweight endpoint for Render/UptimeRobot. It deliberately
+ * avoids a database query so a health ping does not create more
+ * Supabase traffic every few minutes.
+ */
+app.MapGet(
+        "/api/health",
+        () =>
+            Results.Ok(
+                new
+                {
+                    status =
+                        "healthy",
+
+                    timestamp =
+                        DateTime.UtcNow
+                }
+            )
+    )
+    .AllowAnonymous();
 
 app.MapControllers();
 

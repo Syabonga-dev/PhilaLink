@@ -13,16 +13,30 @@ namespace PersonalProject.Services.Implementations
         private readonly IAuditLogService _audit;
         private readonly IMedicationService _medicationService;
 
-        public PatientService(PhilaLinkDbContext context, IAuditLogService audit, IMedicationService medicationService)
+        public PatientService(
+            PhilaLinkDbContext context,
+            IAuditLogService audit,
+            IMedicationService medicationService
+        )
         {
             _context = context;
             _audit = audit;
             _medicationService = medicationService;
         }
 
-        public async Task LogMedicationAsync(Guid userId, Guid medicationId, bool taken, string? notes)
+        public async Task LogMedicationAsync(
+            Guid userId,
+            Guid medicationId,
+            bool taken,
+            string? notes
+        )
         {
-            await _medicationService.LogPatientMedicationAsync(userId, medicationId, taken, notes);
+            await _medicationService.LogPatientMedicationAsync(
+                userId,
+                medicationId,
+                taken,
+                notes
+            );
         }
 
         // =====================================================
@@ -35,7 +49,8 @@ namespace PersonalProject.Services.Implementations
         {
             var patient =
                 await GetPatientByUserIdAsync(
-                    userId
+                    userId,
+                    asTracking: false
                 );
 
             return ToMeDto(patient);
@@ -48,7 +63,8 @@ namespace PersonalProject.Services.Implementations
         {
             var patient =
                 await GetPatientByUserIdAsync(
-                    userId
+                    userId,
+                    asTracking: true
                 );
 
             if (
@@ -75,9 +91,9 @@ namespace PersonalProject.Services.Implementations
 
             var duplicatePhone =
                 await _context.Users.AnyAsync(
-                    u =>
-                        u.Id != userId &&
-                        u.PhoneNumber ==
+                    user =>
+                        user.Id != userId &&
+                        user.PhoneNumber ==
                             dto.PhoneNumber.Trim()
                 );
 
@@ -88,30 +104,72 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            patient.User.FullName = dto.FullName.Trim();
-            patient.User.PhoneNumber = dto.PhoneNumber.Trim();
-            patient.User.Email = dto.Email.Trim();
-            patient.User.UpdatedAt = DateTime.UtcNow;
-            patient.DateOfBirth = dto.DateOfBirth;
-            patient.Gender = dto.Gender.Trim();
-            patient.Email = dto.Email.Trim();
-            patient.AddressLine1 = dto.AddressLine1.Trim();
-            patient.AddressLine2 = string.IsNullOrWhiteSpace(dto.AddressLine2) ? null : dto.AddressLine2.Trim();
-            patient.Suburb = dto.Suburb.Trim();
-            patient.City = dto.City.Trim();
-            patient.Province = dto.Province.Trim();
-            patient.PostalCode = dto.PostalCode.Trim();
-            patient.EmergencyContactName = dto.EmergencyContactName.Trim();
-            patient.EmergencyContactPhone = dto.EmergencyContactPhone.Trim();
-            patient.EmergencyContactRelationship = dto.EmergencyContactRelationship.Trim();
-            patient.IsProfileComplete = IsProfileComplete(patient);
+            patient.User.FullName =
+                dto.FullName.Trim();
 
-            if (patient.IsProfileComplete && patient.ProfileCompletedAt == null)
+            patient.User.PhoneNumber =
+                dto.PhoneNumber.Trim();
+
+            patient.User.Email =
+                dto.Email.Trim();
+
+            patient.User.UpdatedAt =
+                DateTime.UtcNow;
+
+            patient.DateOfBirth =
+                dto.DateOfBirth;
+
+            patient.Gender =
+                dto.Gender.Trim();
+
+            patient.Email =
+                dto.Email.Trim();
+
+            patient.AddressLine1 =
+                dto.AddressLine1.Trim();
+
+            patient.AddressLine2 =
+                string.IsNullOrWhiteSpace(
+                    dto.AddressLine2
+                )
+                    ? null
+                    : dto.AddressLine2.Trim();
+
+            patient.Suburb =
+                dto.Suburb.Trim();
+
+            patient.City =
+                dto.City.Trim();
+
+            patient.Province =
+                dto.Province.Trim();
+
+            patient.PostalCode =
+                dto.PostalCode.Trim();
+
+            patient.EmergencyContactName =
+                dto.EmergencyContactName.Trim();
+
+            patient.EmergencyContactPhone =
+                dto.EmergencyContactPhone.Trim();
+
+            patient.EmergencyContactRelationship =
+                dto.EmergencyContactRelationship.Trim();
+
+            patient.IsProfileComplete =
+                IsProfileComplete(patient);
+
+            if (
+                patient.IsProfileComplete &&
+                patient.ProfileCompletedAt == null
+            )
             {
-                patient.ProfileCompletedAt = DateTime.UtcNow;
+                patient.ProfileCompletedAt =
+                    DateTime.UtcNow;
             }
 
-            patient.UpdatedAt = DateTime.UtcNow;
+            patient.UpdatedAt =
+                DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -129,474 +187,306 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<PatientDashboardDto>
-    GetDashboardAsync(
-        Guid userId
-    )
-{
-    var now =
-        DateTime.UtcNow;
-
-    /*
-     * Dashboard needs only a small portion
-     * of the Patient record.
-     *
-     * Do not use GetPatientByUserIdAsync here,
-     * because that method also loads allergies
-     * and medical conditions.
-     */
-    var patient =
-        await _context.Patients
-            .AsNoTracking()
-            .Where(
-                patient =>
-                    patient.UserId ==
-                        userId &&
-                    patient.User.Role ==
-                        RoleNames.Patient &&
-                    patient.User.IsActive
+            GetDashboardAsync(
+                Guid userId
             )
-            .Select(
-                patient =>
-                    new
-                    {
-                        patient.Id,
+        {
+            var now =
+                DateTime.UtcNow;
 
-                        patient.PatientNumber,
+            var patient =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId == userId &&
+                            patient.User.Role ==
+                                RoleNames.Patient &&
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            new
+                            {
+                                patient.Id,
+                                patient.PatientNumber,
+                                patient.IsProfileComplete,
 
-                        patient
-                            .IsProfileComplete,
+                                FullName =
+                                    patient.User.FullName,
 
-                        FullName =
-                            patient.User
-                                .FullName,
+                                Clinic =
+                                    patient.Clinic == null
+                                        ? null
+                                        : new PatientClinicSummaryDto
+                                        {
+                                            Id =
+                                                patient.Clinic.Id,
 
-                        Clinic =
-                            patient.Clinic ==
-                                null
-                                ? null
-                                : new
-                                    PatientClinicSummaryDto
-                                {
-                                    Id =
-                                        patient
-                                            .Clinic
-                                            .Id,
+                                            Name =
+                                                patient.Clinic.Name,
 
-                                    Name =
-                                        patient
-                                            .Clinic
-                                            .Name,
+                                            Address =
+                                                patient.Clinic.Address,
 
-                                    Address =
-                                        patient
-                                            .Clinic
-                                            .Address,
+                                            ContactNumber =
+                                                patient.Clinic.ContactNumber,
 
-                                    ContactNumber =
-                                        patient
-                                            .Clinic
-                                            .ContactNumber,
+                                            OpeningTime =
+                                                patient.Clinic.OpeningTime,
 
-                                    OpeningTime =
-                                        patient
-                                            .Clinic
-                                            .OpeningTime,
+                                            ClosingTime =
+                                                patient.Clinic.ClosingTime
+                                        }
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
-                                    ClosingTime =
-                                        patient
-                                            .Clinic
-                                            .ClosingTime
-                                }
-                    }
-            )
-            .FirstOrDefaultAsync();
+            if (patient == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active Patient profile not found."
+                );
+            }
 
-    if (patient == null)
-    {
-        throw new UnauthorizedAccessException(
-            "Active Patient profile not found."
-        );
-    }
-
-    /*
-     * Dashboard only displays the first
-     * three active medications.
-     *
-     * Previously every medication was
-     * loaded and Take(3) happened afterward.
-     */
-    var medicationEntities =
-        await _context.Medications
-            .AsNoTracking()
-            .Include(
-                medication =>
-                    medication.Schedules
-                        .Where(
-                            schedule =>
-                                schedule.IsActive
-                        )
-            )
-            .Where(
-                medication =>
-                    medication.PatientId ==
-                        patient.Id &&
-                    medication.IsActive
-            )
-            .OrderBy(
-                medication =>
-                    medication.Name
-            )
-            .Take(3)
-            .ToListAsync();
-
-    var medications =
-        medicationEntities
-            .Select(
-                medication =>
-                    new PatientMedicationDto
-                    {
-                        Id =
-                            medication.Id,
-
-                        Name =
-                            medication.Name,
-
-                        Dosage =
-                            medication.Dosage,
-
-                        Form =
-                            medication.Form,
-
-                        Instructions =
-                            medication
-                                .Instructions,
-
-                        PrescribedBy =
-                            medication
-                                .PrescribedBy,
-
-                        ConditionName =
-                            medication
-                                .ConditionName,
-
-                        StartDate =
-                            medication.StartDate,
-
-                        EndDate =
-                            medication.EndDate,
-
-                        IsActive =
-                            medication.IsActive,
-
-                        ScheduleTimes =
-                            medication
-                                .Schedules
+            var medicationEntities =
+                await _context.Medications
+                    .AsNoTracking()
+                    .Include(
+                        medication =>
+                            medication.Schedules
                                 .Where(
                                     schedule =>
-                                        schedule
-                                            .IsActive
+                                        schedule.IsActive
                                 )
-                                .OrderBy(
-                                    schedule =>
-                                        schedule
-                                            .TimeOfDay
-                                )
-                                .Select(
-                                    schedule =>
-                                        schedule
-                                            .TimeOfDay
-                                            .ToString(
-                                                @"hh\:mm"
-                                            )
-                                )
-                                .ToList(),
+                    )
+                    .Where(
+                        medication =>
+                            medication.PatientId ==
+                                patient.Id &&
+                            medication.IsActive
+                    )
+                    .OrderBy(
+                        medication =>
+                            medication.Name
+                    )
+                    .Take(3)
+                    .ToListAsync();
 
-                        NextDoseAt =
-                            CalculateNextDose(
-                                medication
-                                    .Schedules
-                            ),
+            var medications =
+                medicationEntities
+                    .Select(
+                        medication =>
+                            ToPatientMedicationDto(
+                                medication,
+                                now
+                            )
+                    )
+                    .ToList();
 
-                        DaysRemaining =
-                            medication.EndDate ==
-                                null
-                                ? null
-                                : Math.Max(
-                                    0,
-                                    (
-                                        medication
-                                            .EndDate
-                                            .Value
-                                            .Date -
-                                        now.Date
-                                    ).Days
-                                )
-                    }
-            )
-            .ToList();
+            var appointments =
+                await _context.Appointments
+                    .AsNoTracking()
+                    .Where(
+                        appointment =>
+                            appointment.PatientId ==
+                                patient.Id &&
+                            appointment.ScheduledAt >=
+                                now &&
+                            appointment.Status !=
+                                "Cancelled" &&
+                            appointment.Status !=
+                                "Completed"
+                    )
+                    .OrderBy(
+                        appointment =>
+                            appointment.ScheduledAt
+                    )
+                    .Take(3)
+                    .Select(
+                        appointment =>
+                            new AppointmentResponseDto
+                            {
+                                Id =
+                                    appointment.Id,
 
-    /*
-     * Previously every appointment for
-     * the patient was loaded, then filtered
-     * and Take(3) was done in memory.
-     *
-     * Filter and Take inside PostgreSQL.
-     */
-    var appointments =
-        await _context.Appointments
-            .AsNoTracking()
-            .Where(
-                appointment =>
-                    appointment.PatientId ==
-                        patient.Id &&
-                    appointment.ScheduledAt >=
-                        now &&
-                    appointment.Status !=
-                        "Cancelled" &&
-                    appointment.Status !=
-                        "Completed"
-            )
-            .OrderBy(
-                appointment =>
-                    appointment.ScheduledAt
-            )
-            .Take(3)
-            .Select(
-                appointment =>
-                    new AppointmentResponseDto
-                    {
-                        Id =
-                            appointment.Id,
+                                PatientId =
+                                    appointment.PatientId,
 
-                        PatientId =
-                            appointment.PatientId,
+                                PatientName =
+                                    appointment
+                                        .Patient
+                                        .User
+                                        .FullName,
 
-                        PatientName =
-                            appointment
-                                .Patient
-                                .User
-                                .FullName,
+                                ClinicId =
+                                    appointment.ClinicId,
 
-                        ClinicId =
-                            appointment.ClinicId,
+                                ClinicName =
+                                    appointment
+                                        .Clinic
+                                        .Name,
 
-                        ClinicName =
-                            appointment
-                                .Clinic
-                                .Name,
+                                NurseId =
+                                    appointment.NurseId,
 
-                        NurseId =
-                            appointment.NurseId,
+                                NurseName =
+                                    appointment.Nurse == null
+                                        ? null
+                                        : appointment
+                                            .Nurse
+                                            .User
+                                            .FullName,
 
-                        NurseName =
-                            appointment.Nurse ==
-                                null
-                                ? null
-                                : appointment
-                                    .Nurse
-                                    .User
-                                    .FullName,
+                                ScheduledAt =
+                                    appointment.ScheduledAt,
 
-                        ScheduledAt =
-                            appointment
-                                .ScheduledAt,
+                                DurationMinutes =
+                                    appointment.DurationMinutes,
 
-                        DurationMinutes =
-                            appointment
-                                .DurationMinutes,
+                                Type =
+                                    appointment.Type,
 
-                        Type =
-                            appointment.Type,
+                                Reason =
+                                    appointment.Reason,
 
-                        Reason =
-                            appointment.Reason,
+                                ProviderName =
+                                    appointment.ProviderName,
 
-                        ProviderName =
-                            appointment
-                                .ProviderName,
+                                Mode =
+                                    appointment.Mode,
 
-                        Mode =
-                            appointment.Mode,
+                                Status =
+                                    appointment.Status,
 
-                        Status =
-                            appointment.Status,
+                                Notes =
+                                    appointment.Notes
+                            }
+                    )
+                    .ToListAsync();
 
-                        Notes =
-                            appointment.Notes
-                    }
-            )
-            .ToListAsync();
-
-    /*
-     * Read-only metric query.
-     * Only DTO columns are transferred.
-     */
-    var metricRows =
-        await _context.HealthMetrics
-            .AsNoTracking()
-            .Where(
-                metric =>
-                    metric.PatientId ==
-                        patient.Id
-            )
-            .OrderByDescending(
-                metric =>
-                    metric.RecordedAt
-            )
-            .Select(
-                metric =>
-                    new
-                    HealthMetricResponseDto
-                    {
-                        Id =
-                            metric.Id,
-
-                        MetricType =
-                            metric.MetricType,
-
-                        Value =
-                            metric.Value,
-
-                        Unit =
-                            metric.Unit,
-
-                        Status =
-                            metric.Status,
-
-                        Note =
-                            metric.Note,
-
-                        RecordedAt =
+            var metricRows =
+                await _context.HealthMetrics
+                    .AsNoTracking()
+                    .Where(
+                        metric =>
+                            metric.PatientId ==
+                                patient.Id
+                    )
+                    .OrderByDescending(
+                        metric =>
                             metric.RecordedAt
-                    }
-            )
-            .ToListAsync();
+                    )
+                    .Select(
+                        metric =>
+                            new HealthMetricResponseDto
+                            {
+                                Id =
+                                    metric.Id,
 
-    var metrics =
-        metricRows
-            .GroupBy(
-                metric =>
-                    metric.MetricType
-            )
-            .Select(
-                group =>
-                    group.First()
-            )
-            .ToList();
+                                MetricType =
+                                    metric.MetricType,
 
-    var unread =
-        await _context.Notifications
-            .CountAsync(
-                notification =>
-                    notification.UserId ==
-                        userId &&
-                    !notification.IsRead
-            );
+                                Value =
+                                    metric.Value,
 
-    /*
-     * Dashboard does not need ClinicStock.
-     *
-     * Load only the relationships needed by
-     * MedicationCollectionResponseDto.
-     */
-    var nextCollectionEntity =
-        await _context
-            .MedicationCollections
-            .AsNoTracking()
-            .Include(
-                collection =>
-                    collection.Patient
-            )
-                .ThenInclude(
-                    patient =>
-                        patient.User
+                                Unit =
+                                    metric.Unit,
+
+                                Status =
+                                    metric.Status,
+
+                                Note =
+                                    metric.Note,
+
+                                RecordedAt =
+                                    metric.RecordedAt
+                            }
+                    )
+                    .ToListAsync();
+
+            var metrics =
+                metricRows
+                    .GroupBy(
+                        metric =>
+                            metric.MetricType
+                    )
+                    .Select(
+                        group =>
+                            group.First()
+                    )
+                    .ToList();
+
+            var unread =
+                await _context.Notifications
+                    .CountAsync(
+                        notification =>
+                            notification.UserId ==
+                                userId &&
+                            !notification.IsRead
+                    );
+
+            var nextCollection =
+                await ProjectCollectionQuery(
+                    _context
+                        .MedicationCollections
+                        .AsNoTracking()
+                        .Where(
+                            collection =>
+                                collection.PatientId ==
+                                    patient.Id &&
+                                collection.Status !=
+                                    MedicationCollectionStatuses
+                                        .Collected &&
+                                collection.Status !=
+                                    MedicationCollectionStatuses
+                                        .Cancelled
+                        )
                 )
-            .Include(
-                collection =>
-                    collection.Clinic
-            )
-            .Include(
-                collection =>
-                    collection.Proxy
-            )
-                .ThenInclude(
-                    proxy =>
-                        proxy!.User
+                .OrderBy(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate
                 )
-            .Include(
-                collection =>
-                    collection
-                        .ProcessedByNurse
-            )
-                .ThenInclude(
-                    nurse =>
-                        nurse!.User
-                )
-            .Include(
-                collection =>
-                    collection.Items
-            )
-                .ThenInclude(
-                    item =>
-                        item.Medication
-                )
-            .Where(
-                collection =>
-                    collection.PatientId ==
-                        patient.Id &&
-                    collection.Status !=
-                        MedicationCollectionStatuses
-                            .Collected &&
-                    collection.Status !=
-                        MedicationCollectionStatuses
-                            .Cancelled
-            )
-            .OrderBy(
-                collection =>
-                    collection
-                        .ScheduledCollectionDate
-            )
-            .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync();
 
-    var nextCollection =
-        nextCollectionEntity ==
-            null
-            ? null
-            : ToCollectionDto(
-                nextCollectionEntity
-            );
+            if (nextCollection != null)
+            {
+                FinalizeCollectionDto(
+                    nextCollection
+                );
+            }
 
-    return new PatientDashboardDto
-    {
-        FullName =
-            patient.FullName,
+            return new PatientDashboardDto
+            {
+                FullName =
+                    patient.FullName,
 
-        PatientNumber =
-            patient.PatientNumber,
+                PatientNumber =
+                    patient.PatientNumber,
 
-        IsProfileComplete =
-            patient
-                .IsProfileComplete,
+                IsProfileComplete =
+                    patient.IsProfileComplete,
 
-        Clinic =
-            patient.Clinic,
+                Clinic =
+                    patient.Clinic,
 
-        Medications =
-            medications,
+                Medications =
+                    medications,
 
-        UpcomingAppointments =
-            appointments,
+                UpcomingAppointments =
+                    appointments,
 
-        HealthMetrics =
-            metrics,
+                HealthMetrics =
+                    metrics,
 
-        UnreadNotifications =
-            unread,
+                UnreadNotifications =
+                    unread,
 
-        NextCollection =
-            nextCollection
-    };
-}
+                NextCollection =
+                    nextCollection
+            };
+        }
 
         // =====================================================
         // MEDICATIONS
@@ -608,7 +498,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -623,85 +513,39 @@ namespace PersonalProject.Services.Implementations
                 Guid patientId
             )
         {
+            var now =
+                DateTime.UtcNow;
+
             var medications =
                 await _context.Medications
-                    .Include(m => m.Schedules)
-                    .Where(
-                        m =>
-                            m.PatientId ==
-                                patientId &&
-                            m.IsActive
+                    .AsNoTracking()
+                    .Include(
+                        medication =>
+                            medication.Schedules
+                                .Where(
+                                    schedule =>
+                                        schedule.IsActive
+                                )
                     )
-                    .OrderBy(m => m.Name)
+                    .Where(
+                        medication =>
+                            medication.PatientId ==
+                                patientId &&
+                            medication.IsActive
+                    )
+                    .OrderBy(
+                        medication =>
+                            medication.Name
+                    )
                     .ToListAsync();
 
             return medications
-                .Select(m =>
-                    new PatientMedicationDto
-                    {
-                        Id =
-                            m.Id,
-
-                        Name =
-                            m.Name,
-
-                        Dosage =
-                            m.Dosage,
-
-                        Form =
-                            m.Form,
-
-                        Instructions =
-                            m.Instructions,
-
-                        PrescribedBy =
-                            m.PrescribedBy,
-
-                        ConditionName =
-                            m.ConditionName,
-
-                        StartDate =
-                            m.StartDate,
-
-                        EndDate =
-                            m.EndDate,
-
-                        IsActive =
-                            m.IsActive,
-
-                        ScheduleTimes =
-                            m.Schedules
-                                .Where(
-                                    s => s.IsActive
-                                )
-                                .OrderBy(
-                                    s => s.TimeOfDay
-                                )
-                                .Select(
-                                    s =>
-                                        s.TimeOfDay
-                                            .ToString(
-                                                @"hh\:mm"
-                                            )
-                                )
-                                .ToList(),
-
-                        NextDoseAt =
-                            CalculateNextDose(
-                                m.Schedules
-                            ),
-
-                        DaysRemaining =
-                            m.EndDate == null
-                                ? null
-                                : Math.Max(
-                                    0,
-                                    (
-                                        m.EndDate.Value.Date -
-                                        DateTime.UtcNow.Date
-                                    ).Days
-                                )
-                    }
+                .Select(
+                    medication =>
+                        ToPatientMedicationDto(
+                            medication,
+                            now
+                        )
                 )
                 .ToList();
         }
@@ -716,7 +560,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -733,7 +577,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -764,7 +608,8 @@ namespace PersonalProject.Services.Implementations
             var appointment =
                 new Appointment
                 {
-                    Id = Guid.NewGuid(),
+                    Id =
+                        Guid.NewGuid(),
 
                     PatientId =
                         patient.Id,
@@ -826,7 +671,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -843,10 +688,10 @@ namespace PersonalProject.Services.Implementations
             var appointment =
                 await _context.Appointments
                     .FirstOrDefaultAsync(
-                        a =>
-                            a.Id ==
+                        item =>
+                            item.Id ==
                                 appointmentId &&
-                            a.PatientId ==
+                            item.PatientId ==
                                 patient.Id
                     );
 
@@ -869,9 +714,14 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            appointment.ScheduledAt = dto.ScheduledAt;
-            appointment.Status = "Rescheduled";
-            appointment.UpdatedAt = DateTime.UtcNow;
+            appointment.ScheduledAt =
+                dto.ScheduledAt;
+
+            appointment.Status =
+                "Rescheduled";
+
+            appointment.UpdatedAt =
+                DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -894,17 +744,17 @@ namespace PersonalProject.Services.Implementations
         )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
             var appointment =
                 await _context.Appointments
                     .FirstOrDefaultAsync(
-                        a =>
-                            a.Id ==
+                        item =>
+                            item.Id ==
                                 appointmentId &&
-                            a.PatientId ==
+                            item.PatientId ==
                                 patient.Id
                     );
 
@@ -945,26 +795,78 @@ namespace PersonalProject.Services.Implementations
                 Guid patientId
             )
         {
-            var appointments =
-                await _context.Appointments
-                    .Include(a => a.Patient)
-                        .ThenInclude(p => p.User)
-                    .Include(a => a.Clinic)
-                    .Include(a => a.Nurse)
-                        .ThenInclude(n => n!.User)
-                    .Where(
-                        a =>
-                            a.PatientId ==
+            return await _context.Appointments
+                .AsNoTracking()
+                .Where(
+                    appointment =>
+                        appointment.PatientId ==
                             patientId
-                    )
-                    .OrderByDescending(
-                        a => a.ScheduledAt
-                    )
-                    .ToListAsync();
+                )
+                .OrderByDescending(
+                    appointment =>
+                        appointment.ScheduledAt
+                )
+                .Select(
+                    appointment =>
+                        new AppointmentResponseDto
+                        {
+                            Id =
+                                appointment.Id,
 
-            return appointments
-                .Select(ToAppointmentDto)
-                .ToList();
+                            PatientId =
+                                appointment.PatientId,
+
+                            PatientName =
+                                appointment
+                                    .Patient
+                                    .User
+                                    .FullName,
+
+                            ClinicId =
+                                appointment.ClinicId,
+
+                            ClinicName =
+                                appointment
+                                    .Clinic
+                                    .Name,
+
+                            NurseId =
+                                appointment.NurseId,
+
+                            NurseName =
+                                appointment.Nurse == null
+                                    ? null
+                                    : appointment
+                                        .Nurse
+                                        .User
+                                        .FullName,
+
+                            ScheduledAt =
+                                appointment.ScheduledAt,
+
+                            DurationMinutes =
+                                appointment.DurationMinutes,
+
+                            Type =
+                                appointment.Type,
+
+                            Reason =
+                                appointment.Reason,
+
+                            ProviderName =
+                                appointment.ProviderName,
+
+                            Mode =
+                                appointment.Mode,
+
+                            Status =
+                                appointment.Status,
+
+                            Notes =
+                                appointment.Notes
+                        }
+                )
+                .ToListAsync();
         }
 
         // =====================================================
@@ -977,52 +879,56 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
             return await _context.HealthRecords
-                .Include(r => r.Clinic)
+                .AsNoTracking()
                 .Where(
-                    r =>
-                        r.PatientId ==
-                        patient.Id
+                    record =>
+                        record.PatientId ==
+                            patient.Id
                 )
                 .OrderByDescending(
-                    r => r.RecordDate
+                    record =>
+                        record.RecordDate
                 )
-                .Select(r =>
-                    new HealthRecordResponseDto
-                    {
-                        Id =
-                            r.Id,
+                .Select(
+                    record =>
+                        new HealthRecordResponseDto
+                        {
+                            Id =
+                                record.Id,
 
-                        Title =
-                            r.Title,
+                            Title =
+                                record.Title,
 
-                        Type =
-                            r.Type,
+                            Type =
+                                record.Type,
 
-                        Category =
-                            r.Category,
+                            Category =
+                                record.Category,
 
-                        ProviderName =
-                            r.ProviderName,
+                            ProviderName =
+                                record.ProviderName,
 
-                        Facility =
-                            r.Clinic == null
-                                ? null
-                                : r.Clinic.Name,
+                            Facility =
+                                record.Clinic == null
+                                    ? null
+                                    : record
+                                        .Clinic
+                                        .Name,
 
-                        Summary =
-                            r.Summary,
+                            Summary =
+                                record.Summary,
 
-                        Status =
-                            r.Status,
+                            Status =
+                                record.Status,
 
-                        RecordDate =
-                            r.RecordDate
-                    }
+                            RecordDate =
+                                record.RecordDate
+                        }
                 )
                 .ToListAsync();
         }
@@ -1038,26 +944,36 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
             var collections =
-                await GetCollectionQuery()
-                    .Where(
-                        c =>
-                            c.PatientId ==
-                            patient.Id
-                    )
-                    .OrderByDescending(
-                        c =>
-                            c.ScheduledCollectionDate
-                    )
-                    .ToListAsync();
+                await ProjectCollectionQuery(
+                    _context
+                        .MedicationCollections
+                        .AsNoTracking()
+                        .Where(
+                            collection =>
+                                collection.PatientId ==
+                                    patient.Id
+                        )
+                )
+                .OrderByDescending(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate
+                )
+                .ToListAsync();
 
-            return collections
-                .Select(ToCollectionDto)
-                .ToList();
+            foreach (var collection in collections)
+            {
+                FinalizeCollectionDto(
+                    collection
+                );
+            }
+
+            return collections;
         }
 
         public async Task<
@@ -1067,7 +983,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -1084,26 +1000,37 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var collection =
-                await GetCollectionQuery()
-                    .Where(c =>
-                        c.PatientId ==
-                            patientId &&
-                        c.Status !=
-                            "Collected" &&
-                        c.Status !=
-                            "Cancelled"
-                    )
-                    .OrderBy(
-                        c =>
-                            c.ScheduledCollectionDate
-                    )
-                    .FirstOrDefaultAsync();
+                await ProjectCollectionQuery(
+                    _context
+                        .MedicationCollections
+                        .AsNoTracking()
+                        .Where(
+                            item =>
+                                item.PatientId ==
+                                    patientId &&
+                                item.Status !=
+                                    "Collected" &&
+                                item.Status !=
+                                    "Cancelled"
+                        )
+                )
+                .OrderBy(
+                    item =>
+                        item
+                            .ScheduledCollectionDate
+                )
+                .FirstOrDefaultAsync();
 
-            return collection == null
-                ? null
-                : ToCollectionDto(
-                    collection
-                );
+            if (collection == null)
+            {
+                return null;
+            }
+
+            FinalizeCollectionDto(
+                collection
+            );
+
+            return collection;
         }
 
         // =====================================================
@@ -1116,35 +1043,41 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
-            await GetPatientByUserIdAsync(
-                userId
-            );
+            _ =
+                await GetActivePatientAccessAsync(
+                    userId
+                );
 
             return await _context.Notifications
+                .AsNoTracking()
                 .Where(
-                    n => n.UserId == userId
+                    notification =>
+                        notification.UserId ==
+                            userId
                 )
                 .OrderByDescending(
-                    n => n.CreatedAt
+                    notification =>
+                        notification.CreatedAt
                 )
-                .Select(n =>
-                    new NotificationResponseDto
-                    {
-                        Id =
-                            n.Id,
+                .Select(
+                    notification =>
+                        new NotificationResponseDto
+                        {
+                            Id =
+                                notification.Id,
 
-                        UserId =
-                            n.UserId,
+                            UserId =
+                                notification.UserId,
 
-                        Message =
-                            n.Message,
+                            Message =
+                                notification.Message,
 
-                        IsRead =
-                            n.IsRead,
+                            IsRead =
+                                notification.IsRead,
 
-                        CreatedAt =
-                            n.CreatedAt
-                    }
+                            CreatedAt =
+                                notification.CreatedAt
+                        }
                 )
                 .ToListAsync();
         }
@@ -1154,17 +1087,18 @@ namespace PersonalProject.Services.Implementations
             Guid notificationId
         )
         {
-            await GetPatientByUserIdAsync(
-                userId
-            );
+            _ =
+                await GetActivePatientAccessAsync(
+                    userId
+                );
 
             var notification =
                 await _context.Notifications
                     .FirstOrDefaultAsync(
-                        n =>
-                            n.Id ==
+                        item =>
+                            item.Id ==
                                 notificationId &&
-                            n.UserId ==
+                            item.UserId ==
                                 userId
                     );
 
@@ -1175,7 +1109,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            notification.IsRead = true;
+            notification.IsRead =
+                true;
 
             await _context.SaveChangesAsync();
         }
@@ -1190,7 +1125,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -1211,7 +1146,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patient =
-                await GetPatientByUserIdAsync(
+                await GetActivePatientAccessAsync(
                     userId
                 );
 
@@ -1258,24 +1193,85 @@ namespace PersonalProject.Services.Implementations
         // PATIENT RESOLUTION
         // =====================================================
 
-        private async Task<Patient>
-            GetPatientByUserIdAsync(
+        private async Task<PatientAccess>
+            GetActivePatientAccessAsync(
                 Guid userId
             )
         {
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .Include(p => p.Clinic)
-                    .Include(p => p.Allergies)
-                    .Include(p => p.MedicalConditions)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
                                 userId &&
-                            p.User.Role ==
+                            item.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (patient == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active Patient profile not found."
+                );
+            }
+
+            return patient;
+        }
+
+        private async Task<Patient>
+            GetPatientByUserIdAsync(
+                Guid userId,
+                bool asTracking
+            )
+        {
+            IQueryable<Patient> query =
+                _context.Patients;
+
+            if (!asTracking)
+            {
+                query =
+                    query.AsNoTracking();
+            }
+
+            var patient =
+                await query
+                    .Include(
+                        item =>
+                            item.User
+                    )
+                    .Include(
+                        item =>
+                            item.Clinic
+                    )
+                    .Include(
+                        item =>
+                            item.Allergies
+                    )
+                    .Include(
+                        item =>
+                            item.MedicalConditions
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.UserId ==
+                                userId &&
+                            item.User.Role ==
+                                RoleNames.Patient &&
+                            item.User.IsActive
                     );
 
             if (patient == null)
@@ -1300,9 +1296,9 @@ namespace PersonalProject.Services.Implementations
             var preference =
                 await _context.PatientPreferences
                     .FirstOrDefaultAsync(
-                        p =>
-                            p.PatientId ==
-                            patientId
+                        item =>
+                            item.PatientId ==
+                                patientId
                     );
 
             if (preference != null)
@@ -1383,7 +1379,7 @@ namespace PersonalProject.Services.Implementations
 
                 DateOfBirth =
                     patient.DateOfBirth ==
-                    default
+                        default
                         ? null
                         : patient.DateOfBirth,
 
@@ -1429,50 +1425,134 @@ namespace PersonalProject.Services.Implementations
 
                 Allergies =
                     patient.Allergies
-                        .Select(a =>
-                            new PatientAllergyDto
-                            {
-                                Id =
-                                    a.Id,
+                        .Select(
+                            allergy =>
+                                new PatientAllergyDto
+                                {
+                                    Id =
+                                        allergy.Id,
 
-                                Name =
-                                    a.AllergyName,
+                                    Name =
+                                        allergy.AllergyName,
 
-                                Reaction =
-                                    a.Reaction,
+                                    Reaction =
+                                        allergy.Reaction,
 
-                                Severity =
-                                    a.Severity,
+                                    Severity =
+                                        allergy.Severity,
 
-                                Notes =
-                                    a.Notes
-                            }
+                                    Notes =
+                                        allergy.Notes
+                                }
                         )
                         .ToList(),
 
                 Conditions =
                     patient.MedicalConditions
-                        .Where(c => c.IsActive)
-                        .Select(c =>
-                            new PatientConditionDto
-                            {
-                                Id =
-                                    c.Id,
+                        .Where(
+                            condition =>
+                                condition.IsActive
+                        )
+                        .Select(
+                            condition =>
+                                new PatientConditionDto
+                                {
+                                    Id =
+                                        condition.Id,
 
-                                Name =
-                                    c.ConditionName,
+                                    Name =
+                                        condition.ConditionName,
 
-                                DiagnosisDate =
-                                    c.DiagnosisDate,
+                                    DiagnosisDate =
+                                        condition.DiagnosisDate,
 
-                                IsChronic =
-                                    c.IsChronic,
+                                    IsChronic =
+                                        condition.IsChronic,
 
-                                Notes =
-                                    c.Notes
-                            }
+                                    Notes =
+                                        condition.Notes
+                                }
                         )
                         .ToList()
+            };
+        }
+
+        private static PatientMedicationDto
+            ToPatientMedicationDto(
+                Medication medication,
+                DateTime now
+            )
+        {
+            return new PatientMedicationDto
+            {
+                Id =
+                    medication.Id,
+
+                Name =
+                    medication.Name,
+
+                Dosage =
+                    medication.Dosage,
+
+                Form =
+                    medication.Form,
+
+                Instructions =
+                    medication.Instructions,
+
+                PrescribedBy =
+                    medication.PrescribedBy,
+
+                ConditionName =
+                    medication.ConditionName,
+
+                StartDate =
+                    medication.StartDate,
+
+                EndDate =
+                    medication.EndDate,
+
+                IsActive =
+                    medication.IsActive,
+
+                ScheduleTimes =
+                    medication.Schedules
+                        .Where(
+                            schedule =>
+                                schedule.IsActive
+                        )
+                        .OrderBy(
+                            schedule =>
+                                schedule.TimeOfDay
+                        )
+                        .Select(
+                            schedule =>
+                                schedule.TimeOfDay
+                                    .ToString(
+                                        @"hh\:mm"
+                                    )
+                        )
+                        .ToList(),
+
+                NextDoseAt =
+                    CalculateNextDose(
+                        medication.Schedules,
+                        now
+                    ),
+
+                DaysRemaining =
+                    medication.EndDate == null
+                        ? null
+                        : Math.Max(
+                            0,
+                            (
+                                medication
+                                    .EndDate
+                                    .Value
+                                    .Date -
+                                now.Date
+                            ).Days
+                        )
             };
         }
 
@@ -1481,7 +1561,8 @@ namespace PersonalProject.Services.Implementations
         )
         {
             return
-                patient.DateOfBirth != default &&
+                patient.DateOfBirth !=
+                    default &&
                 !string.IsNullOrWhiteSpace(
                     patient.Gender
                 ) &&
@@ -1503,29 +1584,43 @@ namespace PersonalProject.Services.Implementations
         }
 
         private static DateTime? CalculateNextDose(
-            IEnumerable<MedicationSchedule> schedules
+            IEnumerable<MedicationSchedule> schedules,
+            DateTime? nowOverride = null
         )
         {
             var active =
                 schedules
-                    .Where(s => s.IsActive)
-                    .OrderBy(s => s.TimeOfDay)
+                    .Where(
+                        schedule =>
+                            schedule.IsActive
+                    )
+                    .OrderBy(
+                        schedule =>
+                            schedule.TimeOfDay
+                    )
                     .ToList();
 
             if (active.Count == 0)
+            {
                 return null;
+            }
 
             var now =
+                nowOverride ??
                 DateTime.UtcNow;
 
-            foreach (var schedule in active)
+            foreach (
+                var schedule in active
+            )
             {
                 var candidate =
                     now.Date +
                     schedule.TimeOfDay;
 
                 if (candidate >= now)
+                {
                     return candidate;
+                }
             }
 
             return
@@ -1547,150 +1642,216 @@ namespace PersonalProject.Services.Implementations
                 : "InPerson";
         }
 
-        private static AppointmentResponseDto
-            ToAppointmentDto(
-                Appointment appointment
-            )
-        {
-            return new AppointmentResponseDto
-            {
-                Id =
-                    appointment.Id,
-
-                PatientId =
-                    appointment.PatientId,
-
-                PatientName =
-                    appointment.Patient
-                        .User.FullName,
-
-                ClinicId =
-                    appointment.ClinicId,
-
-                ClinicName =
-                    appointment.Clinic.Name,
-
-                NurseId =
-                    appointment.NurseId,
-
-                NurseName =
-                    appointment.Nurse?
-                        .User.FullName,
-
-                ScheduledAt =
-                    appointment.ScheduledAt,
-
-                DurationMinutes =
-                    appointment.DurationMinutes,
-
-                Type =
-                    appointment.Type,
-
-                Reason =
-                    appointment.Reason,
-
-                ProviderName =
-                    appointment.ProviderName,
-
-                Mode =
-                    appointment.Mode,
-
-                Status =
-                    appointment.Status,
-
-                Notes =
-                    appointment.Notes
-            };
-        }
-
         private async Task<AppointmentResponseDto>
             GetAppointmentDtoAsync(
                 Guid appointmentId,
                 Guid patientId
             )
         {
-            var appointment =
-                await _context.Appointments
-                    .Include(a => a.Patient)
-                        .ThenInclude(p => p.User)
-                    .Include(a => a.Clinic)
-                    .Include(a => a.Nurse)
-                        .ThenInclude(n => n!.User)
-                    .FirstAsync(
-                        a =>
-                            a.Id ==
-                                appointmentId &&
-                            a.PatientId ==
-                                patientId
-                    );
+            return await _context.Appointments
+                .AsNoTracking()
+                .Where(
+                    appointment =>
+                        appointment.Id ==
+                            appointmentId &&
+                        appointment.PatientId ==
+                            patientId
+                )
+                .Select(
+                    appointment =>
+                        new AppointmentResponseDto
+                        {
+                            Id =
+                                appointment.Id,
 
-            return ToAppointmentDto(
-                appointment
+                            PatientId =
+                                appointment.PatientId,
+
+                            PatientName =
+                                appointment
+                                    .Patient
+                                    .User
+                                    .FullName,
+
+                            ClinicId =
+                                appointment.ClinicId,
+
+                            ClinicName =
+                                appointment
+                                    .Clinic
+                                    .Name,
+
+                            NurseId =
+                                appointment.NurseId,
+
+                            NurseName =
+                                appointment.Nurse == null
+                                    ? null
+                                    : appointment
+                                        .Nurse
+                                        .User
+                                        .FullName,
+
+                            ScheduledAt =
+                                appointment.ScheduledAt,
+
+                            DurationMinutes =
+                                appointment.DurationMinutes,
+
+                            Type =
+                                appointment.Type,
+
+                            Reason =
+                                appointment.Reason,
+
+                            ProviderName =
+                                appointment.ProviderName,
+
+                            Mode =
+                                appointment.Mode,
+
+                            Status =
+                                appointment.Status,
+
+                            Notes =
+                                appointment.Notes
+                        }
+                )
+                .FirstAsync();
+        }
+
+        private static IQueryable<
+            MedicationCollectionResponseDto>
+            ProjectCollectionQuery(
+                IQueryable<MedicationCollection> query
+            )
+        {
+            return query.Select(
+                collection =>
+                    new MedicationCollectionResponseDto
+                    {
+                        Id =
+                            collection.Id,
+
+                        PatientId =
+                            collection.PatientId,
+
+                        PatientName =
+                            collection
+                                .Patient
+                                .User
+                                .FullName,
+
+                        ClinicId =
+                            collection.ClinicId,
+
+                        ClinicName =
+                            collection
+                                .Clinic
+                                .Name,
+
+                        ProxyId =
+                            collection.ProxyId,
+
+                        ProxyName =
+                            collection.Proxy == null
+                                ? null
+                                : collection
+                                    .Proxy
+                                    .User
+                                    .FullName,
+
+                        ProcessedByNurseId =
+                            collection
+                                .ProcessedByNurseId,
+
+                        ProcessedByNurseName =
+                            collection.ProcessedByNurse ==
+                                null
+                                ? null
+                                : collection
+                                    .ProcessedByNurse
+                                    .User
+                                    .FullName,
+
+                        ScheduledCollectionDate =
+                            collection
+                                .ScheduledCollectionDate,
+
+                        CollectedAt =
+                            collection.CollectedAt,
+
+                        /*
+                         * Raw status is finalized after the
+                         * database projection so Pending/Overdue
+                         * behavior remains exactly as before.
+                         */
+                        Status =
+                            collection.Status,
+
+                        MedicationName =
+                            string.Empty,
+
+                        Date =
+                            string.Empty,
+
+                        Notes =
+                            collection.Notes,
+
+                        Items =
+                            collection.Items
+                                .Select(
+                                    item =>
+                                        new MedicationCollectionItemResponseDto
+                                        {
+                                            Id =
+                                                item.Id,
+
+                                            MedicationId =
+                                                item.MedicationId,
+
+                                            ClinicStockId =
+                                                item.ClinicStockId,
+
+                                            MedicationName =
+                                                item
+                                                    .Medication
+                                                    .Name,
+
+                                            Dosage =
+                                                item
+                                                    .Medication
+                                                    .Dosage,
+
+                                            Form =
+                                                item
+                                                    .Medication
+                                                    .Form,
+
+                                            Quantity =
+                                                item.Quantity,
+
+                                            Notes =
+                                                item.Notes
+                                        }
+                                )
+                                .ToList()
+                    }
             );
         }
 
-        private static HealthMetricResponseDto
-            ToHealthMetricDto(
-                HealthMetric metric
-            )
+        private static void FinalizeCollectionDto(
+            MedicationCollectionResponseDto collection
+        )
         {
-            return new HealthMetricResponseDto
-            {
-                Id =
-                    metric.Id,
-
-                MetricType =
-                    metric.MetricType,
-
-                Value =
-                    metric.Value,
-
-                Unit =
-                    metric.Unit,
-
-                Status =
-                    metric.Status,
-
-                Note =
-                    metric.Note,
-
-                RecordedAt =
-                    metric.RecordedAt
-            };
-        }
-
-        private IQueryable<MedicationCollection>
-            GetCollectionQuery()
-        {
-            return _context
-                .MedicationCollections
-                .Include(c => c.Patient)
-                    .ThenInclude(p => p.User)
-                .Include(c => c.Clinic)
-                .Include(c => c.Proxy)
-                    .ThenInclude(p => p!.User)
-                .Include(c => c.ProcessedByNurse)
-                    .ThenInclude(n => n!.User)
-                .Include(c => c.Items)
-                    .ThenInclude(i => i.Medication)
-                .Include(c => c.Items)
-                    .ThenInclude(i => i.ClinicStock);
-        }
-
-        private static MedicationCollectionResponseDto
-            ToCollectionDto(
-                MedicationCollection collection
-            )
-        {
-            var status =
-                collection.Status;
-
             if (
-                status != "Collected" &&
-                status != "Cancelled"
+                collection.Status !=
+                    "Collected" &&
+                collection.Status !=
+                    "Cancelled"
             )
             {
-                status =
+                collection.Status =
                     collection
                         .ScheduledCollectionDate
                         .Date <
@@ -1699,102 +1860,23 @@ namespace PersonalProject.Services.Implementations
                         : "Pending";
             }
 
-            return new MedicationCollectionResponseDto
-            {
-                Id =
-                    collection.Id,
-
-                PatientId =
-                    collection.PatientId,
-
-                PatientName =
-                    collection.Patient
-                        .User.FullName,
-
-                ClinicId =
-                    collection.ClinicId,
-
-                ClinicName =
-                    collection.Clinic.Name,
-
-                ProxyId =
-                    collection.ProxyId,
-
-                ProxyName =
-                    collection.Proxy?
-                        .User.FullName,
-
-                ProcessedByNurseId =
-                    collection.ProcessedByNurseId,
-
-                ProcessedByNurseName =
-                    collection
-                        .ProcessedByNurse?
-                        .User.FullName,
-
-                ScheduledCollectionDate =
-                    collection
-                        .ScheduledCollectionDate,
-
-                CollectedAt =
-                    collection.CollectedAt,
-
-                Status =
-                    status,
-
-                MedicationName =
-                    string.Join(
-                        ", ",
-                        collection.Items
-                            .Select(
-                                i =>
-                                    i.Medication.Name
-                            )
-                            .Distinct()
-                    ),
-
-                Date =
-                    collection
-                        .ScheduledCollectionDate
-                        .ToString(
-                            "yyyy-MM-dd"
-                        ),
-
-                Notes =
-                    collection.Notes,
-
-                Items =
+            collection.MedicationName =
+                string.Join(
+                    ", ",
                     collection.Items
-                        .Select(i =>
-                            new MedicationCollectionItemResponseDto
-                            {
-                                Id =
-                                    i.Id,
-
-                                MedicationId =
-                                    i.MedicationId,
-
-                                ClinicStockId =
-                                    i.ClinicStockId,
-
-                                MedicationName =
-                                    i.Medication.Name,
-
-                                Dosage =
-                                    i.Medication.Dosage,
-
-                                Form =
-                                    i.Medication.Form,
-
-                                Quantity =
-                                    i.Quantity,
-
-                                Notes =
-                                    i.Notes
-                            }
+                        .Select(
+                            item =>
+                                item.MedicationName
                         )
-                        .ToList()
-            };
+                        .Distinct()
+                );
+
+            collection.Date =
+                collection
+                    .ScheduledCollectionDate
+                    .ToString(
+                        "yyyy-MM-dd"
+                    );
         }
 
         private static PatientPreferenceDto
@@ -1826,6 +1908,21 @@ namespace PersonalProject.Services.Implementations
                     preference
                         .AllowChatbotProfileAccess
             };
+        }
+
+        private sealed class PatientAccess
+        {
+            public Guid Id
+            {
+                get;
+                init;
+            }
+
+            public Guid? ClinicId
+            {
+                get;
+                init;
+            }
         }
     }
 }

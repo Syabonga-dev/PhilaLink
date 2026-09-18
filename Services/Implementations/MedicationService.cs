@@ -39,12 +39,25 @@ namespace PersonalProject.Services.Implementations
 
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id == dto.PatientId &&
-                            p.User.IsActive
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                dto.PatientId &&
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientMedicationAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (patient == null)
             {
@@ -144,8 +157,7 @@ namespace PersonalProject.Services.Implementations
                 medication
             );
 
-            await _context
-                .SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
             await _audit.LogAsync(
                 "MedicationCreated",
@@ -166,39 +178,58 @@ namespace PersonalProject.Services.Implementations
                 Guid patientUserId
             )
         {
-            var patient =
+            var patientId =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId ==
                                 patientUserId &&
-                            p.User.Role ==
+                            patient.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
-                    );
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            (Guid?)patient.Id
+                    )
+                    .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (patientId == null)
             {
                 throw new KeyNotFoundException(
                     "Active patient profile not found."
                 );
             }
 
-            return await _context
-                .Medications
-                .Include(m => m.Schedules)
-                .Include(m => m.Logs)
+            /*
+             * Preserve the existing API response: schedules and
+             * adherence logs are still returned. Read tracking
+             * is unnecessary for this endpoint.
+             */
+            return await _context.Medications
+                .AsNoTrackingWithIdentityResolution()
+                .AsSplitQuery()
+                .Include(
+                    medication =>
+                        medication.Schedules
+                )
+                .Include(
+                    medication =>
+                        medication.Logs
+                )
                 .Where(
-                    m =>
-                        m.PatientId ==
-                        patient.Id
+                    medication =>
+                        medication.PatientId ==
+                            patientId.Value
                 )
                 .OrderByDescending(
-                    m => m.IsActive
+                    medication =>
+                        medication.IsActive
                 )
                 .ThenBy(
-                    m => m.Name
+                    medication =>
+                        medication.Name
                 )
                 .ToListAsync();
         }
@@ -220,11 +251,24 @@ namespace PersonalProject.Services.Implementations
 
             var patient =
                 await _context.Patients
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
-                            patientId
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                patientId
+                    )
+                    .Select(
+                        item =>
+                            new PatientMedicationAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (patient == null)
             {
@@ -243,17 +287,25 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return await _context
-                .Medications
-                .Include(m => m.Schedules)
-                .Include(m => m.Logs)
+            return await _context.Medications
+                .AsNoTrackingWithIdentityResolution()
+                .AsSplitQuery()
+                .Include(
+                    medication =>
+                        medication.Schedules
+                )
+                .Include(
+                    medication =>
+                        medication.Logs
+                )
                 .Where(
-                    m =>
-                        m.PatientId ==
-                        patientId
+                    medication =>
+                        medication.PatientId ==
+                            patientId
                 )
                 .OrderBy(
-                    m => m.Name
+                    medication =>
+                        medication.Name
                 )
                 .ToListAsync();
         }
@@ -274,15 +326,9 @@ namespace PersonalProject.Services.Implementations
                 );
 
             var medication =
-                await _context.Medications
-                    .Include(
-                        m => m.Patient
-                    )
-                    .FirstOrDefaultAsync(
-                        m =>
-                            m.Id ==
-                            medicationId
-                    );
+                await GetMedicationClinicAccessAsync(
+                    medicationId
+                );
 
             if (medication == null)
             {
@@ -292,7 +338,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                medication.Patient.ClinicId !=
+                medication.ClinicId !=
                 clinicId
             )
             {
@@ -314,15 +360,15 @@ namespace PersonalProject.Services.Implementations
             }
 
             var duplicate =
-                await _context
-                    .MedicationSchedules
+                await _context.MedicationSchedules
+                    .AsNoTracking()
                     .AnyAsync(
-                        s =>
-                            s.MedicationId ==
+                        schedule =>
+                            schedule.MedicationId ==
                                 medicationId &&
-                            s.TimeOfDay ==
+                            schedule.TimeOfDay ==
                                 scheduleTime &&
-                            s.IsActive
+                            schedule.IsActive
                     );
 
             if (duplicate)
@@ -348,14 +394,11 @@ namespace PersonalProject.Services.Implementations
                         true
                 };
 
-            _context
-                .MedicationSchedules
-                .Add(
-                    schedule
-                );
+            _context.MedicationSchedules.Add(
+                schedule
+            );
 
-            await _context
-                .SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
             await _audit.LogAsync(
                 "MedicationScheduleAdded",
@@ -381,15 +424,9 @@ namespace PersonalProject.Services.Implementations
                 );
 
             var medication =
-                await _context.Medications
-                    .Include(
-                        m => m.Patient
-                    )
-                    .FirstOrDefaultAsync(
-                        m =>
-                            m.Id ==
-                            medicationId
-                    );
+                await GetMedicationClinicAccessAsync(
+                    medicationId
+                );
 
             if (medication == null)
             {
@@ -399,7 +436,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                medication.Patient.ClinicId !=
+                medication.ClinicId !=
                 clinicId
             )
             {
@@ -408,15 +445,16 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return await _context
-                .MedicationLogs
+            return await _context.MedicationLogs
+                .AsNoTracking()
                 .Where(
-                    l =>
-                        l.MedicationId ==
-                        medicationId
+                    log =>
+                        log.MedicationId ==
+                            medicationId
                 )
                 .OrderByDescending(
-                    l => l.TakenAt
+                    log =>
+                        log.TakenAt
                 )
                 .ToListAsync();
         }
@@ -434,15 +472,27 @@ namespace PersonalProject.Services.Implementations
         {
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
                                 patientUserId &&
-                            p.User.Role ==
+                            item.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
-                    );
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientMedicationAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (patient == null)
             {
@@ -451,18 +501,24 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var medication =
+            var activeMedicationId =
                 await _context.Medications
-                    .FirstOrDefaultAsync(
-                        m =>
-                            m.Id ==
+                    .AsNoTracking()
+                    .Where(
+                        medication =>
+                            medication.Id ==
                                 medicationId &&
-                            m.PatientId ==
+                            medication.PatientId ==
                                 patient.Id &&
-                            m.IsActive
-                    );
+                            medication.IsActive
+                    )
+                    .Select(
+                        medication =>
+                            (Guid?)medication.Id
+                    )
+                    .FirstOrDefaultAsync();
 
-            if (medication == null)
+            if (activeMedicationId == null)
             {
                 throw new KeyNotFoundException(
                     "Active medication not found."
@@ -476,7 +532,7 @@ namespace PersonalProject.Services.Implementations
                         Guid.NewGuid(),
 
                     MedicationId =
-                        medication.Id,
+                        activeMedicationId.Value,
 
                     Taken =
                         taken,
@@ -492,23 +548,52 @@ namespace PersonalProject.Services.Implementations
                         DateTime.UtcNow
                 };
 
-            _context
-                .MedicationLogs
-                .Add(
-                    log
-                );
+            _context.MedicationLogs.Add(
+                log
+            );
 
-            await _context
-                .SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
             await _audit.LogAsync(
                 taken
                     ? "MedicationTaken"
                     : "MedicationSkipped",
                 patientUserId,
-                $"Medication {medication.Id} adherence logged.",
+                $"Medication {activeMedicationId.Value} adherence logged.",
                 patient.ClinicId
             );
+        }
+
+        // =====================================================
+        // READ HELPERS
+        // =====================================================
+
+        private async Task<MedicationClinicAccess?>
+            GetMedicationClinicAccessAsync(
+                Guid medicationId
+            )
+        {
+            return await _context.Medications
+                .AsNoTracking()
+                .Where(
+                    medication =>
+                        medication.Id ==
+                            medicationId
+                )
+                .Select(
+                    medication =>
+                        new MedicationClinicAccess
+                        {
+                            Id =
+                                medication.Id,
+
+                            ClinicId =
+                                medication
+                                    .Patient
+                                    .ClinicId
+                        }
+                )
+                .FirstOrDefaultAsync();
         }
 
         // =====================================================
@@ -520,20 +605,40 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
-            var user =
+            var staff =
                 await _context.Users
-                    .Include(u => u.Admin)
-                    .Include(u => u.Nurse)
-                    .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
-                            userId
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        user =>
+                            user.Id ==
+                                userId &&
+                            user.IsActive
+                    )
+                    .Select(
+                        user =>
+                            new StaffClinicAccess
+                            {
+                                Role =
+                                    user.Role,
 
-            if (
-                user == null ||
-                !user.IsActive
-            )
+                                AdminClinicId =
+                                    user.Admin == null
+                                        ? null
+                                        : user
+                                            .Admin
+                                            .ClinicId,
+
+                                NurseClinicId =
+                                    user.Nurse == null
+                                        ? null
+                                        : (Guid?)user
+                                            .Nurse
+                                            .ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (staff == null)
             {
                 throw new UnauthorizedAccessException(
                     "Active staff account required."
@@ -541,29 +646,79 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role ==
+                staff.Role ==
                     RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId !=
+                staff.AdminClinicId !=
                     null
             )
             {
-                return user.Admin
-                    .ClinicId.Value;
+                return staff.AdminClinicId.Value;
             }
 
             if (
-                user.Role ==
+                staff.Role ==
                     RoleNames.Nurse &&
-                user.Nurse != null
+                staff.NurseClinicId !=
+                    null
             )
             {
-                return user.Nurse
-                    .ClinicId;
+                return staff.NurseClinicId.Value;
             }
 
             throw new UnauthorizedAccessException(
                 "Clinic staff privileges are required."
             );
+        }
+
+        private sealed class PatientMedicationAccess
+        {
+            public Guid Id
+            {
+                get;
+                init;
+            }
+
+            public Guid? ClinicId
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class MedicationClinicAccess
+        {
+            public Guid Id
+            {
+                get;
+                init;
+            }
+
+            public Guid? ClinicId
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class StaffClinicAccess
+        {
+            public string Role
+            {
+                get;
+                init;
+            } = string.Empty;
+
+            public Guid? AdminClinicId
+            {
+                get;
+                init;
+            }
+
+            public Guid? NurseClinicId
+            {
+                get;
+                init;
+            }
         }
     }
 }

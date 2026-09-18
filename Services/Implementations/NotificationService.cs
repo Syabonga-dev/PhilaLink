@@ -6,7 +6,8 @@ using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class NotificationService : INotificationService
+    public class NotificationService :
+        INotificationService
     {
         private readonly PhilaLinkDbContext _context;
 
@@ -23,47 +24,85 @@ namespace PersonalProject.Services.Implementations
             Guid performedByUserId
         )
         {
-            if (string.IsNullOrWhiteSpace(message))
+            if (
+                string.IsNullOrWhiteSpace(
+                    message
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Notification message is required."
                 );
             }
 
-            var staffUser =
+            /*
+             * Only retrieve the staff information required
+             * for authorization.
+             *
+             * Do not load complete User/Admin/Nurse graphs.
+             */
+            var staff =
                 await _context.Users
-                    .Include(u => u.Admin)
-                    .Include(u => u.Nurse)
-                    .FirstOrDefaultAsync(
-                        u =>
-                            u.Id == performedByUserId &&
-                            u.IsActive
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        user =>
+                            user.Id ==
+                                performedByUserId &&
+                            user.IsActive
+                    )
+                    .Select(
+                        user =>
+                            new StaffNotificationAccess
+                            {
+                                Role =
+                                    user.Role,
 
-            if (staffUser == null)
+                                AdminClinicId =
+                                    user.Admin == null
+                                        ? null
+                                        : user
+                                            .Admin
+                                            .ClinicId,
+
+                                NurseClinicId =
+                                    user.Nurse == null
+                                        ? null
+                                        : (Guid?)user
+                                            .Nurse
+                                            .ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (staff == null)
             {
                 throw new UnauthorizedAccessException(
                     "Active staff account required."
                 );
             }
 
-            Guid? staffClinicId = null;
+            Guid? staffClinicId =
+                null;
 
             if (
-                staffUser.Role == RoleNames.ClinicAdmin &&
-                staffUser.Admin?.ClinicId != null
+                staff.Role ==
+                    RoleNames.ClinicAdmin &&
+                staff.AdminClinicId !=
+                    null
             )
             {
                 staffClinicId =
-                    staffUser.Admin.ClinicId.Value;
+                    staff.AdminClinicId.Value;
             }
             else if (
-                staffUser.Role == RoleNames.Nurse &&
-                staffUser.Nurse != null
+                staff.Role ==
+                    RoleNames.Nurse &&
+                staff.NurseClinicId !=
+                    null
             )
             {
                 staffClinicId =
-                    staffUser.Nurse.ClinicId;
+                    staff.NurseClinicId.Value;
             }
             else
             {
@@ -72,15 +111,36 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Only the patient's user ID and clinic ID
+             * are required here.
+             *
+             * This preserves the existing active-patient
+             * and same-clinic validation.
+             */
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId == patientUserId &&
-                            p.User.Role == RoleNames.Patient &&
-                            p.User.IsActive
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
+                                patientUserId &&
+                            item.User.Role ==
+                                RoleNames.Patient &&
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientNotificationAccess
+                            {
+                                UserId =
+                                    item.UserId,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (patient == null)
             {
@@ -90,8 +150,10 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                patient.ClinicId == null ||
-                patient.ClinicId != staffClinicId
+                patient.ClinicId ==
+                    null ||
+                patient.ClinicId !=
+                    staffClinicId
             )
             {
                 throw new UnauthorizedAccessException(
@@ -102,7 +164,8 @@ namespace PersonalProject.Services.Implementations
             var notification =
                 new Notification
                 {
-                    Id = Guid.NewGuid(),
+                    Id =
+                        Guid.NewGuid(),
 
                     UserId =
                         patient.UserId,
@@ -124,26 +187,37 @@ namespace PersonalProject.Services.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> CreateSystemForPatientAsync(
-            Guid patientUserId,
-            string message
-        )
+        public async Task<bool>
+            CreateSystemForPatientAsync(
+                Guid patientUserId,
+                string message
+            )
         {
-            if (string.IsNullOrWhiteSpace(message))
+            if (
+                string.IsNullOrWhiteSpace(
+                    message
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Notification message is required."
                 );
             }
 
+            /*
+             * AnyAsync generates an EXISTS query.
+             * No Include is required.
+             */
             var patientExists =
                 await _context.Patients
-                    .Include(p => p.User)
+                    .AsNoTracking()
                     .AnyAsync(
-                        p =>
-                            p.UserId == patientUserId &&
-                            p.User.Role == RoleNames.Patient &&
-                            p.User.IsActive
+                        patient =>
+                            patient.UserId ==
+                                patientUserId &&
+                            patient.User.Role ==
+                                RoleNames.Patient &&
+                            patient.User.IsActive
                     );
 
             if (!patientExists)
@@ -157,15 +231,20 @@ namespace PersonalProject.Services.Implementations
                 message.Trim();
 
             var duplicateCutoff =
-                DateTime.UtcNow.AddHours(-12);
+                DateTime.UtcNow
+                    .AddHours(-12);
 
             var duplicateExists =
                 await _context.Notifications
+                    .AsNoTracking()
                     .AnyAsync(
-                        n =>
-                            n.UserId == patientUserId &&
-                            n.Message == trimmedMessage &&
-                            n.CreatedAt >= duplicateCutoff
+                        notification =>
+                            notification.UserId ==
+                                patientUserId &&
+                            notification.Message ==
+                                trimmedMessage &&
+                            notification.CreatedAt >=
+                                duplicateCutoff
                     );
 
             if (duplicateExists)
@@ -176,7 +255,8 @@ namespace PersonalProject.Services.Implementations
             var notification =
                 new Notification
                 {
-                    Id = Guid.NewGuid(),
+                    Id =
+                        Guid.NewGuid(),
 
                     UserId =
                         patientUserId,
@@ -198,6 +278,44 @@ namespace PersonalProject.Services.Implementations
             await _context.SaveChangesAsync();
 
             return true;
+        }
+
+        private sealed class
+            StaffNotificationAccess
+        {
+            public string Role
+            {
+                get;
+                init;
+            } = string.Empty;
+
+            public Guid? AdminClinicId
+            {
+                get;
+                init;
+            }
+
+            public Guid? NurseClinicId
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class
+            PatientNotificationAccess
+        {
+            public Guid UserId
+            {
+                get;
+                init;
+            }
+
+            public Guid? ClinicId
+            {
+                get;
+                init;
+            }
         }
     }
 }

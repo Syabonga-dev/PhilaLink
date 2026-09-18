@@ -46,9 +46,9 @@ namespace PersonalProject.Services.Implementations
 
             var exists =
                 await _context.Users.AnyAsync(
-                    u =>
-                        u.IdNumber == idNumber ||
-                        u.PhoneNumber == phoneNumber
+                    user =>
+                        user.IdNumber == idNumber ||
+                        user.PhoneNumber == phoneNumber
                 );
 
             if (exists)
@@ -199,12 +199,17 @@ namespace PersonalProject.Services.Implementations
             var idNumber =
                 dto.IdNumber.Trim();
 
+            /*
+             * Login is read-only until authentication succeeds;
+             * the user entity does not need EF change tracking.
+             */
             var user =
                 await _context.Users
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.IdNumber ==
-                            idNumber
+                        item =>
+                            item.IdNumber ==
+                                idNumber
                     );
 
             if (
@@ -258,13 +263,52 @@ namespace PersonalProject.Services.Implementations
             Guid userId
         )
         {
+            /*
+             * /api/auth/me is called during frontend bootstrap.
+             * Project only the fields the API returns and avoid
+             * change tracking for this read-only request.
+             */
             var user =
                 await _context.Users
-                    .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
-                            userId
-                    );
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                userId
+                    )
+                    .Select(
+                        item =>
+                            new UserResponseDto
+                            {
+                                Id =
+                                    item.Id,
+
+                                FullName =
+                                    item.FullName,
+
+                                IdNumber =
+                                    item.IdNumber,
+
+                                PhoneNumber =
+                                    item.PhoneNumber,
+
+                                Email =
+                                    item.Email,
+
+                                Role =
+                                    item.Role,
+
+                                IsActive =
+                                    item.IsActive,
+
+                                IsVerified =
+                                    item.IsVerified,
+
+                                MustChangePassword =
+                                    item.MustChangePassword
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 user == null ||
@@ -283,9 +327,7 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return CreateUserResponse(
-                user
-            );
+            return user;
         }
 
         // =====================================================
@@ -298,12 +340,16 @@ namespace PersonalProject.Services.Implementations
                 ChangePasswordDto dto
             )
         {
+            /*
+             * Tracking is required because PasswordHash,
+             * MustChangePassword and UpdatedAt are modified.
+             */
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
-                            userId
+                        item =>
+                            item.Id ==
+                                userId
                     );
 
             if (
@@ -367,10 +413,6 @@ namespace PersonalProject.Services.Implementations
 
             await _context.SaveChangesAsync();
 
-            /*
-             * Return a fresh JWT whose password-change claim
-             * reflects the new account state.
-             */
             return CreateLoginResponse(
                 user
             );
@@ -397,9 +439,9 @@ namespace PersonalProject.Services.Implementations
             }
             while (
                 await _context.Patients.AnyAsync(
-                    p =>
-                        p.PatientNumber ==
-                        patientNumber
+                    patient =>
+                        patient.PatientNumber ==
+                            patientNumber
                 )
             );
 
@@ -449,8 +491,10 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 !password.Any(
-                    c =>
-                        !char.IsLetterOrDigit(c)
+                    character =>
+                        !char.IsLetterOrDigit(
+                            character
+                        )
                 )
             )
             {
