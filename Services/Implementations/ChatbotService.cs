@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
@@ -9,30 +9,64 @@ using System.Text;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class ChatbotService : IChatbotService
+    public class ChatbotService :
+        IChatbotService
     {
-        private const string EmergencyResponse =
-            "Your message contains symptoms or information that may indicate a medical emergency. " +
-            "Please seek emergency medical help now or go to the nearest emergency facility. " +
-            "Do not rely on PhilaLink or the chatbot for emergency treatment.";
+        private const string
+            EmergencyResponse =
+                "Your message contains symptoms or information that may indicate a medical emergency. " +
+                "Please seek emergency medical help now or go to the nearest emergency facility. " +
+                "Do not rely on PhilaLink or the chatbot for emergency treatment.";
 
-        private const string UrgentResponse =
-            "Your message contains symptoms that should be assessed promptly by a healthcare professional. " +
-            "Please contact your clinic, an urgent care service, or another qualified healthcare provider as soon as possible. " +
-            "If you are struggling to breathe, develop chest pain, faint, become confused, have severe bleeding, " +
-            "or your symptoms rapidly worsen, seek emergency medical help immediately.";
+        private const string
+            UrgentResponse =
+                "Your message contains symptoms that should be assessed promptly by a healthcare professional. " +
+                "Please contact your clinic, an urgent care service, or another qualified healthcare provider as soon as possible. " +
+                "If you are struggling to breathe, develop chest pain, faint, become confused, have severe bleeding, " +
+                "or your symptoms rapidly worsen, seek emergency medical help immediately.";
 
-        private readonly PhilaLinkDbContext _context;
-        private readonly IChatbotProvider _provider;
+        private const string
+            ProfileAccessDisabledContext =
+                """
+                PHILALINK PRIVACY CONTEXT
+
+                The patient has disabled PhilaChatBot access to their stored PhilaLink profile.
+
+                You do not have access to the patient's stored medications, medication supply,
+                allergies, medical conditions, symptom-assessment history, collection history,
+                or other stored health information.
+
+                Do not claim or imply that you know any of those stored details.
+
+                If the patient asks what is recorded in their PhilaLink profile, explain that
+                profile access is currently disabled and that they can enable
+                "Allow PhilaChatBot profile access" in Settings if they want Phila to use it.
+
+                You may still provide general health education based on information the patient
+                explicitly writes in the current message.
+                """;
+
+        private readonly PhilaLinkDbContext
+            _context;
+
+        private readonly IChatbotProvider
+            _provider;
 
         public ChatbotService(
             PhilaLinkDbContext context,
             IChatbotProvider provider
         )
         {
-            _context = context;
-            _provider = provider;
+            _context =
+                context;
+
+            _provider =
+                provider;
         }
+
+        // =====================================================
+        // SEND MESSAGE
+        // =====================================================
 
         public async Task<ChatbotMessageResponseDto>
             SendMessageAsync(
@@ -56,24 +90,45 @@ namespace PersonalProject.Services.Implementations
                     userId
                 );
 
+            var allowProfileAccess =
+                await IsProfileAccessAllowedAsync(
+                    patientId
+                );
+
             var cleanMessage =
                 dto.Message.Trim();
 
+            IQueryable<ChatConversation>
+                conversationQuery =
+                    _context
+                        .ChatConversations;
+
             /*
-             * Tracking is required here because the active
-             * conversation is updated and new messages are added.
+             * Previous messages may contain profile information
+             * from a time when access was enabled.
+             *
+             * Therefore history is loaded for the external AI
+             * only when profile access is enabled.
              */
+            if (
+                allowProfileAccess
+            )
+            {
+                conversationQuery =
+                    conversationQuery
+                        .Include(
+                            conversation =>
+                                conversation.Messages
+                        );
+            }
+
             var conversation =
-                await _context.ChatConversations
-                    .Include(
-                        conversation =>
-                            conversation.Messages
-                    )
+                await conversationQuery
                     .FirstOrDefaultAsync(
-                        conversation =>
-                            conversation.PatientId ==
+                        item =>
+                            item.PatientId ==
                                 patientId &&
-                            conversation.IsActive
+                            item.IsActive
                     );
 
             if (conversation == null)
@@ -97,9 +152,11 @@ namespace PersonalProject.Services.Implementations
                             true
                     };
 
-                _context.ChatConversations.Add(
-                    conversation
-                );
+                _context
+                    .ChatConversations
+                    .Add(
+                        conversation
+                    );
             }
 
             var userMessage =
@@ -132,6 +189,10 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 DateTime.UtcNow;
 
+            // =================================================
+            // SAFETY INTERCEPTS
+            // =================================================
+
             if (
                 ContainsAny(
                     cleanMessage,
@@ -139,10 +200,11 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                return await SaveInterceptedResponseAsync(
-                    conversation,
-                    EmergencyResponse
-                );
+                return await
+                    SaveInterceptedResponseAsync(
+                        conversation,
+                        EmergencyResponse
+                    );
             }
 
             if (
@@ -152,36 +214,67 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                return await SaveInterceptedResponseAsync(
-                    conversation,
-                    UrgentResponse
-                );
+                return await
+                    SaveInterceptedResponseAsync(
+                        conversation,
+                        UrgentResponse
+                    );
             }
 
             /*
-             * Preserve the current behavior: persist the user's
-             * message before calling the external AI provider.
+             * Persist the patient's message before calling the
+             * external provider.
              */
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
-            var patientContext =
-                await BuildPatientContextAsync(
-                    patientId
-                );
+            string patientContext;
 
-            var messages =
-                conversation.Messages
-                    .OrderBy(
-                        message =>
-                            message.CreatedAt
-                    )
-                    .ToList();
+            IReadOnlyList<ChatMessage>
+                providerMessages;
+
+            if (
+                allowProfileAccess
+            )
+            {
+                patientContext =
+                    await BuildPatientContextAsync(
+                        patientId
+                    );
+
+                providerMessages =
+                    conversation.Messages
+                        .OrderBy(
+                            message =>
+                                message.CreatedAt
+                        )
+                        .ToList();
+            }
+            else
+            {
+                /*
+                 * Important privacy boundary:
+                 *
+                 * - no profile queries
+                 * - no old conversation history
+                 * - only this new message is sent to Gemini
+                 */
+                patientContext =
+                    ProfileAccessDisabledContext;
+
+                providerMessages =
+                    new List<ChatMessage>
+                    {
+                        userMessage
+                    };
+            }
 
             var responseText =
-                await _provider.GenerateResponseAsync(
-                    patientContext,
-                    messages
-                );
+                await _provider
+                    .GenerateResponseAsync(
+                        patientContext,
+                        providerMessages
+                    );
 
             if (
                 string.IsNullOrWhiteSpace(
@@ -210,13 +303,18 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 assistantMessage.CreatedAt;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return CreateResponse(
                 conversation,
                 assistantMessage
             );
         }
+
+        // =====================================================
+        // HISTORY
+        // =====================================================
 
         public async Task<ChatbotHistoryDto?>
             GetHistoryAsync(
@@ -228,21 +326,33 @@ namespace PersonalProject.Services.Implementations
                     userId
                 );
 
+            /*
+             * The patient may still view their own existing
+             * conversation history even when AI profile access
+             * is disabled.
+             *
+             * The privacy restriction controls what gets sent
+             * to the external AI provider.
+             */
             var conversation =
-                await _context.ChatConversations
+                await _context
+                    .ChatConversations
                     .AsNoTracking()
                     .Include(
-                        conversation =>
-                            conversation.Messages
+                        item =>
+                            item.Messages
                     )
                     .FirstOrDefaultAsync(
-                        conversation =>
-                            conversation.PatientId ==
+                        item =>
+                            item.PatientId ==
                                 patientId &&
-                            conversation.IsActive
+                            item.IsActive
                     );
 
-            if (conversation == null)
+            if (
+                conversation ==
+                    null
+            )
             {
                 return null;
             }
@@ -285,21 +395,23 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
-        public async Task ClearHistoryAsync(
-            Guid userId
-        )
+        // =====================================================
+        // CLEAR HISTORY
+        // =====================================================
+
+        public async Task
+            ClearHistoryAsync(
+                Guid userId
+            )
         {
             var patientId =
                 await GetActivePatientIdAsync(
                     userId
                 );
 
-            /*
-             * Tracking is intentionally kept because these rows
-             * are updated before SaveChangesAsync.
-             */
             var conversations =
-                await _context.ChatConversations
+                await _context
+                    .ChatConversations
                     .Where(
                         conversation =>
                             conversation.PatientId ==
@@ -320,8 +432,13 @@ namespace PersonalProject.Services.Implementations
                     DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
         }
+
+        // =====================================================
+        // INTERCEPTED RESPONSE
+        // =====================================================
 
         private async Task<ChatbotMessageResponseDto>
             SaveInterceptedResponseAsync(
@@ -346,7 +463,8 @@ namespace PersonalProject.Services.Implementations
             conversation.UpdatedAt =
                 assistantMessage.CreatedAt;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return CreateResponse(
                 conversation,
@@ -354,15 +472,15 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // PATIENT ACCESS
+        // =====================================================
+
         private async Task<Guid>
             GetActivePatientIdAsync(
                 Guid userId
             )
         {
-            /*
-             * Chatbot methods only need Patient.Id here. Avoid
-             * loading the full Patient + User entity graph.
-             */
             var patientId =
                 await _context.Patients
                     .AsNoTracking()
@@ -380,7 +498,10 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (patientId == null)
+            if (
+                patientId ==
+                    null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active Patient account required."
@@ -388,6 +509,35 @@ namespace PersonalProject.Services.Implementations
             }
 
             return patientId.Value;
+        }
+
+        private async Task<bool>
+            IsProfileAccessAllowedAsync(
+                Guid patientId
+            )
+        {
+            var value =
+                await _context
+                    .PatientPreferences
+                    .AsNoTracking()
+                    .Where(
+                        preference =>
+                            preference.PatientId ==
+                                patientId
+                    )
+                    .Select(
+                        preference =>
+                            (bool?)preference
+                                .AllowChatbotProfileAccess
+                    )
+                    .FirstOrDefaultAsync();
+
+            /*
+             * Existing accounts created before preferences
+             * existed retain the historical default of enabled.
+             */
+            return value ??
+                true;
         }
 
         // =====================================================
@@ -399,13 +549,13 @@ namespace PersonalProject.Services.Implementations
                 Guid patientId
             )
         {
-            /*
-             * These queries are prompt-building reads only, so
-             * they do not need change tracking.
-             */
+            var now =
+                DateTime.UtcNow;
+
             var medications =
                 await _context.Medications
                     .AsNoTracking()
+                    .AsSplitQuery()
                     .Include(
                         medication =>
                             medication.Schedules
@@ -414,11 +564,27 @@ namespace PersonalProject.Services.Implementations
                                         schedule.IsActive
                                 )
                     )
+                    .Include(
+                        medication =>
+                            medication.Logs
+                                .Where(
+                                    log =>
+                                        log.Taken
+                                )
+                    )
                     .Where(
                         medication =>
                             medication.PatientId ==
                                 patientId &&
-                            medication.IsActive
+                            medication.IsActive &&
+                            medication.StartDate <=
+                                now &&
+                            (
+                                medication.EndDate ==
+                                    null ||
+                                medication.EndDate >=
+                                    now
+                            )
                     )
                     .OrderBy(
                         medication =>
@@ -445,7 +611,8 @@ namespace PersonalProject.Services.Implementations
                     .ToListAsync();
 
             var conditions =
-                await _context.MedicalConditions
+                await _context
+                    .MedicalConditions
                     .AsNoTracking()
                     .Where(
                         condition =>
@@ -463,7 +630,8 @@ namespace PersonalProject.Services.Implementations
                     .ToListAsync();
 
             var latestAssessment =
-                await _context.SymptomAssessments
+                await _context
+                    .SymptomAssessments
                     .AsNoTracking()
                     .Where(
                         assessment =>
@@ -477,7 +645,8 @@ namespace PersonalProject.Services.Implementations
                     .FirstOrDefaultAsync();
 
             var completedCollections =
-                await _context.MedicationCollections
+                await _context
+                    .MedicationCollections
                     .AsNoTracking()
                     .Include(
                         collection =>
@@ -507,6 +676,7 @@ namespace PersonalProject.Services.Implementations
             );
 
             builder.AppendLine();
+
             builder.AppendLine(
                 "STORED PATIENT PROFILE"
             );
@@ -528,15 +698,19 @@ namespace PersonalProject.Services.Implementations
             );
 
             builder.AppendLine();
+
             builder.AppendLine(
                 "MEDICATION SUPPLY"
             );
 
             builder.AppendLine(
-                "Medication supply values are estimates calculated by PhilaLink from recorded collections, dose size and active schedules."
+                "Medication supply values are estimates based on the latest completed collection, the recorded dose size, the active schedule and doses that the patient has actually marked as taken."
             );
 
-            if (medications.Count == 0)
+            if (
+                medications.Count ==
+                    0
+            )
             {
                 builder.AppendLine(
                     "No active medications are recorded."
@@ -544,9 +718,6 @@ namespace PersonalProject.Services.Implementations
             }
             else
             {
-                var now =
-                    DateTime.UtcNow;
-
                 foreach (
                     var medication
                     in medications
@@ -563,6 +734,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             builder.AppendLine();
+
             builder.AppendLine(
                 "LATEST SYMPTOM ASSESSMENT"
             );
@@ -573,7 +745,10 @@ namespace PersonalProject.Services.Implementations
                 "Treat it as assessment-session information and do not claim that it changed the permanent profile."
             );
 
-            if (latestAssessment == null)
+            if (
+                latestAssessment ==
+                    null
+            )
             {
                 builder.AppendLine(
                     "No symptom assessment is recorded."
@@ -599,6 +774,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             builder.AppendLine();
+
             builder.AppendLine(
                 "CONTEXT RULES"
             );
@@ -612,7 +788,11 @@ namespace PersonalProject.Services.Implementations
             );
 
             builder.AppendLine(
-                "- Clearly describe medication supply as an estimate."
+                "- Medication supply is an estimate based on recorded data."
+            );
+
+            builder.AppendLine(
+                "- A medication marked as Taken counts as consumed supply; a medication marked as Skipped does not."
             );
 
             builder.AppendLine(
@@ -636,13 +816,23 @@ namespace PersonalProject.Services.Implementations
                 .Trim();
         }
 
-        private static string FormatMedicationList(
-            IReadOnlyCollection<Medication> medications
-        )
+        // =====================================================
+        // MEDICATION FORMAT
+        // =====================================================
+
+        private static string
+            FormatMedicationList(
+                IReadOnlyCollection<Medication>
+                    medications
+            )
         {
-            if (medications.Count == 0)
+            if (
+                medications.Count ==
+                    0
+            )
             {
-                return "None recorded";
+                return
+                    "None recorded";
             }
 
             return string.Join(
@@ -659,9 +849,10 @@ namespace PersonalProject.Services.Implementations
                             }
                             .Where(
                                 value =>
-                                    !string.IsNullOrWhiteSpace(
-                                        value
-                                    )
+                                    !string
+                                        .IsNullOrWhiteSpace(
+                                            value
+                                        )
                             );
 
                         return string.Join(
@@ -673,13 +864,19 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        private static string FormatStringList(
-            IReadOnlyCollection<string> values
-        )
+        private static string
+            FormatStringList(
+                IReadOnlyCollection<string>
+                    values
+            )
         {
-            if (values.Count == 0)
+            if (
+                values.Count ==
+                    0
+            )
             {
-                return "None recorded";
+                return
+                    "None recorded";
             }
 
             return string.Join(
@@ -716,11 +913,12 @@ namespace PersonalProject.Services.Implementations
                 completedCollections
                     .FirstOrDefault(
                         collection =>
-                            collection.Items.Any(
-                                item =>
-                                    item.MedicationId ==
-                                        medication.Id
-                            )
+                            collection.Items
+                                .Any(
+                                    item =>
+                                        item.MedicationId ==
+                                            medication.Id
+                                )
                     );
 
             var medicationLabel =
@@ -734,15 +932,18 @@ namespace PersonalProject.Services.Implementations
                     }
                     .Where(
                         value =>
-                            !string.IsNullOrWhiteSpace(
-                                value
-                            )
+                            !string
+                                .IsNullOrWhiteSpace(
+                                    value
+                                )
                     )
                 );
 
             if (
-                latestCollection == null ||
-                latestCollection.CollectedAt ==
+                latestCollection ==
+                    null ||
+                latestCollection
+                    .CollectedAt ==
                     null
             )
             {
@@ -766,7 +967,8 @@ namespace PersonalProject.Services.Implementations
             if (
                 medication.UnitsPerDose ==
                     null ||
-                medication.UnitsPerDose <= 0
+                medication.UnitsPerDose <=
+                    0
             )
             {
                 return
@@ -776,7 +978,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                activeSchedules.Count == 0
+                activeSchedules.Count ==
+                    0
             )
             {
                 return
@@ -787,19 +990,25 @@ namespace PersonalProject.Services.Implementations
 
             var collectedAt =
                 latestCollection
-                    .CollectedAt.Value;
+                    .CollectedAt
+                    .Value;
 
-            var scheduledDosesUsed =
-                CountScheduledDoses(
-                    collectedAt,
-                    now,
-                    activeSchedules
-                );
+            var recordedTakenDoses =
+                medication.Logs
+                    .Count(
+                        log =>
+                            log.Taken &&
+                            log.TakenAt >=
+                                collectedAt &&
+                            log.TakenAt <=
+                                now
+                    );
 
             var estimatedUnitsUsed =
-                scheduledDosesUsed *
+                recordedTakenDoses *
                 medication
-                    .UnitsPerDose.Value;
+                    .UnitsPerDose
+                    .Value;
 
             var estimatedRemaining =
                 Math.Max(
@@ -811,12 +1020,16 @@ namespace PersonalProject.Services.Implementations
             var unitsPerDay =
                 activeSchedules.Count *
                 medication
-                    .UnitsPerDose.Value;
+                    .UnitsPerDose
+                    .Value;
 
             int? daysRemaining =
                 null;
 
-            if (unitsPerDay > 0)
+            if (
+                unitsPerDay >
+                    0
+            )
             {
                 daysRemaining =
                     (int)Math.Floor(
@@ -825,7 +1038,10 @@ namespace PersonalProject.Services.Implementations
                     );
             }
 
-            if (!daysRemaining.HasValue)
+            if (
+                !daysRemaining
+                    .HasValue
+            )
             {
                 return
                     $"- {medicationLabel}: " +
@@ -837,76 +1053,29 @@ namespace PersonalProject.Services.Implementations
                 $"approximately {daysRemaining.Value} day(s) remaining; " +
                 $"estimated remaining quantity {estimatedRemaining:0.##} unit(s); " +
                 $"dispensed quantity {dispensedQuantity}; " +
+                $"recorded taken doses since the last collection {recordedTakenDoses}; " +
                 $"units per dose {medication.UnitsPerDose.Value:0.####}; " +
-                $"doses per day {activeSchedules.Count}; " +
+                $"scheduled doses per day {activeSchedules.Count}; " +
                 $"last collected {collectedAt:yyyy-MM-dd}.";
         }
 
-        private static int CountScheduledDoses(
-            DateTime from,
-            DateTime to,
-            IReadOnlyList<MedicationSchedule>
-                schedules
-        )
-        {
-            if (
-                schedules.Count == 0 ||
-                to <= from
+        // =====================================================
+        // KEYWORD MATCHING
+        // =====================================================
+
+        private static bool
+            ContainsAny(
+                string text,
+                IEnumerable<string>
+                    keywords
             )
-            {
-                return 0;
-            }
-
-            var count =
-                0;
-
-            var date =
-                from.Date;
-
-            var lastDate =
-                to.Date;
-
-            while (
-                date <= lastDate
-            )
-            {
-                foreach (
-                    var schedule
-                    in schedules
-                )
-                {
-                    var occurrence =
-                        date +
-                        schedule.TimeOfDay;
-
-                    if (
-                        occurrence >
-                            from &&
-                        occurrence <=
-                            to
-                    )
-                    {
-                        count++;
-                    }
-                }
-
-                date =
-                    date.AddDays(1);
-            }
-
-            return count;
-        }
-
-        private static bool ContainsAny(
-            string text,
-            IEnumerable<string> keywords
-        )
         {
             return keywords.Any(
                 keyword =>
                     text.Contains(
                         keyword,
-                        StringComparison.OrdinalIgnoreCase
+                        StringComparison
+                            .OrdinalIgnoreCase
                     )
             );
         }
@@ -961,6 +1130,10 @@ namespace PersonalProject.Services.Implementations
             "dehydration",
             "dehydrated"
         };
+
+        // =====================================================
+        // RESPONSE CREATION
+        // =====================================================
 
         private static ChatMessage
             CreateAssistantMessage(
