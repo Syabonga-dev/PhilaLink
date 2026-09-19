@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
@@ -10,67 +10,83 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/appointments")]
     [Authorize]
-    public class AppointmentsController : ControllerBase
+    public class AppointmentsController :
+        ControllerBase
     {
-        private readonly IAppointmentService _appointmentService;
+        private readonly IAppointmentService
+            _appointmentService;
 
         public AppointmentsController(
             IAppointmentService appointmentService
         )
         {
-            _appointmentService = appointmentService;
+            _appointmentService =
+                appointmentService;
         }
 
         // =====================================================
-        // CLINIC STAFF: ALL CLINIC APPOINTMENTS
+        // CLINIC STAFF: ALL
         // =====================================================
 
         [HttpGet]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> GetAll()
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            GetAll()
         {
             try
             {
-                var results =
+                return Ok(
                     await _appointmentService
                         .GetClinicAppointmentsAsync(
                             GetCurrentUserId()
-                        );
-
-                return Ok(results);
+                        )
+                );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
 
         // =====================================================
-        // PATIENT: OWN APPOINTMENTS
+        // PATIENT: OWN
         // =====================================================
 
         [HttpGet("me")]
-        [Authorize(Roles = RoleNames.Patient)]
+        [Authorize(
+            Roles = RoleNames.Patient
+        )]
         public async Task<IActionResult>
             GetMyAppointments()
         {
             try
             {
-                var results =
+                return Ok(
                     await _appointmentService
                         .GetPatientAppointmentsAsync(
                             GetCurrentUserId()
-                        );
-
-                return Ok(results);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(
-                    new { message = ex.Message }
+                        )
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                KeyNotFoundException ex
+            )
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -81,10 +97,13 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet("{id:guid}")]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> GetById(
-            Guid id
-        )
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            GetById(
+                Guid id
+            )
         {
             try
             {
@@ -95,11 +114,16 @@ namespace PersonalProject.Controllers
                             GetCurrentUserId()
                         );
 
-                return result == null
+                return result ==
+                    null
                     ? NotFound()
-                    : Ok(result);
+                    : Ok(
+                        result
+                    );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -110,10 +134,13 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> Create(
-            CreateAppointmentDto dto
-        )
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            Create(
+                CreateAppointmentDto dto
+            )
         {
             try
             {
@@ -125,24 +152,44 @@ namespace PersonalProject.Controllers
                         );
 
                 return CreatedAtAction(
-                    nameof(GetById),
-                    new { id = result.Id },
+                    nameof(
+                        GetById
+                    ),
+                    new
+                    {
+                        id =
+                            result.Id
+                    },
                     result
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
@@ -153,58 +200,132 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPut("{id:guid}")]
-        [Authorize(Policy = "ClinicStaff")]
-        public async Task<IActionResult> Update(
-            Guid id,
-            UpdateAppointmentDto dto
-        )
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            Update(
+                Guid id,
+                UpdateAppointmentDto dto
+            )
         {
             try
             {
-                var result =
+                return Ok(
                     await _appointmentService
                         .UpdateAsync(
                             id,
                             dto,
                             GetCurrentUserId()
-                        );
-
-                return Ok(result);
+                        )
+                );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
 
-        private Guid GetCurrentUserId()
+        // =====================================================
+        // CLINIC STAFF: DELETE
+        // =====================================================
+
+        [HttpDelete("{id:guid}")]
+        [Authorize(
+            Policy = "ClinicStaff"
+        )]
+        public async Task<IActionResult>
+            Delete(
+                Guid id
+            )
+        {
+            try
+            {
+                await _appointmentService
+                    .DeleteAsync(
+                        id,
+                        GetCurrentUserId()
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Appointment deleted."
+                    }
+                );
+            }
+            catch (
+                KeyNotFoundException ex
+            )
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // CURRENT USER
+        // =====================================================
+
+        private Guid
+            GetCurrentUserId()
         {
             var value =
                 User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
+                    ClaimTypes
+                        .NameIdentifier
                 );
 
             if (
-                string.IsNullOrWhiteSpace(value) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
                 !Guid.TryParse(
                     value,
                     out var userId
                 )
             )
             {
-                throw new UnauthorizedAccessException();
+                throw new
+                    UnauthorizedAccessException();
             }
 
             return userId;
