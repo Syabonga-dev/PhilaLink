@@ -10,8 +10,13 @@ namespace PersonalProject.Controllers
     [Route("api/auth/password-reset")]
     public class PasswordResetController : ControllerBase
     {
+        private const string GenericResetMessage =
+            "If an account matches those details, a verification code has been sent.";
+
         private readonly PhilaLinkDbContext _context;
-        private readonly IOtpVerificationService _otpService;
+
+        private readonly IOtpVerificationService
+            _otpService;
 
         public PasswordResetController(
             PhilaLinkDbContext context,
@@ -19,7 +24,9 @@ namespace PersonalProject.Controllers
         )
         {
             _context = context;
-            _otpService = otpService;
+
+            _otpService =
+                otpService;
         }
 
         // =====================================================
@@ -34,18 +41,25 @@ namespace PersonalProject.Controllers
             var identifier =
                 dto.Identifier.Trim();
 
+            var normalizedIdentifier =
+                identifier.ToLower();
+
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
                         u =>
-                            u.Email == identifier ||
-                            u.IdNumber == identifier
+                            u.IsActive &&
+                            (
+                                u.IdNumber ==
+                                    identifier ||
+                                u.Email.ToLower() ==
+                                    normalizedIdentifier
+                            )
                     );
 
             /*
-             * Always return the same message whether or not
-             * the account exists. This prevents account
-             * enumeration.
+             * Never reveal whether the supplied email or
+             * ID number belongs to a PhilaLink account.
              */
             if (user == null)
             {
@@ -53,23 +67,25 @@ namespace PersonalProject.Controllers
                     new
                     {
                         message =
-                            "If an account matches those details, a verification code has been sent."
+                            GenericResetMessage
                     }
                 );
             }
 
             try
             {
-                await _otpService.GenerateAsync(
-                    user.Id,
-                    "PasswordReset"
-                );
+                await _otpService
+                    .GenerateAsync(
+                        user.Id,
+                        "PasswordReset"
+                    );
             }
             catch (InvalidOperationException)
             {
                 /*
-                 * Do not expose whether an account exists
-                 * or whether email delivery failed.
+                 * Keep the public response identical even
+                 * when delivery fails or resend cooldown
+                 * is active.
                  */
             }
 
@@ -77,7 +93,7 @@ namespace PersonalProject.Controllers
                 new
                 {
                     message =
-                        "If an account matches those details, a verification code has been sent."
+                        GenericResetMessage
                 }
             );
         }
@@ -105,15 +121,47 @@ namespace PersonalProject.Controllers
                 );
             }
 
+            var passwordError =
+                GetPasswordValidationError(
+                    dto.NewPassword
+                );
+
+            /*
+             * Validate the password before consuming the OTP.
+             * A valid OTP should not be wasted because the
+             * chosen password failed the password policy.
+             */
+            if (
+                passwordError !=
+                null
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            passwordError
+                    }
+                );
+            }
+
             var identifier =
                 dto.Identifier.Trim();
+
+            var normalizedIdentifier =
+                identifier.ToLower();
 
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
                         u =>
-                            u.Email == identifier ||
-                            u.IdNumber == identifier
+                            u.IsActive &&
+                            (
+                                u.IdNumber ==
+                                    identifier ||
+                                u.Email.ToLower() ==
+                                    normalizedIdentifier
+                            )
                     );
 
             if (user == null)
@@ -128,11 +176,12 @@ namespace PersonalProject.Controllers
             }
 
             var verified =
-                await _otpService.VerifyAsync(
-                    user.Id,
-                    dto.Code,
-                    "PasswordReset"
-                );
+                await _otpService
+                    .VerifyAsync(
+                        user.Id,
+                        dto.Code,
+                        "PasswordReset"
+                    );
 
             if (!verified)
             {
@@ -141,20 +190,6 @@ namespace PersonalProject.Controllers
                     {
                         message =
                             "Invalid or expired verification code."
-                    }
-                );
-            }
-
-            if (
-                dto.NewPassword.Length <
-                12
-            )
-            {
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            "Password must contain at least 12 characters."
                     }
                 );
             }
@@ -170,7 +205,8 @@ namespace PersonalProject.Controllers
             user.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return Ok(
                 new
@@ -179,6 +215,72 @@ namespace PersonalProject.Controllers
                         "Password reset successfully."
                 }
             );
+        }
+
+        // =====================================================
+        // PASSWORD POLICY
+        // =====================================================
+
+        private static string?
+            GetPasswordValidationError(
+                string password
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    password
+                ) ||
+                password.Length < 12
+            )
+            {
+                return
+                    "Password must contain at least 12 characters.";
+            }
+
+            if (
+                !password.Any(
+                    char.IsUpper
+                )
+            )
+            {
+                return
+                    "Password must contain at least one uppercase letter.";
+            }
+
+            if (
+                !password.Any(
+                    char.IsLower
+                )
+            )
+            {
+                return
+                    "Password must contain at least one lowercase letter.";
+            }
+
+            if (
+                !password.Any(
+                    char.IsDigit
+                )
+            )
+            {
+                return
+                    "Password must contain at least one number.";
+            }
+
+            if (
+                !password.Any(
+                    character =>
+                        !char.IsLetterOrDigit(
+                            character
+                        )
+                )
+            )
+            {
+                return
+                    "Password must contain at least one special character.";
+            }
+
+            return null;
         }
     }
 }
