@@ -94,6 +94,73 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
+        // GOOGLE OAUTH CALLBACK
+        // =====================================================
+
+        [HttpGet("google-callback")]
+        [AllowAnonymous]
+        public IActionResult GoogleCallback(
+            [FromQuery] string? code,
+            [FromQuery] string? error
+        )
+        {
+            if (
+                !string.IsNullOrWhiteSpace(
+                    error
+                )
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Google authentication failed.",
+
+                        error
+                    }
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    code
+                )
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Google authorization code was not provided."
+                    }
+                );
+            }
+
+            /*
+             * The Google authorization code is received here.
+             *
+             * The next step will be to exchange this code
+             * for Google tokens in the authentication service,
+             * obtain the user's Google profile,
+             * create/find the PhilaLink user,
+             * and return the normal PhilaLink JWT.
+             *
+             * That service logic will be added separately so
+             * the existing authentication system is not broken.
+             */
+
+            return Ok(
+                new
+                {
+                    message =
+                        "Google authorization callback received successfully.",
+
+                    code
+                }
+            );
+        }
+
+        // =====================================================
         // CURRENT USER
         // =====================================================
 
