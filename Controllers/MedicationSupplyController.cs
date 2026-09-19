@@ -12,32 +12,30 @@ namespace PersonalProject.Controllers
     [ApiController]
     [Route("api/medications/me/supply")]
     [Authorize(Roles = RoleNames.Patient)]
-    public class MedicationSupplyController : ControllerBase
+    public class MedicationSupplyController :
+        ControllerBase
     {
-        private readonly PhilaLinkDbContext _context;
+        private readonly PhilaLinkDbContext
+            _context;
 
         public MedicationSupplyController(
             PhilaLinkDbContext context
         )
         {
-            _context = context;
+            _context =
+                context;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetMySupply(
-            CancellationToken cancellationToken
-        )
+        public async Task<IActionResult>
+            GetMySupply(
+                CancellationToken
+                    cancellationToken
+            )
         {
             var userId =
                 GetCurrentUserId();
 
-            /*
-             * Only retrieve the Patient ID.
-             *
-             * The old implementation loaded the complete
-             * Patient + User entity even though this endpoint
-             * only needs Patient.Id.
-             */
             var patientId =
                 await _context.Patients
                     .AsNoTracking()
@@ -57,7 +55,10 @@ namespace PersonalProject.Controllers
                         cancellationToken
                     );
 
-            if (patientId == null)
+            if (
+                patientId ==
+                    null
+            )
             {
                 return NotFound(
                     new
@@ -68,12 +69,9 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            /*
-             * Only active medications are required.
-             *
-             * Only active schedules are loaded.
-             * Tracking is unnecessary for this read-only request.
-             */
+            var now =
+                DateTime.UtcNow;
+
             var medications =
                 await _context.Medications
                     .AsNoTracking()
@@ -89,7 +87,15 @@ namespace PersonalProject.Controllers
                         medication =>
                             medication.PatientId ==
                                 patientId.Value &&
-                            medication.IsActive
+                            medication.IsActive &&
+                            medication.StartDate <=
+                                now &&
+                            (
+                                medication.EndDate ==
+                                    null ||
+                                medication.EndDate >=
+                                    now
+                            )
                     )
                     .OrderBy(
                         medication =>
@@ -99,7 +105,10 @@ namespace PersonalProject.Controllers
                         cancellationToken
                     );
 
-            if (medications.Count == 0)
+            if (
+                medications.Count ==
+                    0
+            )
             {
                 return Ok(
                     Array.Empty<
@@ -116,16 +125,10 @@ namespace PersonalProject.Controllers
                     )
                     .ToList();
 
-            /*
-             * The old implementation loaded every completed
-             * MedicationCollection entity plus its Items.
-             *
-             * We only need:
-             * - collection ID
-             * - medication ID
-             * - quantity
-             * - collected timestamp
-             */
+            // =================================================
+            // LATEST COMPLETED COLLECTION
+            // =================================================
+
             var collectedItems =
                 await _context
                     .MedicationCollectionItems
@@ -174,10 +177,6 @@ namespace PersonalProject.Controllers
                         cancellationToken
                     );
 
-            /*
-             * Find only the latest completed collection
-             * for each medication.
-             */
             var latestDispenseByMedication =
                 collectedItems
                     .GroupBy(
@@ -225,8 +224,43 @@ namespace PersonalProject.Controllers
                         }
                     );
 
-            var now =
-                DateTime.UtcNow;
+            // =================================================
+            // ACTUAL TAKEN DOSES
+            // =================================================
+
+            /*
+             * Supply now decreases when the patient explicitly
+             * marks a dose as Taken.
+             *
+             * Skipped entries do not consume supply.
+             */
+            var takenLogs =
+                await _context
+                    .MedicationLogs
+                    .AsNoTracking()
+                    .Where(
+                        log =>
+                            medicationIds.Contains(
+                                log.MedicationId
+                            ) &&
+                            log.Taken &&
+                            log.TakenAt <=
+                                now
+                    )
+                    .Select(
+                        log =>
+                            new TakenLogRow
+                            {
+                                MedicationId =
+                                    log.MedicationId,
+
+                                TakenAt =
+                                    log.TakenAt
+                            }
+                    )
+                    .ToListAsync(
+                        cancellationToken
+                    );
 
             var result =
                 medications
@@ -242,19 +276,29 @@ namespace PersonalProject.Controllers
                             return BuildSupplyDto(
                                 medication,
                                 latestDispense,
+                                takenLogs,
                                 now
                             );
                         }
                     )
                     .ToList();
 
-            return Ok(result);
+            return Ok(
+                result
+            );
         }
+
+        // =====================================================
+        // CALCULATION
+        // =====================================================
 
         private static MedicationSupplyDto
             BuildSupplyDto(
                 Medication medication,
-                LatestDispense? latestDispense,
+                LatestDispense?
+                    latestDispense,
+                IReadOnlyCollection<TakenLogRow>
+                    takenLogs,
                 DateTime now
             )
         {
@@ -270,7 +314,10 @@ namespace PersonalProject.Controllers
                     )
                     .ToList();
 
-            if (latestDispense == null)
+            if (
+                latestDispense ==
+                    null
+            )
             {
                 return new MedicationSupplyDto
                 {
@@ -400,19 +447,20 @@ namespace PersonalProject.Controllers
                 };
             }
 
-            var collectedAt =
-                latestDispense
-                    .CollectedAt;
-
-            var scheduledDosesUsed =
-                CountScheduledDoses(
-                    collectedAt,
-                    now,
-                    activeSchedules
+            var recordedTakenDoses =
+                takenLogs.Count(
+                    log =>
+                        log.MedicationId ==
+                            medication.Id &&
+                        log.TakenAt >=
+                            latestDispense
+                                .CollectedAt &&
+                        log.TakenAt <=
+                            now
                 );
 
             var estimatedUnitsUsed =
-                scheduledDosesUsed *
+                recordedTakenDoses *
                 medication
                     .UnitsPerDose
                     .Value;
@@ -433,7 +481,10 @@ namespace PersonalProject.Controllers
             int? daysRemaining =
                 null;
 
-            if (unitsPerDay > 0)
+            if (
+                unitsPerDay >
+                    0
+            )
             {
                 daysRemaining =
                     (int)Math.Floor(
@@ -472,73 +523,20 @@ namespace PersonalProject.Controllers
                     daysRemaining,
 
                 LastCollectedAt =
-                    collectedAt,
+                    latestDispense
+                        .CollectedAt,
 
                 CalculationStatus =
                     "Available"
             };
         }
 
-        private static int CountScheduledDoses(
-            DateTime from,
-            DateTime to,
-            IReadOnlyList<
-                MedicationSchedule
-            > schedules
-        )
-        {
-            if (
-                schedules.Count ==
-                    0 ||
-                to <= from
-            )
-            {
-                return 0;
-            }
+        // =====================================================
+        // CURRENT USER
+        // =====================================================
 
-            var count =
-                0;
-
-            var date =
-                from.Date;
-
-            var lastDate =
-                to.Date;
-
-            while (
-                date <= lastDate
-            )
-            {
-                foreach (
-                    var schedule
-                    in schedules
-                )
-                {
-                    var occurrence =
-                        date +
-                        schedule.TimeOfDay;
-
-                    if (
-                        occurrence >
-                            from &&
-                        occurrence <=
-                            to
-                    )
-                    {
-                        count++;
-                    }
-                }
-
-                date =
-                    date.AddDays(
-                        1
-                    );
-            }
-
-            return count;
-        }
-
-        private Guid GetCurrentUserId()
+        private Guid
+            GetCurrentUserId()
         {
             var value =
                 User.FindFirstValue(
@@ -562,6 +560,10 @@ namespace PersonalProject.Controllers
 
             return userId;
         }
+
+        // =====================================================
+        // INTERNAL MODELS
+        // =====================================================
 
         private sealed class
             CollectedItemRow
@@ -601,6 +603,22 @@ namespace PersonalProject.Controllers
             }
 
             public DateTime CollectedAt
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class
+            TakenLogRow
+        {
+            public Guid MedicationId
+            {
+                get;
+                init;
+            }
+
+            public DateTime TakenAt
             {
                 get;
                 init;
