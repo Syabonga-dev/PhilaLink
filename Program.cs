@@ -103,7 +103,7 @@ builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
     client =>
     {
         client.Timeout =
-            TimeSpan.FromSeconds(20);
+            TimeSpan.FromSeconds(45);
     }
 );
 
