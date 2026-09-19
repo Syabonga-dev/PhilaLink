@@ -9,20 +9,27 @@ namespace PersonalProject.Services.Implementations
     public class NotificationService :
         INotificationService
     {
-        private readonly PhilaLinkDbContext _context;
+        private readonly PhilaLinkDbContext
+            _context;
 
         public NotificationService(
             PhilaLinkDbContext context
         )
         {
-            _context = context;
+            _context =
+                context;
         }
 
-        public async Task CreateForPatientAsync(
-            Guid patientUserId,
-            string message,
-            Guid performedByUserId
-        )
+        // =====================================================
+        // CLINIC STAFF NOTIFICATION
+        // =====================================================
+
+        public async Task<bool>
+            CreateForPatientAsync(
+                Guid patientUserId,
+                string message,
+                Guid performedByUserId
+            )
         {
             if (
                 string.IsNullOrWhiteSpace(
@@ -35,12 +42,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * Only retrieve the staff information required
-             * for authorization.
-             *
-             * Do not load complete User/Admin/Nurse graphs.
-             */
             var staff =
                 await _context.Users
                     .AsNoTracking()
@@ -58,14 +59,16 @@ namespace PersonalProject.Services.Implementations
                                     user.Role,
 
                                 AdminClinicId =
-                                    user.Admin == null
+                                    user.Admin ==
+                                        null
                                         ? null
                                         : user
                                             .Admin
                                             .ClinicId,
 
                                 NurseClinicId =
-                                    user.Nurse == null
+                                    user.Nurse ==
+                                        null
                                         ? null
                                         : (Guid?)user
                                             .Nurse
@@ -92,7 +95,9 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 staffClinicId =
-                    staff.AdminClinicId.Value;
+                    staff
+                        .AdminClinicId
+                        .Value;
             }
             else if (
                 staff.Role ==
@@ -102,7 +107,9 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 staffClinicId =
-                    staff.NurseClinicId.Value;
+                    staff
+                        .NurseClinicId
+                        .Value;
             }
             else
             {
@@ -111,13 +118,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * Only the patient's user ID and clinic ID
-             * are required here.
-             *
-             * This preserves the existing active-patient
-             * and same-clinic validation.
-             */
             var patient =
                 await _context.Patients
                     .AsNoTracking()
@@ -137,7 +137,15 @@ namespace PersonalProject.Services.Implementations
                                     item.UserId,
 
                                 ClinicId =
-                                    item.ClinicId
+                                    item.ClinicId,
+
+                                ClinicNotifications =
+                                    item.Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Preference
+                                            .ClinicNotifications
                             }
                     )
                     .FirstOrDefaultAsync();
@@ -159,6 +167,22 @@ namespace PersonalProject.Services.Implementations
                 throw new UnauthorizedAccessException(
                     "Patient does not belong to your clinic."
                 );
+            }
+
+            /*
+             * Respect the patient's explicit notification
+             * preference.
+             *
+             * This only controls ordinary clinic messages.
+             * Appointment reminders and health/weather updates
+             * use their own dedicated preferences.
+             */
+            if (
+                !patient
+                    .ClinicNotifications
+            )
+            {
+                return false;
             }
 
             var notification =
@@ -184,8 +208,15 @@ namespace PersonalProject.Services.Implementations
                 notification
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
+
+            return true;
         }
+
+        // =====================================================
+        // SYSTEM NOTIFICATION
+        // =====================================================
 
         public async Task<bool>
             CreateSystemForPatientAsync(
@@ -204,10 +235,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * AnyAsync generates an EXISTS query.
-             * No Include is required.
-             */
             var patientExists =
                 await _context.Patients
                     .AsNoTracking()
@@ -230,12 +257,20 @@ namespace PersonalProject.Services.Implementations
             var trimmedMessage =
                 message.Trim();
 
+            /*
+             * Keep the existing general-purpose duplicate
+             * protection for system notifications.
+             *
+             * Weather notifications use their own shorter
+             * duplicate window in WeatherController.
+             */
             var duplicateCutoff =
                 DateTime.UtcNow
                     .AddHours(-12);
 
             var duplicateExists =
-                await _context.Notifications
+                await _context
+                    .Notifications
                     .AsNoTracking()
                     .AnyAsync(
                         notification =>
@@ -275,10 +310,15 @@ namespace PersonalProject.Services.Implementations
                 notification
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return true;
         }
+
+        // =====================================================
+        // INTERNAL MODELS
+        // =====================================================
 
         private sealed class
             StaffNotificationAccess
@@ -312,6 +352,12 @@ namespace PersonalProject.Services.Implementations
             }
 
             public Guid? ClinicId
+            {
+                get;
+                init;
+            }
+
+            public bool ClinicNotifications
             {
                 get;
                 init;
