@@ -2,7 +2,7 @@ namespace PersonalProject.Services.Interfaces
 {
     public interface INotificationService
     {
-        Task CreateForPatientAsync(
+        Task<bool> CreateForPatientAsync(
             Guid patientUserId,
             string message,
             Guid performedByUserId
