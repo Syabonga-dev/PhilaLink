@@ -9,6 +9,8 @@ using PersonalProject.Services.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PersonalProject.Services.Implementations
 {
@@ -16,6 +18,9 @@ namespace PersonalProject.Services.Implementations
     {
         private readonly PhilaLinkDbContext _context;
         private readonly IConfiguration _config;
+
+        private static readonly HttpClient GoogleHttpClient =
+            new HttpClient();
 
         public AuthService(
             PhilaLinkDbContext context,
@@ -253,6 +258,432 @@ namespace PersonalProject.Services.Implementations
             return CreateLoginResponse(
                 user
             );
+        }
+
+        // =====================================================
+        // GOOGLE OAUTH AUTHORIZATION URL
+        // =====================================================
+
+        public string GetGoogleAuthorizationUrl(
+            string state
+        )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    state
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Google OAuth state is required."
+                );
+            }
+
+            var clientId =
+                GetGoogleConfiguration(
+                    "ClientId"
+                );
+
+            var redirectUri =
+                GetGoogleConfiguration(
+                    "RedirectUri"
+                );
+
+            var scope =
+                "openid email profile";
+
+            return
+                "https://accounts.google.com/o/oauth2/v2/auth" +
+                "?client_id=" +
+                Uri.EscapeDataString(
+                    clientId
+                ) +
+                "&redirect_uri=" +
+                Uri.EscapeDataString(
+                    redirectUri
+                ) +
+                "&response_type=code" +
+                "&scope=" +
+                Uri.EscapeDataString(
+                    scope
+                ) +
+                "&state=" +
+                Uri.EscapeDataString(
+                    state
+                ) +
+                "&prompt=select_account";
+        }
+
+        // =====================================================
+        // GOOGLE LOGIN
+        // =====================================================
+
+        public async Task<LoginResponseDto> GoogleLoginAsync(
+            string authorizationCode
+        )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    authorizationCode
+                )
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Google authorization code is missing."
+                );
+            }
+
+            var clientId =
+                GetGoogleConfiguration(
+                    "ClientId"
+                );
+
+            var clientSecret =
+                GetGoogleConfiguration(
+                    "ClientSecret"
+                );
+
+            var redirectUri =
+                GetGoogleConfiguration(
+                    "RedirectUri"
+                );
+
+            using var tokenRequest =
+                new FormUrlEncodedContent(
+                    new Dictionary<string, string>
+                    {
+                        {
+                            "code",
+                            authorizationCode
+                        },
+
+                        {
+                            "client_id",
+                            clientId
+                        },
+
+                        {
+                            "client_secret",
+                            clientSecret
+                        },
+
+                        {
+                            "redirect_uri",
+                            redirectUri
+                        },
+
+                        {
+                            "grant_type",
+                            "authorization_code"
+                        }
+                    }
+                );
+
+            HttpResponseMessage tokenResponse;
+
+            try
+            {
+                tokenResponse =
+                    await GoogleHttpClient.PostAsync(
+                        "https://oauth2.googleapis.com/token",
+                        tokenRequest
+                    );
+            }
+            catch (
+                HttpRequestException
+            )
+            {
+                throw new InvalidOperationException(
+                    "Google authentication service could not be reached."
+                );
+            }
+
+            using (tokenResponse)
+            {
+                if (!tokenResponse.IsSuccessStatusCode)
+                {
+                    throw new UnauthorizedAccessException(
+                        "Google authorization could not be completed."
+                    );
+                }
+
+                var responseJson =
+                    await tokenResponse.Content
+                        .ReadAsStringAsync();
+
+                var googleTokens =
+                    JsonSerializer.Deserialize
+                        <GoogleTokenResponse>(
+                            responseJson
+                        );
+
+                if (
+                    googleTokens == null ||
+                    string.IsNullOrWhiteSpace(
+                        googleTokens.IdToken
+                    )
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "Google did not return a valid identity token."
+                    );
+                }
+
+                var googlePrincipal =
+                    await ValidateGoogleIdTokenAsync(
+                        googleTokens.IdToken,
+                        clientId
+                    );
+
+                var email =
+                    googlePrincipal
+                        .FindFirst("email")
+                        ?.Value
+                    ??
+                    googlePrincipal
+                        .FindFirst(
+                            ClaimTypes.Email
+                        )
+                        ?.Value;
+
+                var emailVerified =
+                    googlePrincipal
+                        .FindFirst(
+                            "email_verified"
+                        )
+                        ?.Value;
+
+                if (
+                    string.IsNullOrWhiteSpace(
+                        email
+                    )
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "Google account email was not provided."
+                    );
+                }
+
+                if (
+                    !string.Equals(
+                        emailVerified,
+                        "true",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "The Google account email is not verified."
+                    );
+                }
+
+                var normalizedEmail =
+                    email
+                        .Trim()
+                        .ToLowerInvariant();
+
+                /*
+                 * Google OAuth does not create a new PhilaLink
+                 * account here because a PhilaLink user requires
+                 * information Google cannot provide, such as
+                 * ID number and phone number.
+                 *
+                 * Instead, Google authenticates an existing
+                 * PhilaLink account with the same verified email.
+                 */
+                var user =
+                    await _context.Users
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(
+                            item =>
+                                item.Email
+                                    .ToLower() ==
+                                normalizedEmail
+                        );
+
+                if (user == null)
+                {
+                    throw new UnauthorizedAccessException(
+                        "No PhilaLink account is linked to this Google email. Register with PhilaLink first."
+                    );
+                }
+
+                if (!user.IsActive)
+                {
+                    throw new UnauthorizedAccessException(
+                        "This account is inactive. Contact an administrator."
+                    );
+                }
+
+                if (
+                    user.Role ==
+                        RoleNames.Patient &&
+                    !user.IsVerified
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "Account verification is required before login."
+                    );
+                }
+
+                if (
+                    !RoleNames.IsValid(
+                        user.Role
+                    )
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "This account has an unsupported role. Contact an administrator."
+                    );
+                }
+
+                return CreateLoginResponse(
+                    user
+                );
+            }
+        }
+
+        // =====================================================
+        // GOOGLE TOKEN VALIDATION
+        // =====================================================
+
+        private async Task<ClaimsPrincipal>
+            ValidateGoogleIdTokenAsync(
+                string idToken,
+                string clientId
+            )
+        {
+            string googleKeysJson;
+
+            try
+            {
+                googleKeysJson =
+                    await GoogleHttpClient
+                        .GetStringAsync(
+                            "https://www.googleapis.com/oauth2/v3/certs"
+                        );
+            }
+            catch (
+                HttpRequestException
+            )
+            {
+                throw new InvalidOperationException(
+                    "Google signing keys could not be retrieved."
+                );
+            }
+
+            var googleKeys =
+                new JsonWebKeySet(
+                    googleKeysJson
+                );
+
+            var validationParameters =
+                new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey =
+                        true,
+
+                    IssuerSigningKeys =
+                        googleKeys.GetSigningKeys(),
+
+                    ValidateIssuer =
+                        true,
+
+                    ValidIssuers =
+                        new[]
+                        {
+                            "https://accounts.google.com",
+                            "accounts.google.com"
+                        },
+
+                    ValidateAudience =
+                        true,
+
+                    ValidAudience =
+                        clientId,
+
+                    ValidateLifetime =
+                        true,
+
+                    RequireExpirationTime =
+                        true,
+
+                    ClockSkew =
+                        TimeSpan.FromMinutes(2)
+                };
+
+            var tokenHandler =
+                new JwtSecurityTokenHandler();
+
+            try
+            {
+                var principal =
+                    tokenHandler.ValidateToken(
+                        idToken,
+                        validationParameters,
+                        out var validatedToken
+                    );
+
+                if (
+                    validatedToken
+                        is not JwtSecurityToken jwtToken
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "Google identity token is invalid."
+                    );
+                }
+
+                if (
+                    !string.Equals(
+                        jwtToken.Header.Alg,
+                        SecurityAlgorithms.RsaSha256,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    throw new UnauthorizedAccessException(
+                        "Google identity token uses an unsupported signing algorithm."
+                    );
+                }
+
+                return principal;
+            }
+            catch (
+                SecurityTokenException
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Google identity token validation failed."
+                );
+            }
+        }
+
+        // =====================================================
+        // GOOGLE CONFIGURATION
+        // =====================================================
+
+        private string GetGoogleConfiguration(
+            string name
+        )
+        {
+            var value =
+                _config[
+                    $"GoogleOAuth:{name}"
+                ];
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    $"Google OAuth configuration is missing: GoogleOAuth:{name}."
+                );
+            }
+
+            return value;
         }
 
         // =====================================================
@@ -641,6 +1072,48 @@ namespace PersonalProject.Services.Implementations
                 .WriteToken(
                     token
                 );
+        }
+
+        // =====================================================
+        // GOOGLE TOKEN RESPONSE
+        // =====================================================
+
+        private sealed class GoogleTokenResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string? AccessToken
+            {
+                get;
+                set;
+            }
+
+            [JsonPropertyName("id_token")]
+            public string? IdToken
+            {
+                get;
+                set;
+            }
+
+            [JsonPropertyName("expires_in")]
+            public int ExpiresIn
+            {
+                get;
+                set;
+            }
+
+            [JsonPropertyName("token_type")]
+            public string? TokenType
+            {
+                get;
+                set;
+            }
+
+            [JsonPropertyName("scope")]
+            public string? Scope
+            {
+                get;
+                set;
+            }
         }
     }
 }
