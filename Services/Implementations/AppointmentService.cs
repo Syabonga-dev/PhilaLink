@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
@@ -7,21 +8,53 @@ using PersonalProject.Services.Interfaces;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class AppointmentService : IAppointmentService
+    public class AppointmentService :
+        IAppointmentService
     {
-        private readonly PhilaLinkDbContext _context;
-        private readonly IAuditLogService _audit;
+        private static readonly TimeZoneInfo
+            SouthAfricaTimeZone =
+                ResolveSouthAfricaTimeZone();
+
+        private readonly PhilaLinkDbContext
+            _context;
+
+        private readonly IAuditLogService
+            _audit;
+
+        private readonly INotificationService
+            _notificationService;
+
+        private readonly ILogger<
+            AppointmentService
+        > _logger;
 
         public AppointmentService(
             PhilaLinkDbContext context,
-            IAuditLogService audit
+            IAuditLogService audit,
+            INotificationService notificationService,
+            ILogger<AppointmentService> logger
         )
         {
-            _context = context;
-            _audit = audit;
+            _context =
+                context;
+
+            _audit =
+                audit;
+
+            _notificationService =
+                notificationService;
+
+            _logger =
+                logger;
         }
 
-        public async Task<AppointmentResponseDto> CreateAsync(
+        // =====================================================
+        // CREATE
+        // =====================================================
+
+        public async Task<
+            AppointmentResponseDto
+        > CreateAsync(
             CreateAppointmentDto dto,
             Guid performedByUserId
         )
@@ -31,41 +64,62 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            if (dto.ClinicId != clinicId)
+            if (
+                dto.ClinicId !=
+                    clinicId
+            )
             {
                 throw new UnauthorizedAccessException(
                     "You can only create appointments for your clinic."
                 );
             }
 
-            if (dto.ScheduledAt <= DateTime.UtcNow)
+            if (
+                dto.ScheduledAt <=
+                    DateTime.UtcNow
+            )
             {
                 throw new InvalidOperationException(
                     "Appointment date must be in the future."
                 );
             }
 
-            if (dto.DurationMinutes <= 0)
+            if (
+                dto.DurationMinutes <=
+                    0
+            )
             {
                 throw new InvalidOperationException(
                     "Appointment duration must be greater than zero."
                 );
             }
 
-            var patient = await _context.Patients
-                .Include(p => p.User)
-                .FirstOrDefaultAsync(
-                    p => p.Id == dto.PatientId
-                );
+            var patient =
+                await _context.Patients
+                    .Include(
+                        patient =>
+                            patient.User
+                    )
+                    .FirstOrDefaultAsync(
+                        patient =>
+                            patient.Id ==
+                                dto.PatientId
+                    );
 
-            if (patient == null)
+            if (
+                patient ==
+                    null
+            )
             {
                 throw new KeyNotFoundException(
                     "Patient not found."
                 );
             }
 
-            if (patient.ClinicId != clinicId)
+            if (
+                patient.ClinicId !=
+                    clinicId
+            )
             {
                 throw new UnauthorizedAccessException(
                     "The patient does not belong to your clinic."
@@ -77,43 +131,65 @@ namespace PersonalProject.Services.Implementations
                 clinicId
             );
 
-            var appointment = new Appointment
-            {
-                Id = Guid.NewGuid(),
+            var appointment =
+                new Appointment
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                PatientId = dto.PatientId,
+                    PatientId =
+                        dto.PatientId,
 
-                ClinicId = clinicId,
+                    ClinicId =
+                        clinicId,
 
-                NurseId = dto.NurseId,
+                    NurseId =
+                        dto.NurseId,
 
-                ScheduledAt = dto.ScheduledAt,
+                    ScheduledAt =
+                        dto.ScheduledAt,
 
-                DurationMinutes = dto.DurationMinutes,
+                    DurationMinutes =
+                        dto.DurationMinutes,
 
-                Type = dto.Type.Trim(),
+                    Type =
+                        dto.Type.Trim(),
 
-                Reason = dto.Reason.Trim(),
+                    Reason =
+                        dto.Reason.Trim(),
 
-                ProviderName =
-                    string.IsNullOrWhiteSpace(
-                        dto.ProviderName
-                    )
-                        ? null
-                        : dto.ProviderName.Trim(),
+                    ProviderName =
+                        string.IsNullOrWhiteSpace(
+                            dto.ProviderName
+                        )
+                            ? null
+                            : dto
+                                .ProviderName
+                                .Trim(),
 
-                Mode = AppointmentModes.Normalize(dto.Mode),
+                    Mode =
+                        AppointmentModes
+                            .Normalize(
+                                dto.Mode
+                            ),
 
-                Status = AppointmentStatuses.Scheduled,
+                    Status =
+                        AppointmentStatuses
+                            .Scheduled,
 
-                Notes = dto.Notes,
+                    Notes =
+                        dto.Notes,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.Appointments.Add(appointment);
+            _context.Appointments.Add(
+                appointment
+            );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "AppointmentCreated",
@@ -122,39 +198,76 @@ namespace PersonalProject.Services.Implementations
                 $"for patient {patient.Id}."
             );
 
-            return (
-                await GetAppointmentQuery()
-                    .FirstAsync(
-                        a => a.Id == appointment.Id
-                    )
-            ).ToDto();
+            var result =
+                (
+                    await GetAppointmentQuery()
+                        .FirstAsync(
+                            item =>
+                                item.Id ==
+                                    appointment.Id
+                        )
+                )
+                .ToDto();
+
+            await TryNotifyAppointmentAsync(
+                patient.UserId,
+                result
+            );
+
+            return result;
         }
 
-        public async Task<AppointmentResponseDto> UpdateAsync(
+        // =====================================================
+        // UPDATE
+        // Includes confirmation / approval, rescheduling,
+        // cancellation, completion and other status changes.
+        // =====================================================
+
+        public async Task<
+            AppointmentResponseDto
+        > UpdateAsync(
             Guid appointmentId,
             UpdateAppointmentDto dto,
             Guid performedByUserId
         )
         {
-            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
 
-            var appointment = await _context.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
+            var appointment =
+                await GetAppointmentQuery()
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                appointmentId
+                    );
 
-            if (appointment == null)
+            if (
+                appointment ==
+                    null
+            )
             {
                 throw new KeyNotFoundException(
                     "Appointment not found."
                 );
             }
 
-            if (appointment.ClinicId != clinicId)
+            if (
+                appointment.ClinicId !=
+                    clinicId
+            )
             {
                 throw new UnauthorizedAccessException(
                     "You cannot manage appointments from another clinic."
                 );
             }
 
-            if (dto.DurationMinutes <= 0)
+            if (
+                dto.DurationMinutes <=
+                    0
+            )
             {
                 throw new InvalidOperationException(
                     "Appointment duration must be greater than zero."
@@ -166,18 +279,49 @@ namespace PersonalProject.Services.Implementations
                 clinicId
             );
 
-            appointment.ScheduledAt = dto.ScheduledAt;
-            appointment.DurationMinutes = dto.DurationMinutes;
-            appointment.NurseId = dto.NurseId;
-            appointment.Type = dto.Type.Trim();
-            appointment.Reason = dto.Reason.Trim();
-            appointment.ProviderName = string.IsNullOrWhiteSpace(dto.ProviderName) ? null : dto.ProviderName.Trim();
-            appointment.Mode = NormalizeMode(dto.Mode);
-            appointment.Status = AppointmentStatuses.Normalize(dto.Status);
-            appointment.Notes = dto.Notes;
-            appointment.UpdatedAt = DateTime.UtcNow;
+            appointment.ScheduledAt =
+                dto.ScheduledAt;
 
-            await _context.SaveChangesAsync();
+            appointment.DurationMinutes =
+                dto.DurationMinutes;
+
+            appointment.NurseId =
+                dto.NurseId;
+
+            appointment.Type =
+                dto.Type.Trim();
+
+            appointment.Reason =
+                dto.Reason.Trim();
+
+            appointment.ProviderName =
+                string.IsNullOrWhiteSpace(
+                    dto.ProviderName
+                )
+                    ? null
+                    : dto
+                        .ProviderName
+                        .Trim();
+
+            appointment.Mode =
+                NormalizeMode(
+                    dto.Mode
+                );
+
+            appointment.Status =
+                AppointmentStatuses
+                    .Normalize(
+                        dto.Status
+                    );
+
+            appointment.Notes =
+                dto.Notes;
+
+            appointment.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "AppointmentUpdated",
@@ -185,54 +329,187 @@ namespace PersonalProject.Services.Implementations
                 $"Appointment {appointment.Id} updated."
             );
 
-            return (
-                await GetAppointmentQuery()
-                    .FirstAsync(
-                        a => a.Id == appointment.Id
-                    )
-            ).ToDto();
+            var result =
+                appointment
+                    .ToDto();
+
+            await TryNotifyAppointmentAsync(
+                appointment
+                    .Patient
+                    .UserId,
+                result
+            );
+
+            return result;
         }
 
-        public async Task<AppointmentResponseDto?>
-            GetByIdAsync(
+        // =====================================================
+        // DELETE
+        // =====================================================
+
+        public async Task
+            DeleteAsync(
                 Guid appointmentId,
                 Guid performedByUserId
             )
         {
-            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
 
-            var appointment = await GetAppointmentQuery().FirstOrDefaultAsync(a => a.Id == appointmentId && a.ClinicId == clinicId);
+            var appointment =
+                await GetAppointmentQuery()
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                appointmentId
+                    );
 
-            return appointment?.ToDto();
+            if (
+                appointment ==
+                    null
+            )
+            {
+                throw new KeyNotFoundException(
+                    "Appointment not found."
+                );
+            }
+
+            if (
+                appointment.ClinicId !=
+                    clinicId
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "You cannot manage appointments from another clinic."
+                );
+            }
+
+            var patientUserId =
+                appointment
+                    .Patient
+                    .UserId;
+
+            var snapshot =
+                appointment
+                    .ToDto();
+
+            _context.Appointments.Remove(
+                appointment
+            );
+
+            await _context
+                .SaveChangesAsync();
+
+            await _audit.LogAsync(
+                "AppointmentDeleted",
+                performedByUserId,
+                $"Appointment {appointmentId} deleted."
+            );
+
+            await TryNotifyAppointmentAsync(
+                patientUserId,
+                snapshot,
+                "Deleted"
+            );
         }
 
-        public async Task<List<AppointmentResponseDto>>GetClinicAppointmentsAsync(Guid performedByUserId)
-        {
-            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
+        // =====================================================
+        // GET ONE
+        // =====================================================
 
-            var appointments = await GetAppointmentQuery().Where(a => a.ClinicId == clinicId).OrderBy(a => a.ScheduledAt).ToListAsync();
+        public async Task<
+            AppointmentResponseDto?
+        > GetByIdAsync(
+            Guid appointmentId,
+            Guid performedByUserId
+        )
+        {
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
+
+            var appointment =
+                await GetAppointmentQuery()
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                appointmentId &&
+                            item.ClinicId ==
+                                clinicId
+                    );
+
+            return appointment
+                ?.ToDto();
+        }
+
+        // =====================================================
+        // CLINIC APPOINTMENTS
+        // =====================================================
+
+        public async Task<
+            List<AppointmentResponseDto>
+        > GetClinicAppointmentsAsync(
+            Guid performedByUserId
+        )
+        {
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
+
+            var appointments =
+                await GetAppointmentQuery()
+                    .Where(
+                        item =>
+                            item.ClinicId ==
+                                clinicId
+                    )
+                    .OrderBy(
+                        item =>
+                            item.ScheduledAt
+                    )
+                    .ToListAsync();
 
             return appointments
-                .Select(a => a.ToDto())
+                .Select(
+                    item =>
+                        item.ToDto()
+                )
                 .ToList();
         }
 
-        public async Task<List<AppointmentResponseDto>>
-    GetPatientAppointmentsAsync(
-        Guid patientUserId
-    )
+        // =====================================================
+        // PATIENT APPOINTMENTS
+        // =====================================================
+
+        public async Task<
+            List<AppointmentResponseDto>
+        > GetPatientAppointmentsAsync(
+            Guid patientUserId
+        )
         {
             var patient =
                 await _context.Patients
-                    .Include(p => p.User)
+                    .Include(
+                        item =>
+                            item.User
+                    )
                     .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId == patientUserId &&
-                            p.User.Role == RoleNames.Patient &&
-                            p.User.IsActive
+                        item =>
+                            item.UserId ==
+                                patientUserId &&
+                            item.User.Role ==
+                                RoleNames.Patient &&
+                            item.User.IsActive
                     );
 
-            if (patient == null)
+            if (
+                patient ==
+                    null
+            )
             {
                 throw new KeyNotFoundException(
                     "Active patient profile not found."
@@ -242,41 +519,155 @@ namespace PersonalProject.Services.Implementations
             var appointments =
                 await GetAppointmentQuery()
                     .Where(
-                        a =>
-                            a.PatientId == patient.Id
+                        item =>
+                            item.PatientId ==
+                                patient.Id
                     )
-                    .OrderBy(a => a.ScheduledAt)
+                    .OrderBy(
+                        item =>
+                            item.ScheduledAt
+                    )
                     .ToListAsync();
 
             return appointments
-                .Select(a => a.ToDto())
+                .Select(
+                    item =>
+                        item.ToDto()
+                )
                 .ToList();
         }
+
+        // =====================================================
+        // APPOINTMENT NOTIFICATION
+        // =====================================================
+
+        private async Task
+            TryNotifyAppointmentAsync(
+                Guid patientUserId,
+                AppointmentResponseDto
+                    appointment,
+                string? statusOverride =
+                    null
+            )
+        {
+            try
+            {
+                var localTime =
+                    ToSouthAfricaTime(
+                        appointment
+                            .ScheduledAt
+                    );
+
+                var type =
+                    string.IsNullOrWhiteSpace(
+                        appointment.Type
+                    )
+                        ? "appointment"
+                        : appointment.Type;
+
+                var status =
+                    string.IsNullOrWhiteSpace(
+                        statusOverride
+                    )
+                        ? appointment.Status
+                        : statusOverride;
+
+                /*
+                 * This deliberately matches the message created
+                 * by MyNotificationsController. That prevents
+                 * the later polling pass from creating a
+                 * duplicate notification.
+                 */
+                var message =
+                    "Appointment update: " +
+                    $"Your {type} at " +
+                    $"{appointment.ClinicName} is " +
+                    $"{status} for " +
+                    $"{localTime:ddd, dd MMM yyyy 'at' HH:mm}.";
+
+                await _notificationService
+                    .CreateAppointmentForPatientAsync(
+                        patientUserId,
+                        message
+                    );
+            }
+            catch (
+                Exception ex
+            )
+            {
+                /*
+                 * Appointment changes must not be rolled back
+                 * solely because a secondary notification could
+                 * not be created.
+                 */
+                _logger.LogWarning(
+                    ex,
+                    "Appointment {AppointmentId} was saved, but its patient notification could not be created.",
+                    appointment.Id
+                );
+            }
+        }
+
+        // =====================================================
+        // QUERY
+        // =====================================================
 
         private IQueryable<Appointment>
             GetAppointmentQuery()
         {
             return _context.Appointments
-                .Include(a => a.Patient)
-                    .ThenInclude(p => p.User)
-                .Include(a => a.Clinic)
-                .Include(a => a.Nurse)
-                    .ThenInclude(n => n!.User);
+                .Include(
+                    appointment =>
+                        appointment.Patient
+                )
+                .ThenInclude(
+                    patient =>
+                        patient.User
+                )
+                .Include(
+                    appointment =>
+                        appointment.Clinic
+                )
+                .Include(
+                    appointment =>
+                        appointment.Nurse
+                )
+                .ThenInclude(
+                    nurse =>
+                        nurse!.User
+                );
         }
+
+        // =====================================================
+        // STAFF CLINIC
+        // =====================================================
 
         private async Task<Guid>
             GetStaffClinicIdAsync(
                 Guid userId
             )
         {
-            var user = await _context.Users
-                .Include(u => u.Admin)
-                .Include(u => u.Nurse)
-                .FirstOrDefaultAsync(
-                    u => u.Id == userId
-                );
+            var user =
+                await _context.Users
+                    .Include(
+                        item =>
+                            item.Admin
+                    )
+                    .Include(
+                        item =>
+                            item.Nurse
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                userId
+                    );
 
-            if (user == null || !user.IsActive)
+            if (
+                user ==
+                    null ||
+                !user.IsActive
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active staff account required."
@@ -284,19 +675,28 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role == RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId != null
+                user.Role ==
+                    RoleNames.ClinicAdmin &&
+                user.Admin?.ClinicId !=
+                    null
             )
             {
-                return user.Admin.ClinicId.Value;
+                return user
+                    .Admin
+                    .ClinicId
+                    .Value;
             }
 
             if (
-                user.Role == RoleNames.Nurse &&
-                user.Nurse != null
+                user.Role ==
+                    RoleNames.Nurse &&
+                user.Nurse !=
+                    null
             )
             {
-                return user.Nurse.ClinicId;
+                return user
+                    .Nurse
+                    .ClinicId;
             }
 
             throw new UnauthorizedAccessException(
@@ -304,21 +704,40 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        private async Task ValidateNurseAsync(
-            Guid? nurseId,
-            Guid clinicId
-        )
+        // =====================================================
+        // NURSE VALIDATION
+        // =====================================================
+
+        private async Task
+            ValidateNurseAsync(
+                Guid? nurseId,
+                Guid clinicId
+            )
         {
-            if (nurseId == null)
+            if (
+                nurseId ==
+                    null
+            )
+            {
                 return;
+            }
 
-            var nurse = await _context.Nurses
-                .Include(n => n.User)
-                .FirstOrDefaultAsync(
-                    n => n.Id == nurseId
-                );
+            var nurse =
+                await _context.Nurses
+                    .Include(
+                        item =>
+                            item.User
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                nurseId
+                    );
 
-            if (nurse == null)
+            if (
+                nurse ==
+                    null
+            )
             {
                 throw new KeyNotFoundException(
                     "Assigned nurse not found."
@@ -326,7 +745,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                nurse.ClinicId != clinicId ||
+                nurse.ClinicId !=
+                    clinicId ||
                 !nurse.User.IsActive
             )
             {
@@ -336,49 +756,156 @@ namespace PersonalProject.Services.Implementations
             }
         }
 
-        private static string NormalizeMode(
-            string mode
-        )
+        // =====================================================
+        // MODE
+        // =====================================================
+
+        private static string
+            NormalizeMode(
+                string mode
+            )
         {
             if (
                 string.Equals(
                     mode,
                     "Telehealth",
-                    StringComparison.OrdinalIgnoreCase
+                    StringComparison
+                        .OrdinalIgnoreCase
                 )
             )
             {
-                return "Telehealth";
+                return
+                    "Telehealth";
             }
 
-            return "InPerson";
+            return
+                "InPerson";
         }
 
+        // =====================================================
+        // TIMEZONE
+        // =====================================================
+
+        private static TimeZoneInfo
+            ResolveSouthAfricaTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo
+                    .FindSystemTimeZoneById(
+                        "Africa/Johannesburg"
+                    );
+            }
+            catch (
+                TimeZoneNotFoundException
+            )
+            {
+                try
+                {
+                    return TimeZoneInfo
+                        .FindSystemTimeZoneById(
+                            "South Africa Standard Time"
+                        );
+                }
+                catch
+                {
+                    return TimeZoneInfo
+                        .CreateCustomTimeZone(
+                            "PhilaLink-SAST",
+                            TimeSpan
+                                .FromHours(2),
+                            "South Africa Standard Time",
+                            "South Africa Standard Time"
+                        );
+                }
+            }
+        }
+
+        private static DateTime
+            ToSouthAfricaTime(
+                DateTime value
+            )
+        {
+            var utc =
+                value.Kind ==
+                    DateTimeKind.Utc
+                    ? value
+                    : DateTime
+                        .SpecifyKind(
+                            value,
+                            DateTimeKind.Utc
+                        );
+
+            return TimeZoneInfo
+                .ConvertTimeFromUtc(
+                    utc,
+                    SouthAfricaTimeZone
+                );
+        }
     }
 
-    internal static class AppointmentMappings
+    internal static class
+        AppointmentMappings
     {
-        public static AppointmentResponseDto ToDto(
-            this Appointment appointment
-        )
+        public static AppointmentResponseDto
+            ToDto(
+                this Appointment
+                    appointment
+            )
         {
             return new AppointmentResponseDto
             {
-                Id = appointment.Id,
-                PatientId = appointment.PatientId,
-                PatientName = appointment.Patient.User.FullName,
-                ClinicId = appointment.ClinicId,
-                ClinicName = appointment.Clinic.Name,
-                NurseId = appointment.NurseId,
-                NurseName = appointment.Nurse?.User.FullName,
-                ScheduledAt = appointment.ScheduledAt,
-                DurationMinutes = appointment.DurationMinutes,
-                Type = appointment.Type,
-                Reason = appointment.Reason,
-                ProviderName = appointment.ProviderName,
-                Mode = appointment.Mode,
-                Status = appointment.Status,
-                Notes = appointment.Notes
+                Id =
+                    appointment.Id,
+
+                PatientId =
+                    appointment.PatientId,
+
+                PatientName =
+                    appointment
+                        .Patient
+                        .User
+                        .FullName,
+
+                ClinicId =
+                    appointment.ClinicId,
+
+                ClinicName =
+                    appointment
+                        .Clinic
+                        .Name,
+
+                NurseId =
+                    appointment.NurseId,
+
+                NurseName =
+                    appointment.Nurse?
+                        .User
+                        .FullName,
+
+                ScheduledAt =
+                    appointment.ScheduledAt,
+
+                DurationMinutes =
+                    appointment.DurationMinutes,
+
+                Type =
+                    appointment.Type,
+
+                Reason =
+                    appointment.Reason,
+
+                ProviderName =
+                    appointment.ProviderName,
+
+                Mode =
+                    appointment.Mode,
+
+                Status =
+                    appointment.Status,
+
+                Notes =
+                    appointment.Notes
             };
         }
     }
