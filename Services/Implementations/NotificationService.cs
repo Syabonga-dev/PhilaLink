@@ -21,7 +21,8 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // CLINIC STAFF NOTIFICATION
+        // CLINIC NOTIFICATION
+        // Controlled by ClinicNotifications
         // =====================================================
 
         public async Task<bool>
@@ -31,16 +32,9 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            if (
-                string.IsNullOrWhiteSpace(
-                    message
-                )
-            )
-            {
-                throw new InvalidOperationException(
-                    "Notification message is required."
-                );
-            }
+            ValidateMessage(
+                message
+            );
 
             var staff =
                 await _context.Users
@@ -145,7 +139,15 @@ namespace PersonalProject.Services.Implementations
                                         ? true
                                         : item
                                             .Preference
-                                            .ClinicNotifications
+                                            .ClinicNotifications,
+
+                                AppointmentReminders =
+                                    item.Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Preference
+                                            .AppointmentReminders
                             }
                     )
                     .FirstOrDefaultAsync();
@@ -169,14 +171,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * Respect the patient's explicit notification
-             * preference.
-             *
-             * This only controls ordinary clinic messages.
-             * Appointment reminders and health/weather updates
-             * use their own dedicated preferences.
-             */
             if (
                 !patient
                     .ClinicNotifications
@@ -185,37 +179,103 @@ namespace PersonalProject.Services.Implementations
                 return false;
             }
 
-            var notification =
-                new Notification
-                {
-                    Id =
-                        Guid.NewGuid(),
-
-                    UserId =
-                        patient.UserId,
-
-                    Message =
-                        message.Trim(),
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        DateTime.UtcNow
-                };
-
-            _context.Notifications.Add(
-                notification
-            );
-
-            await _context
-                .SaveChangesAsync();
-
-            return true;
+            return await
+                AddNotificationAsync(
+                    patient.UserId,
+                    message,
+                    duplicateWindow:
+                        TimeSpan
+                            .FromMinutes(2)
+                );
         }
 
         // =====================================================
-        // SYSTEM NOTIFICATION
+        // APPOINTMENT NOTIFICATION
+        // Controlled by AppointmentReminders
+        // =====================================================
+
+        public async Task<bool>
+            CreateAppointmentForPatientAsync(
+                Guid patientUserId,
+                string message
+            )
+        {
+            ValidateMessage(
+                message
+            );
+
+            var patient =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
+                                patientUserId &&
+                            item.User.Role ==
+                                RoleNames.Patient &&
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientNotificationAccess
+                            {
+                                UserId =
+                                    item.UserId,
+
+                                ClinicId =
+                                    item.ClinicId,
+
+                                ClinicNotifications =
+                                    item.Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Preference
+                                            .ClinicNotifications,
+
+                                AppointmentReminders =
+                                    item.Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Preference
+                                            .AppointmentReminders
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (patient == null)
+            {
+                throw new KeyNotFoundException(
+                    "Active patient account not found."
+                );
+            }
+
+            /*
+             * Appointment creation, approval/confirmation,
+             * rescheduling, cancellation, deletion and upcoming
+             * reminders all respect AppointmentReminders.
+             */
+            if (
+                !patient
+                    .AppointmentReminders
+            )
+            {
+                return false;
+            }
+
+            return await
+                AddNotificationAsync(
+                    patient.UserId,
+                    message,
+                    duplicateWindow:
+                        TimeSpan
+                            .FromMinutes(2)
+                );
+        }
+
+        // =====================================================
+        // GENERAL SYSTEM NOTIFICATION
         // =====================================================
 
         public async Task<bool>
@@ -224,16 +284,9 @@ namespace PersonalProject.Services.Implementations
                 string message
             )
         {
-            if (
-                string.IsNullOrWhiteSpace(
-                    message
-                )
-            )
-            {
-                throw new InvalidOperationException(
-                    "Notification message is required."
-                );
-            }
+            ValidateMessage(
+                message
+            );
 
             var patientExists =
                 await _context.Patients
@@ -254,47 +307,74 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Preserve the existing system-notification
+             * duplicate protection.
+             */
+            return await
+                AddNotificationAsync(
+                    patientUserId,
+                    message,
+                    duplicateWindow:
+                        TimeSpan
+                            .FromHours(12)
+                );
+        }
+
+        // =====================================================
+        // ADD NOTIFICATION
+        // =====================================================
+
+        private async Task<bool>
+            AddNotificationAsync(
+                Guid userId,
+                string message,
+                TimeSpan?
+                    duplicateWindow
+            )
+        {
             var trimmedMessage =
                 message.Trim();
 
-            /*
-             * Keep the existing general-purpose duplicate
-             * protection for system notifications.
-             *
-             * Weather notifications use their own shorter
-             * duplicate window in WeatherController.
-             */
-            var duplicateCutoff =
-                DateTime.UtcNow
-                    .AddHours(-12);
-
-            var duplicateExists =
-                await _context
-                    .Notifications
-                    .AsNoTracking()
-                    .AnyAsync(
-                        notification =>
-                            notification.UserId ==
-                                patientUserId &&
-                            notification.Message ==
-                                trimmedMessage &&
-                            notification.CreatedAt >=
-                                duplicateCutoff
-                    );
-
-            if (duplicateExists)
+            if (
+                duplicateWindow !=
+                    null
+            )
             {
-                return false;
+                var cutoff =
+                    DateTime.UtcNow -
+                    duplicateWindow.Value;
+
+                var duplicateExists =
+                    await _context
+                        .Notifications
+                        .AsNoTracking()
+                        .AnyAsync(
+                            notification =>
+                                notification.UserId ==
+                                    userId &&
+                                notification.Message ==
+                                    trimmedMessage &&
+                                notification.CreatedAt >=
+                                    cutoff
+                        );
+
+                if (
+                    duplicateExists
+                )
+                {
+                    return false;
+                }
             }
 
-            var notification =
+            _context.Notifications.Add(
                 new Notification
                 {
                     Id =
                         Guid.NewGuid(),
 
                     UserId =
-                        patientUserId,
+                        userId,
 
                     Message =
                         trimmedMessage,
@@ -304,16 +384,34 @@ namespace PersonalProject.Services.Implementations
 
                     CreatedAt =
                         DateTime.UtcNow
-                };
-
-            _context.Notifications.Add(
-                notification
+                }
             );
 
             await _context
                 .SaveChangesAsync();
 
             return true;
+        }
+
+        // =====================================================
+        // VALIDATION
+        // =====================================================
+
+        private static void
+            ValidateMessage(
+                string message
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    message
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Notification message is required."
+                );
+            }
         }
 
         // =====================================================
@@ -358,6 +456,12 @@ namespace PersonalProject.Services.Implementations
             }
 
             public bool ClinicNotifications
+            {
+                get;
+                init;
+            }
+
+            public bool AppointmentReminders
             {
                 get;
                 init;
