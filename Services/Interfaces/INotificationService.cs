@@ -8,6 +8,11 @@ namespace PersonalProject.Services.Interfaces
             Guid performedByUserId
         );
 
+        Task<bool> CreateAppointmentForPatientAsync(
+            Guid patientUserId,
+            string message
+        );
+
         Task<bool> CreateSystemForPatientAsync(
             Guid patientUserId,
             string message
