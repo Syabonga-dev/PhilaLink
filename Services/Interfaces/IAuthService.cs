@@ -20,5 +20,13 @@ namespace PersonalProject.Services.Interfaces
             Guid userId,
             ChangePasswordDto dto
         );
+
+        string GetGoogleAuthorizationUrl(
+            string state
+        );
+
+        Task<LoginResponseDto> GoogleLoginAsync(
+            string authorizationCode
+        );
     }
 }
