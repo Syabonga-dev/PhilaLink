@@ -16,10 +16,12 @@ namespace PersonalProject.Controllers
 
         private readonly IAuthService _authService;
         private readonly IOtpVerificationService _otpService;
+        private readonly IConfiguration _config;
 
         public AuthController(
             IAuthService authService,
-            IOtpVerificationService otpService
+            IOtpVerificationService otpService,
+            IConfiguration config
         )
         {
             _authService =
@@ -27,6 +29,9 @@ namespace PersonalProject.Controllers
 
             _otpService =
                 otpService;
+
+            _config =
+                config;
         }
 
         // =====================================================
@@ -131,7 +136,10 @@ namespace PersonalProject.Controllers
                             true,
 
                         MaxAge =
-                            TimeSpan.FromMinutes(10)
+                            TimeSpan.FromMinutes(10),
+
+                        Path =
+                            "/"
                     }
                 );
 
@@ -180,18 +188,10 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                Response.Cookies.Delete(
-                    GoogleStateCookie
-                );
+                DeleteGoogleStateCookie();
 
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            "Google authentication was cancelled or failed.",
-
-                        error
-                    }
+                return RedirectToGoogleError(
+                    "Google authentication was cancelled or failed."
                 );
             }
 
@@ -201,16 +201,10 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                Response.Cookies.Delete(
-                    GoogleStateCookie
-                );
+                DeleteGoogleStateCookie();
 
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            "Google authorization code was not provided."
-                    }
+                return RedirectToGoogleError(
+                    "Google authorization code was not provided."
                 );
             }
 
@@ -233,22 +227,14 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                Response.Cookies.Delete(
-                    GoogleStateCookie
-                );
+                DeleteGoogleStateCookie();
 
-                return Unauthorized(
-                    new
-                    {
-                        message =
-                            "Google authentication state validation failed."
-                    }
+                return RedirectToGoogleError(
+                    "Google authentication state validation failed."
                 );
             }
 
-            Response.Cookies.Delete(
-                GoogleStateCookie
-            );
+            DeleteGoogleStateCookie();
 
             try
             {
@@ -258,32 +244,35 @@ namespace PersonalProject.Controllers
                             code
                         );
 
-                return Ok(
-                    result
+                var frontendBaseUrl =
+                    GetFrontendBaseUrl();
+
+                var redirectUrl =
+                    frontendBaseUrl +
+                    "/auth/google/callback" +
+                    "#token=" +
+                    Uri.EscapeDataString(
+                        result.Token
+                    );
+
+                return Redirect(
+                    redirectUrl
                 );
             }
             catch (
                 UnauthorizedAccessException ex
             )
             {
-                return Unauthorized(
-                    new
-                    {
-                        message =
-                            ex.Message
-                    }
+                return RedirectToGoogleError(
+                    ex.Message
                 );
             }
             catch (
-                InvalidOperationException ex
+                InvalidOperationException
             )
             {
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            ex.Message
-                    }
+                return RedirectToGoogleError(
+                    "Google sign-in could not be completed. Please try again."
                 );
             }
         }
@@ -451,6 +440,72 @@ namespace PersonalProject.Controllers
                 {
                     verified =
                         true
+                }
+            );
+        }
+
+        // =====================================================
+        // GOOGLE OAUTH HELPERS
+        // =====================================================
+
+        private string GetFrontendBaseUrl()
+        {
+            var frontendBaseUrl =
+                _config[
+                    "Frontend:BaseUrl"
+                ];
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    frontendBaseUrl
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Frontend:BaseUrl is missing from configuration."
+                );
+            }
+
+            return frontendBaseUrl
+                .TrimEnd('/');
+        }
+
+        private IActionResult
+            RedirectToGoogleError(
+                string message
+            )
+        {
+            var frontendBaseUrl =
+                GetFrontendBaseUrl();
+
+            var redirectUrl =
+                frontendBaseUrl +
+                "/auth/google/callback" +
+                "#error=" +
+                Uri.EscapeDataString(
+                    message
+                );
+
+            return Redirect(
+                redirectUrl
+            );
+        }
+
+        private void
+            DeleteGoogleStateCookie()
+        {
+            Response.Cookies.Delete(
+                GoogleStateCookie,
+                new CookieOptions
+                {
+                    Path =
+                        "/",
+
+                    Secure =
+                        true,
+
+                    SameSite =
+                        SameSiteMode.Lax
                 }
             );
         }
