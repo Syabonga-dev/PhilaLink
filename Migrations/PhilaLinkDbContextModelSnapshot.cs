@@ -934,6 +934,10 @@ namespace PersonalProject.Migrations
                     b.Property<bool>("ShareHealthData")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
