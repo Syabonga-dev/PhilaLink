@@ -19,16 +19,19 @@ namespace PersonalProject.Controllers
             INotificationService service
         )
         {
-            _service = service;
+            _service =
+                service;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(
-            CreateNotificationDto dto
-        )
+        public async Task<IActionResult>
+            Create(
+                CreateNotificationDto dto
+            )
         {
             if (
-                dto.UserId == Guid.Empty ||
+                dto.UserId ==
+                    Guid.Empty ||
                 string.IsNullOrWhiteSpace(
                     dto.Message
                 )
@@ -45,50 +48,78 @@ namespace PersonalProject.Controllers
 
             try
             {
-                await _service
-                    .CreateForPatientAsync(
-                        dto.UserId,
-                        dto.Message,
-                        GetCurrentUserId()
+                var created =
+                    await _service
+                        .CreateForPatientAsync(
+                            dto.UserId,
+                            dto.Message,
+                            GetCurrentUserId()
+                        );
+
+                if (!created)
+                {
+                    return Ok(
+                        new
+                        {
+                            created =
+                                false,
+
+                            message =
+                                "The patient has disabled clinic notifications."
+                        }
                     );
+                }
 
                 return Ok(
                     new
                     {
+                        created =
+                            true,
+
                         message =
                             "Notification created."
                     }
                 );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
                     new
                     {
-                        message = ex.Message
+                        message =
+                            ex.Message
                     }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
 
-        private Guid GetCurrentUserId()
+        private Guid
+            GetCurrentUserId()
         {
             var claim =
                 User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
+                    ClaimTypes
+                        .NameIdentifier
                 );
 
             if (
@@ -101,7 +132,8 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                throw new UnauthorizedAccessException();
+                throw new
+                    UnauthorizedAccessException();
             }
 
             return userId;
