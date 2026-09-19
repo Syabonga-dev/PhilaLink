@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
@@ -17,12 +19,19 @@ namespace PersonalProject.Controllers
         private readonly IMedicationService
             _medicationService;
 
+        private readonly PhilaLinkDbContext
+            _context;
+
         public MedicationController(
-            IMedicationService medicationService
+            IMedicationService medicationService,
+            PhilaLinkDbContext context
         )
         {
             _medicationService =
                 medicationService;
+
+            _context =
+                context;
         }
 
         // =====================================================
@@ -30,7 +39,9 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost]
-        [Authorize(Roles = RoleNames.Nurse)]
+        [Authorize(
+            Roles = RoleNames.Nurse
+        )]
         public async Task<IActionResult>
             Create(
                 MedicationCreateDto dto
@@ -100,6 +111,26 @@ namespace PersonalProject.Controllers
         {
             try
             {
+                var shareHealthData =
+                    await GetHealthDataSharingSettingAsync(
+                        patientId
+                    );
+
+                if (
+                    shareHealthData ==
+                        false
+                )
+                {
+                    return StatusCode(
+                        403,
+                        new
+                        {
+                            message =
+                                "The patient has disabled health-data sharing."
+                        }
+                    );
+                }
+
                 var medications =
                     await _medicationService
                         .GetPatientMedicationsAsync(
@@ -260,6 +291,26 @@ namespace PersonalProject.Controllers
         {
             try
             {
+                var shareHealthData =
+                    await GetMedicationHealthDataSharingSettingAsync(
+                        medicationId
+                    );
+
+                if (
+                    shareHealthData ==
+                        false
+                )
+                {
+                    return StatusCode(
+                        403,
+                        new
+                        {
+                            message =
+                                "The patient has disabled health-data sharing."
+                        }
+                    );
+                }
+
                 var logs =
                     await _medicationService
                         .GetMedicationLogsAsync(
@@ -364,6 +415,74 @@ namespace PersonalProject.Controllers
             {
                 return Forbid();
             }
+        }
+
+        // =====================================================
+        // PRIVACY
+        // =====================================================
+
+        private async Task<bool?>
+            GetHealthDataSharingSettingAsync(
+                Guid patientId
+            )
+        {
+            var patient =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                patientId
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                Allowed =
+                                    item.Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Preference
+                                            .ShareHealthData
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            return patient?.Allowed;
+        }
+
+        private async Task<bool?>
+            GetMedicationHealthDataSharingSettingAsync(
+                Guid medicationId
+            )
+        {
+            var medication =
+                await _context.Medications
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                medicationId
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                Allowed =
+                                    item.Patient
+                                        .Preference ==
+                                        null
+                                        ? true
+                                        : item
+                                            .Patient
+                                            .Preference!
+                                            .ShareHealthData
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            return medication?.Allowed;
         }
 
         // =====================================================
@@ -479,7 +598,8 @@ namespace PersonalProject.Controllers
         {
             var value =
                 User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
+                    ClaimTypes
+                        .NameIdentifier
                 );
 
             if (
@@ -492,7 +612,8 @@ namespace PersonalProject.Controllers
                 )
             )
             {
-                throw new UnauthorizedAccessException();
+                throw new
+                    UnauthorizedAccessException();
             }
 
             return userId;
