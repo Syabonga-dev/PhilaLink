@@ -63,9 +63,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
 
             var user = new User
             {
@@ -175,7 +172,7 @@ namespace PersonalProject.Services.Implementations
 
             await _context.SaveChangesAsync();
 
-            await transaction.CommitAsync();
+            
 
             return new RegisterResponseDto
             {
