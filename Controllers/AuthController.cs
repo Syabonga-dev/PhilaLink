@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
 using System.Security.Claims;
+using System.Security.Cryptography;
 
 namespace PersonalProject.Controllers
 {
@@ -10,6 +11,9 @@ namespace PersonalProject.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
+        private const string GoogleStateCookie =
+            "philalink_google_oauth_state";
+
         private readonly IAuthService _authService;
         private readonly IOtpVerificationService _otpService;
 
@@ -94,15 +98,81 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
+        // GOOGLE OAUTH LOGIN
+        // =====================================================
+
+        [HttpGet("google-login")]
+        [AllowAnonymous]
+        public IActionResult GoogleLogin()
+        {
+            try
+            {
+                var state =
+                    Convert.ToHexString(
+                        RandomNumberGenerator
+                            .GetBytes(32)
+                    );
+
+                Response.Cookies.Append(
+                    GoogleStateCookie,
+                    state,
+                    new CookieOptions
+                    {
+                        HttpOnly =
+                            true,
+
+                        Secure =
+                            true,
+
+                        SameSite =
+                            SameSiteMode.Lax,
+
+                        IsEssential =
+                            true,
+
+                        MaxAge =
+                            TimeSpan.FromMinutes(10)
+                    }
+                );
+
+                var authorizationUrl =
+                    _authService
+                        .GetGoogleAuthorizationUrl(
+                            state
+                        );
+
+                return Redirect(
+                    authorizationUrl
+                );
+            }
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return StatusCode(
+                    StatusCodes
+                        .Status500InternalServerError,
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+        }
+
+        // =====================================================
         // GOOGLE OAUTH CALLBACK
         // =====================================================
 
         [HttpGet("google-callback")]
         [AllowAnonymous]
-        public IActionResult GoogleCallback(
-            [FromQuery] string? code,
-            [FromQuery] string? error
-        )
+        public async Task<IActionResult>
+            GoogleCallback(
+                [FromQuery] string? code,
+                [FromQuery] string? state,
+                [FromQuery] string? error
+            )
         {
             if (
                 !string.IsNullOrWhiteSpace(
@@ -110,11 +180,15 @@ namespace PersonalProject.Controllers
                 )
             )
             {
+                Response.Cookies.Delete(
+                    GoogleStateCookie
+                );
+
                 return BadRequest(
                     new
                     {
                         message =
-                            "Google authentication failed.",
+                            "Google authentication was cancelled or failed.",
 
                         error
                     }
@@ -127,6 +201,10 @@ namespace PersonalProject.Controllers
                 )
             )
             {
+                Response.Cookies.Delete(
+                    GoogleStateCookie
+                );
+
                 return BadRequest(
                     new
                     {
@@ -136,28 +214,78 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            /*
-             * The Google authorization code is received here.
-             *
-             * The next step will be to exchange this code
-             * for Google tokens in the authentication service,
-             * obtain the user's Google profile,
-             * create/find the PhilaLink user,
-             * and return the normal PhilaLink JWT.
-             *
-             * That service logic will be added separately so
-             * the existing authentication system is not broken.
-             */
+            var storedState =
+                Request.Cookies[
+                    GoogleStateCookie
+                ];
 
-            return Ok(
-                new
-                {
-                    message =
-                        "Google authorization callback received successfully.",
+            if (
+                string.IsNullOrWhiteSpace(
+                    state
+                ) ||
+                string.IsNullOrWhiteSpace(
+                    storedState
+                ) ||
+                !string.Equals(
+                    state,
+                    storedState,
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                Response.Cookies.Delete(
+                    GoogleStateCookie
+                );
 
-                    code
-                }
+                return Unauthorized(
+                    new
+                    {
+                        message =
+                            "Google authentication state validation failed."
+                    }
+                );
+            }
+
+            Response.Cookies.Delete(
+                GoogleStateCookie
             );
+
+            try
+            {
+                var result =
+                    await _authService
+                        .GoogleLoginAsync(
+                            code
+                        );
+
+                return Ok(
+                    result
+                );
+            }
+            catch (
+                UnauthorizedAccessException ex
+            )
+            {
+                return Unauthorized(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
         }
 
         // =====================================================
