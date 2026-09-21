@@ -96,6 +96,7 @@ namespace PersonalProject.Data
             ModelBuilder modelBuilder
         )
         {
+
             base.OnModelCreating(modelBuilder);
 
             // =================================================
@@ -111,11 +112,14 @@ namespace PersonalProject.Data
                 .IsUnique();
 
             modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            modelBuilder.Entity<User>()
                 .HasIndex(u => u.Role);
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.IsActive);
-
             // =================================================
             // USER -> PATIENT
             // =================================================

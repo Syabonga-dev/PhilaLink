@@ -1048,7 +1048,9 @@ namespace PersonalProject.Services.Implementations
                 phoneNumber.Trim();
 
             var normalizedEmail =
-                email.Trim();
+                email
+                    .Trim()
+                    .ToLowerInvariant();
 
             var exists =
                 await _context.Users
@@ -1057,8 +1059,18 @@ namespace PersonalProject.Services.Implementations
                             u.IdNumber ==
                                 normalizedIdNumber ||
                             u.PhoneNumber ==
-                                normalizedPhoneNumber
+                                normalizedPhoneNumber ||
+                            u.Email
+                                .ToLower() ==
+                                normalizedEmail
                     );
+
+            if (exists)
+            {
+                throw new InvalidOperationException(
+                    "An account with that ID number, phone number, or email address already exists."
+                );
+            }
 
             if (exists)
             {
