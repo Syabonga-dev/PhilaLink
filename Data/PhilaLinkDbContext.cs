@@ -6,7 +6,7 @@ namespace PersonalProject.Data
 {
     public class PhilaLinkDbContext : DbContext
     {
-        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options): base(options)
+        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options) : base(options)
         {
         }
 
@@ -91,6 +91,15 @@ namespace PersonalProject.Data
         public DbSet<ChatConversation> ChatConversations { get; set; }
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
+
+
+        // =====================================================
+        // LEGAL DOCUMENTS / ACCEPTANCES
+        // =====================================================
+
+        public DbSet<LegalDocument> LegalDocuments { get; set; }
+
+        public DbSet<UserLegalAcceptance> UserLegalAcceptances { get; set; }
 
         protected override void OnModelCreating(
             ModelBuilder modelBuilder
@@ -697,6 +706,91 @@ namespace PersonalProject.Data
             modelBuilder.Entity<PatientPreference>()
                 .HasIndex(p => p.PatientId)
                 .IsUnique();
+
+            // =================================================
+            // LEGAL DOCUMENTS
+            // =================================================
+
+            modelBuilder.Entity<LegalDocument>(entity =>
+            {
+                entity.HasKey(ld => ld.Id);
+
+                entity.Property(ld => ld.Type)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(ld => ld.Title)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.Property(ld => ld.Version)
+                    .IsRequired()
+                    .HasMaxLength(20);
+
+                entity.Property(ld => ld.EffectiveDate)
+                    .IsRequired();
+
+                entity.Property(ld => ld.IsCurrent)
+                    .IsRequired();
+
+                entity.Property(ld => ld.CreatedAt)
+                    .IsRequired();
+
+                // A document type cannot contain the same version twice.
+                entity.HasIndex(ld => new
+                {
+                    ld.Type,
+                    ld.Version
+                })
+                    .IsUnique();
+
+                // Speeds up retrieval of the current document
+                // for a given legal-document type.
+                entity.HasIndex(ld => new
+                {
+                    ld.Type,
+                    ld.IsCurrent
+                });
+            });
+
+            // =================================================
+            // USER -> LEGAL ACCEPTANCES
+            // =================================================
+
+            modelBuilder.Entity<UserLegalAcceptance>(entity =>
+            {
+                entity.HasKey(ula => ula.Id);
+
+                entity.Property(ula => ula.Action)
+                    .IsRequired()
+                    .HasMaxLength(30);
+
+                entity.Property(ula => ula.AcceptedAt)
+                    .IsRequired();
+
+                entity.HasOne(ula => ula.User)
+                    .WithMany(u => u.LegalAcceptances)
+                    .HasForeignKey(ula => ula.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ula => ula.LegalDocument)
+                    .WithMany(ld => ld.UserAcceptances)
+                    .HasForeignKey(ula => ula.LegalDocumentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // One user can only accept/acknowledge a particular
+                // legal-document version once.
+                entity.HasIndex(ula => new
+                {
+                    ula.UserId,
+                    ula.LegalDocumentId
+                })
+                    .IsUnique();
+
+                entity.HasIndex(ula => ula.UserId);
+
+                entity.HasIndex(ula => ula.LegalDocumentId);
+            });
         }
     }
 }

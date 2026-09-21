@@ -17,6 +17,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
+using PersonalProject.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,6 +93,7 @@ builder.Services.AddScoped<IMedicationCollectionService, MedicationCollectionSer
 builder.Services.AddScoped<IClinicStockService, ClinicStockService>();
 builder.Services.AddScoped<INurseService, NurseService>();
 builder.Services.AddScoped<IChatbotService, ChatbotService>();
+builder.Services.AddScoped<ILegalDocumentService, LegalDocumentService>();
 
 builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
     client =>

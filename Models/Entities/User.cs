@@ -58,5 +58,19 @@ namespace PersonalProject.Models.Entities
         public Proxy? Proxy { get; set; }
 
         public Admin? Admin { get; set; }
+
+        // =====================================================
+        // LEGAL ACCEPTANCES
+        // =====================================================
+
+        /*
+         * Historical legal acceptance records are retained
+         * so PhilaLink can determine which version of each
+         * document this user accepted or acknowledged.
+         */
+        public ICollection<UserLegalAcceptance>
+            LegalAcceptances
+        { get; set; } =
+                new List<UserLegalAcceptance>();
     }
 }
