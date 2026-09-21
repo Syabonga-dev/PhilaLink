@@ -751,6 +751,69 @@ namespace PersonalProject.Data
                     ld.Type,
                     ld.IsCurrent
                 });
+
+                // =================================================
+                // INITIAL LEGAL DOCUMENT SEED
+                // =================================================
+
+                entity.HasData(
+                    new LegalDocument
+                    {
+                        Id = Guid.Parse(
+                            "3d116ce4-8d55-4a45-93ce-1d1b5a77c101"
+                        ),
+                        Type = "TermsOfUse",
+                        Title = "PhilaLink Terms of Use",
+                        Version = "1.0",
+                        EffectiveDate = new DateTime(
+                            2026,
+                            9,
+                            21,
+                            0,
+                            0,
+                            0,
+                            DateTimeKind.Utc
+                        ),
+                        IsCurrent = true,
+                        CreatedAt = new DateTime(
+                            2026,
+                            9,
+                            21,
+                            0,
+                            0,
+                            0,
+                            DateTimeKind.Utc
+                        )
+                    },
+                    new LegalDocument
+                    {
+                        Id = Guid.Parse(
+                            "83a6a26b-281b-4fd8-92ce-a1887cafc102"
+                        ),
+                        Type = "PrivacyPolicy",
+                        Title = "PhilaLink Privacy Policy",
+                        Version = "1.0",
+                        EffectiveDate = new DateTime(
+                            2026,
+                            9,
+                            21,
+                            0,
+                            0,
+                            0,
+                            DateTimeKind.Utc
+                        ),
+                        IsCurrent = true,
+                        CreatedAt = new DateTime(
+                            2026,
+                            9,
+                            21,
+                            0,
+                            0,
+                            0,
+                            DateTimeKind.Utc
+                        )
+                    }
+                );
             });
 
             // =================================================
