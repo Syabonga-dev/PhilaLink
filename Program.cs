@@ -1,6 +1,7 @@
 using BCrypt.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -13,6 +14,7 @@ using PersonalProject.Services.AI;
 using PersonalProject.Services.Implementations;
 using PersonalProject.Services.Interfaces;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,16 +38,6 @@ if (
     );
 }
 
-/*
- * Keep the current retry policy, but make pooled PostgreSQL
- * connections less likely to sit stale for long periods.
- *
- * The command timeout is intentionally left at its existing
- * default. The Render logs showed read stalls timing out and
- * the same SQL succeeding in milliseconds on retry, so making
- * the command timeout longer would only make a bad stall last
- * longer.
- */
 var connectionStringBuilder =
     new NpgsqlConnectionStringBuilder(
         configuredConnectionString
@@ -176,15 +168,6 @@ builder.Services.AddSwaggerGen(
 // CORS
 // =====================================================
 
-/*
- * Only trusted PhilaLink frontend origins should be allowed
- * to make browser requests to the API.
- *
- * Frontend:BaseUrl is already used by Google OAuth and OTP
- * email links, so the deployed frontend origin is also read
- * from configuration instead of maintaining a second secret
- * or environment variable.
- */
 var allowedOrigins =
     new List<string>
     {
@@ -271,13 +254,275 @@ builder.Services.AddCors(
 );
 
 // =====================================================
+// RATE LIMITING
+// =====================================================
+
+builder.Services.AddRateLimiter(
+    options =>
+    {
+        options.RejectionStatusCode =
+            StatusCodes
+                .Status429TooManyRequests;
+
+        options.GlobalLimiter =
+            PartitionedRateLimiter
+                .Create<
+                    HttpContext,
+                    string
+                >(
+                    httpContext =>
+                    {
+                        var forwardedFor =
+                            httpContext
+                                .Request
+                                .Headers[
+                                    "X-Forwarded-For"
+                                ]
+                                .FirstOrDefault();
+
+                        var clientIp =
+                            !string.IsNullOrWhiteSpace(
+                                forwardedFor
+                            )
+                                ? forwardedFor
+                                    .Split(
+                                        ','
+                                    )[0]
+                                    .Trim()
+                                : httpContext
+                                        .Connection
+                                        .RemoteIpAddress
+                                        ?.ToString() ??
+                                  "unknown";
+
+                        var path =
+                            httpContext
+                                .Request
+                                .Path
+                                .Value
+                                ?.ToLowerInvariant() ??
+                            string.Empty;
+
+                        return path switch
+                        {
+                            "/api/auth/login" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"login:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    10,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            1
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/register" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"register:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    5,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            10
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/otp/generate" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"otp-generate:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    5,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            10
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/otp/verify" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"otp-verify:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    15,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            5
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/password-reset/request" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"password-reset-request:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    5,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            10
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/password-reset/reset" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"password-reset:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    10,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            10
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            "/api/auth/google-login" =>
+                                RateLimitPartition
+                                    .GetFixedWindowLimiter(
+                                        $"google-login:{clientIp}",
+                                        _ =>
+                                            new FixedWindowRateLimiterOptions
+                                            {
+                                                PermitLimit =
+                                                    20,
+
+                                                Window =
+                                                    TimeSpan
+                                                        .FromMinutes(
+                                                            1
+                                                        ),
+
+                                                QueueLimit =
+                                                    0,
+
+                                                AutoReplenishment =
+                                                    true
+                                            }
+                                    ),
+
+                            _ =>
+                                RateLimitPartition
+                                    .GetNoLimiter(
+                                        $"unlimited:{clientIp}"
+                                    )
+                        };
+                    }
+                );
+
+        options.OnRejected =
+            async (
+                context,
+                cancellationToken
+            ) =>
+            {
+                context
+                    .HttpContext
+                    .Response
+                    .ContentType =
+                        "application/json";
+
+                await context
+                    .HttpContext
+                    .Response
+                    .WriteAsJsonAsync(
+                        new
+                        {
+                            message =
+                                "Too many requests. Please wait a moment and try again."
+                        },
+                        cancellationToken
+                    );
+            };
+    }
+);
+
+// =====================================================
 // JWT AUTHENTICATION
 // =====================================================
 
 var jwtKey =
-    builder.Configuration["Jwt:Key"];
+    builder.Configuration[
+        "Jwt:Key"
+    ];
 
-if (string.IsNullOrWhiteSpace(jwtKey))
+if (
+    string.IsNullOrWhiteSpace(
+        jwtKey
+    )
+)
 {
     throw new InvalidOperationException(
         "JWT Key is missing in configuration."
@@ -291,7 +536,8 @@ var key =
 
 builder.Services
     .AddAuthentication(
-        JwtBearerDefaults.AuthenticationScheme
+        JwtBearerDefaults
+            .AuthenticationScheme
     )
     .AddJwtBearer(
         options =>
@@ -439,11 +685,6 @@ var app =
 // SUPER ADMIN SEED
 // =====================================================
 
-/*
- * Check configuration before opening PostgreSQL. On Render the
- * seed values are normally not configured, so this avoids an
- * unnecessary database round-trip on every cold start.
- */
 var seedFullName =
     builder.Configuration[
         "Seed:SuperAdminFullName"
@@ -599,7 +840,10 @@ else
 // HTTP PIPELINE
 // =====================================================
 
-if (app.Environment.IsDevelopment())
+if (
+    app.Environment
+        .IsDevelopment()
+)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -609,15 +853,16 @@ app.UseCors(
     "FrontendOnly"
 );
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 
 app.UseAuthorization();
 
-/*
- * Lightweight endpoint for Render/UptimeRobot. It deliberately
- * avoids a database query so a health ping does not create more
- * Supabase traffic every few minutes.
- */
+// =====================================================
+// HEALTH
+// =====================================================
+
 app.MapGet(
         "/api/health",
         () =>
