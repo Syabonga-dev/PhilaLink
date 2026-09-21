@@ -571,10 +571,10 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task<AppointmentResponseDto>
-            BookAppointmentAsync(
-                Guid userId,
-                PatientBookAppointmentDto dto
-            )
+    BookAppointmentAsync(
+        Guid userId,
+        PatientBookAppointmentDto dto
+    )
         {
             var patient =
                 await GetActivePatientAccessAsync(
@@ -598,10 +598,35 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (dto.DurationMinutes <= 0)
+            if (
+                dto.DurationMinutes <=
+                0
+            )
             {
                 throw new InvalidOperationException(
                     "Appointment duration must be greater than zero."
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Type
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Appointment type is required."
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Reason
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Appointment reason is required."
                 );
             }
 
@@ -615,7 +640,9 @@ namespace PersonalProject.Services.Implementations
                         patient.Id,
 
                     ClinicId =
-                        patient.ClinicId.Value,
+                        patient
+                            .ClinicId
+                            .Value,
 
                     ScheduledAt =
                         dto.ScheduledAt,
@@ -624,10 +651,12 @@ namespace PersonalProject.Services.Implementations
                         dto.DurationMinutes,
 
                     Type =
-                        dto.Type.Trim(),
+                        dto.Type
+                            .Trim(),
 
                     Reason =
-                        dto.Reason.Trim(),
+                        dto.Reason
+                            .Trim(),
 
                     Mode =
                         NormalizeAppointmentMode(
@@ -635,10 +664,15 @@ namespace PersonalProject.Services.Implementations
                         ),
 
                     Status =
-                        "Pending",
+                        AppointmentStatuses
+                            .Pending,
 
                     Notes =
-                        dto.Notes,
+                        string.IsNullOrWhiteSpace(
+                            dto.Notes
+                        )
+                            ? null
+                            : dto.Notes.Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -648,7 +682,8 @@ namespace PersonalProject.Services.Implementations
                 appointment
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "PatientAppointmentRequested",
@@ -664,20 +699,23 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task<AppointmentResponseDto>
-            RescheduleAppointmentAsync(
-                Guid userId,
-                Guid appointmentId,
-                PatientRescheduleAppointmentDto dto
-            )
+    RescheduleAppointmentAsync(
+        Guid userId,
+        Guid appointmentId,
+        PatientRescheduleAppointmentDto dto
+    )
         {
             var patient =
                 await GetActivePatientAccessAsync(
                     userId
                 );
 
+            var now =
+                DateTime.UtcNow;
+
             if (
                 dto.ScheduledAt <=
-                DateTime.UtcNow
+                now
             )
             {
                 throw new InvalidOperationException(
@@ -704,9 +742,11 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 appointment.Status ==
-                    "Completed" ||
+                    AppointmentStatuses.Completed ||
                 appointment.Status ==
-                    "Cancelled"
+                    AppointmentStatuses.Cancelled ||
+                appointment.Status ==
+                    AppointmentStatuses.Missed
             )
             {
                 throw new InvalidOperationException(
@@ -714,16 +754,28 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            if (
+                appointment.ScheduledAt <=
+                now
+            )
+            {
+                throw new InvalidOperationException(
+                    "A past appointment cannot be rescheduled."
+                );
+            }
+
             appointment.ScheduledAt =
                 dto.ScheduledAt;
 
             appointment.Status =
-                "Rescheduled";
+                AppointmentStatuses
+                    .Rescheduled;
 
             appointment.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "PatientAppointmentRescheduled",
@@ -739,9 +791,9 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task CancelAppointmentAsync(
-            Guid userId,
-            Guid appointmentId
-        )
+    Guid userId,
+    Guid appointmentId
+)
         {
             var patient =
                 await GetActivePatientAccessAsync(
@@ -767,21 +819,37 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 appointment.Status ==
-                "Completed"
+                    AppointmentStatuses.Completed ||
+                appointment.Status ==
+                    AppointmentStatuses.Cancelled ||
+                appointment.Status ==
+                    AppointmentStatuses.Missed
             )
             {
                 throw new InvalidOperationException(
-                    "A completed appointment cannot be cancelled."
+                    "This appointment cannot be cancelled."
+                );
+            }
+
+            if (
+                appointment.ScheduledAt <=
+                DateTime.UtcNow
+            )
+            {
+                throw new InvalidOperationException(
+                    "A past appointment cannot be cancelled."
                 );
             }
 
             appointment.Status =
-                "Cancelled";
+                AppointmentStatuses
+                    .Cancelled;
 
             appointment.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "PatientAppointmentCancelled",
