@@ -797,7 +797,7 @@ namespace PersonalProject.Services.Implementations
                 )
             )
             {
-                throw new UnauthorizedAccessException(
+                throw new InvalidOperationException(
                     "Current password is incorrect."
                 );
             }
