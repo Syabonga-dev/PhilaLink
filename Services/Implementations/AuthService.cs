@@ -36,8 +36,8 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<RegisterResponseDto> RegisterAsync(
-            RegisterDto dto
-        )
+    RegisterDto dto
+)
         {
             ValidatePasswordStrength(
                 dto.Password
@@ -49,61 +49,127 @@ namespace PersonalProject.Services.Implementations
             var phoneNumber =
                 dto.PhoneNumber.Trim();
 
-            var exists =
-                await _context.Users.AnyAsync(
-                    user =>
-                        user.IdNumber == idNumber ||
-                        user.PhoneNumber == phoneNumber
-                );
+            var email =
+                dto.Email
+                    .Trim()
+                    .ToLowerInvariant();
 
-            if (exists)
+            if (
+                string.IsNullOrWhiteSpace(
+                    email
+                )
+            )
             {
                 throw new InvalidOperationException(
-                    "An account with that ID number or phone number already exists."
+                    "Email address is required."
                 );
             }
 
+            var duplicate =
+                await _context.Users
+                    .AsNoTracking()
+                    .Where(
+                        user =>
+                            user.IdNumber ==
+                                idNumber ||
+                            user.PhoneNumber ==
+                                phoneNumber ||
+                            user.Email
+                                .ToLower() ==
+                                email
+                    )
+                    .Select(
+                        user =>
+                            new
+                            {
+                                DuplicateId =
+                                    user.IdNumber ==
+                                        idNumber,
 
-            var user = new User
+                                DuplicatePhone =
+                                    user.PhoneNumber ==
+                                        phoneNumber,
+
+                                DuplicateEmail =
+                                    user.Email
+                                        .ToLower() ==
+                                        email
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (
+                duplicate?.DuplicateId ==
+                true
+            )
             {
-                Id =
-                    Guid.NewGuid(),
+                throw new InvalidOperationException(
+                    "An account with that ID number already exists."
+                );
+            }
 
-                FullName =
-                    dto.FullName.Trim(),
+            if (
+                duplicate?.DuplicatePhone ==
+                true
+            )
+            {
+                throw new InvalidOperationException(
+                    "An account with that phone number already exists."
+                );
+            }
 
-                IdNumber =
-                    idNumber,
+            if (
+                duplicate?.DuplicateEmail ==
+                true
+            )
+            {
+                throw new InvalidOperationException(
+                    "An account with that email address already exists."
+                );
+            }
 
-                PhoneNumber =
-                    phoneNumber,
+            var user =
+                new User
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                Email =
-                    dto.Email.Trim(),
+                    FullName =
+                        dto.FullName.Trim(),
 
-                PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(
-                        dto.Password
-                    ),
+                    IdNumber =
+                        idNumber,
 
-                Role =
-                    RoleNames.Patient,
+                    PhoneNumber =
+                        phoneNumber,
 
-                IsActive =
-                    true,
+                    Email =
+                        email,
 
-                IsVerified =
-                    false,
+                    PasswordHash =
+                        BCrypt.Net.BCrypt
+                            .HashPassword(
+                                dto.Password
+                            ),
 
-                VerifiedAt =
-                    null,
+                    Role =
+                        RoleNames.Patient,
 
-                MustChangePassword =
-                    false,
+                    IsActive =
+                        true,
 
-                CreatedAt =
-                    DateTime.UtcNow
-            };
+                    IsVerified =
+                        false,
+
+                    VerifiedAt =
+                        null,
+
+                    MustChangePassword =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
             _context.Users.Add(
                 user
@@ -170,9 +236,8 @@ namespace PersonalProject.Services.Implementations
                 preference
             );
 
-            await _context.SaveChangesAsync();
-
-            
+            await _context
+                .SaveChangesAsync();
 
             return new RegisterResponseDto
             {

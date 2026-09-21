@@ -1072,11 +1072,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (exists)
-            {
-                throw new InvalidOperationException("An account with that ID number or phone number already exists.");
-            }
-
             var tempPassword =
                 GenerateTempPassword();
 
