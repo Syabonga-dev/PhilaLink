@@ -1584,9 +1584,9 @@ namespace PersonalProject.Services.Implementations
         }
 
         private static DateTime? CalculateNextDose(
-            IEnumerable<MedicationSchedule> schedules,
-            DateTime? nowOverride = null
-        )
+    IEnumerable<MedicationSchedule> schedules,
+    DateTime? nowOverride = null
+)
         {
             var active =
                 schedules
@@ -1605,27 +1605,68 @@ namespace PersonalProject.Services.Implementations
                 return null;
             }
 
-            var now =
+            var nowUtc =
                 nowOverride ??
                 DateTime.UtcNow;
 
+            /*
+             * Medication schedule times are South African local
+             * clock times.
+             *
+             * South Africa uses UTC+2 throughout the year and
+             * does not observe daylight-saving time.
+             */
+            var southAfricaOffset =
+                TimeSpan.FromHours(2);
+
+            var localNow =
+                nowUtc +
+                southAfricaOffset;
+
             foreach (
-                var schedule in active
+                var schedule
+                in active
             )
             {
-                var candidate =
-                    now.Date +
-                    schedule.TimeOfDay;
+                var candidateLocal =
+                    DateTime.SpecifyKind(
+                        localNow.Date +
+                            schedule.TimeOfDay,
+                        DateTimeKind.Unspecified
+                    );
 
-                if (candidate >= now)
+                if (
+                    candidateLocal >=
+                    localNow
+                )
                 {
-                    return candidate;
+                    /*
+                     * API DateTime values should remain UTC.
+                     * Convert the local SAST clock time back to UTC
+                     * before returning it to the frontend.
+                     */
+                    return DateTime.SpecifyKind(
+                        candidateLocal -
+                            southAfricaOffset,
+                        DateTimeKind.Utc
+                    );
                 }
             }
 
-            return
-                now.Date.AddDays(1) +
-                active[0].TimeOfDay;
+            var tomorrowLocal =
+                DateTime.SpecifyKind(
+                    localNow.Date
+                        .AddDays(1) +
+                    active[0]
+                        .TimeOfDay,
+                    DateTimeKind.Unspecified
+                );
+
+            return DateTime.SpecifyKind(
+                tomorrowLocal -
+                    southAfricaOffset,
+                DateTimeKind.Utc
+            );
         }
 
         private static string
