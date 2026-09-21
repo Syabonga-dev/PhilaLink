@@ -1233,10 +1233,10 @@ namespace PersonalProject.Services.Implementations
         }
 
         private async Task<Patient>
-            GetPatientByUserIdAsync(
-                Guid userId,
-                bool asTracking
-            )
+    GetPatientByUserIdAsync(
+        Guid userId,
+        bool asTracking
+    )
         {
             IQueryable<Patient> query =
                 _context.Patients;
@@ -1246,6 +1246,21 @@ namespace PersonalProject.Services.Implementations
                 query =
                     query.AsNoTracking();
             }
+
+            /*
+             * The patient profile contains two collection
+             * navigations: Allergies and MedicalConditions.
+             *
+             * Loading both through one SQL query can create a
+             * cartesian multiplication of rows and EF Core warns
+             * about this situation.
+             *
+             * Split the query so User/Clinic and each collection
+             * are loaded efficiently without duplicating the
+             * patient row for every allergy-condition combination.
+             */
+            query =
+                query.AsSplitQuery();
 
             var patient =
                 await query
