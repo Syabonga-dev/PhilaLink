@@ -13,6 +13,8 @@ using PersonalProject.Models.Entities;
 using PersonalProject.Services.AI;
 using PersonalProject.Services.Implementations;
 using PersonalProject.Services.Interfaces;
+using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -254,6 +256,105 @@ builder.Services.AddCors(
 );
 
 // =====================================================
+// RATE LIMIT HELPERS
+// =====================================================
+
+static string GetClientIp(
+    HttpContext httpContext
+)
+{
+    /*
+     * Render provides the original client address through
+     * X-Forwarded-For.
+     *
+     * The first valid address is used. If it is unavailable,
+     * fall back to the connection's remote address.
+     */
+    var forwardedFor =
+        httpContext
+            .Request
+            .Headers[
+                "X-Forwarded-For"
+            ]
+            .FirstOrDefault();
+
+    if (
+        !string.IsNullOrWhiteSpace(
+            forwardedFor
+        )
+    )
+    {
+        var candidates =
+            forwardedFor.Split(
+                ',',
+                StringSplitOptions
+                    .RemoveEmptyEntries |
+                StringSplitOptions
+                    .TrimEntries
+            );
+
+        foreach (
+            var candidate in candidates
+        )
+        {
+            if (
+                IPAddress.TryParse(
+                    candidate,
+                    out var address
+                )
+            )
+            {
+                return address
+                    .ToString();
+            }
+        }
+    }
+
+    return httpContext
+               .Connection
+               .RemoteIpAddress
+               ?.ToString()
+           ??
+           "unknown";
+}
+
+static string
+    GetAuthenticatedIdentity(
+        HttpContext httpContext,
+        string clientIp
+    )
+{
+    if (
+        httpContext
+            .User
+            .Identity
+            ?.IsAuthenticated ==
+        true
+    )
+    {
+        var userId =
+            httpContext.User
+                .FindFirstValue(
+                    ClaimTypes
+                        .NameIdentifier
+                );
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                userId
+            )
+        )
+        {
+            return
+                $"user:{userId}";
+        }
+    }
+
+    return
+        $"ip:{clientIp}";
+}
+
+// =====================================================
 // RATE LIMITING
 // =====================================================
 
@@ -272,215 +373,544 @@ builder.Services.AddRateLimiter(
                 >(
                     httpContext =>
                     {
-                        var forwardedFor =
-                            httpContext
-                                .Request
-                                .Headers[
-                                    "X-Forwarded-For"
-                                ]
-                                .FirstOrDefault();
-
                         var clientIp =
-                            !string.IsNullOrWhiteSpace(
-                                forwardedFor
-                            )
-                                ? forwardedFor
-                                    .Split(
-                                        ','
-                                    )[0]
-                                    .Trim()
-                                : httpContext
-                                        .Connection
-                                        .RemoteIpAddress
-                                        ?.ToString() ??
-                                  "unknown";
+                            GetClientIp(
+                                httpContext
+                            );
+
+                        var identity =
+                            GetAuthenticatedIdentity(
+                                httpContext,
+                                clientIp
+                            );
 
                         var path =
                             httpContext
                                 .Request
                                 .Path
                                 .Value
-                                ?.ToLowerInvariant() ??
+                                ?.ToLowerInvariant()
+                            ??
                             string.Empty;
 
-                        return path switch
+                        // =====================================
+                        // HEALTH
+                        // =====================================
+
+                        /*
+                         * Health is intentionally generous.
+                         *
+                         * This allows:
+                         * - Render cold-start warming
+                         * - frontend Google OAuth pre-warming
+                         * - uptime monitoring
+                         *
+                         * It is still bounded so an attacker
+                         * cannot hammer it without restriction.
+                         */
+                        if (
+                            path ==
+                            "/api/health"
+                        )
                         {
-                            "/api/auth/login" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"login:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    10,
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"health:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                120,
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            1
-                                                        ),
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        1
+                                                    ),
 
-                                                QueueLimit =
-                                                    0,
+                                            QueueLimit =
+                                                0,
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
 
-                            "/api/auth/register" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"register:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    5,
+                        // =====================================
+                        // LOGIN
+                        // =====================================
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            10
-                                                        ),
+                        if (
+                            path ==
+                            "/api/auth/login"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"login:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                10,
 
-                                                QueueLimit =
-                                                    0,
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        1
+                                                    ),
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                                            QueueLimit =
+                                                0,
 
-                            "/api/auth/otp/generate" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"otp-generate:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    5,
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            10
-                                                        ),
+                        // =====================================
+                        // REGISTRATION
+                        // =====================================
 
-                                                QueueLimit =
-                                                    0,
+                        if (
+                            path ==
+                            "/api/auth/register"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"register:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                5,
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
 
-                            "/api/auth/otp/verify" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"otp-verify:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    15,
+                                            QueueLimit =
+                                                0,
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            5
-                                                        ),
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
 
-                                                QueueLimit =
-                                                    0,
+                        // =====================================
+                        // OTP GENERATION
+                        // =====================================
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                        if (
+                            path ==
+                            "/api/auth/otp/generate"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"otp-generate:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                5,
 
-                            "/api/auth/password-reset/request" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"password-reset-request:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    5,
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            10
-                                                        ),
+                                            QueueLimit =
+                                                0,
 
-                                                QueueLimit =
-                                                    0,
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                        // =====================================
+                        // OTP VERIFICATION
+                        // =====================================
 
-                            "/api/auth/password-reset/reset" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"password-reset:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    10,
+                        if (
+                            path ==
+                            "/api/auth/otp/verify"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"otp-verify:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                15,
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            10
-                                                        ),
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        5
+                                                    ),
 
-                                                QueueLimit =
-                                                    0,
+                                            QueueLimit =
+                                                0,
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
 
-                            "/api/auth/google-login" =>
-                                RateLimitPartition
-                                    .GetFixedWindowLimiter(
-                                        $"google-login:{clientIp}",
-                                        _ =>
-                                            new FixedWindowRateLimiterOptions
-                                            {
-                                                PermitLimit =
-                                                    20,
+                        // =====================================
+                        // PASSWORD RESET REQUEST
+                        // =====================================
 
-                                                Window =
-                                                    TimeSpan
-                                                        .FromMinutes(
-                                                            1
-                                                        ),
+                        if (
+                            path ==
+                            "/api/auth/password-reset/request"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"password-reset-request:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                5,
 
-                                                QueueLimit =
-                                                    0,
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
 
-                                                AutoReplenishment =
-                                                    true
-                                            }
-                                    ),
+                                            QueueLimit =
+                                                0,
 
-                            _ =>
-                                RateLimitPartition
-                                    .GetNoLimiter(
-                                        $"unlimited:{clientIp}"
-                                    )
-                        };
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // PASSWORD RESET COMPLETION
+                        // =====================================
+
+                        if (
+                            path ==
+                            "/api/auth/password-reset/reset"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"password-reset:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                10,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // CHANGE PASSWORD
+                        // =====================================
+
+                        if (
+                            path ==
+                            "/api/auth/change-password"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"change-password:{identity}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                10,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // GOOGLE LOGIN
+                        // =====================================
+
+                        if (
+                            path ==
+                            "/api/auth/google-login"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"google-login:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                20,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        1
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // GOOGLE CALLBACK
+                        // =====================================
+
+                        /*
+                         * Do not make the OAuth callback overly
+                         * restrictive. A failed/repeated OAuth
+                         * redirect should not lock legitimate
+                         * users out.
+                         */
+                        if (
+                            path ==
+                            "/api/auth/google-callback"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"google-callback:{clientIp}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                60,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        5
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // GEMINI / CHATBOT
+                        // =====================================
+
+                        /*
+                         * This endpoint can cause a paid Gemini
+                         * API request.
+                         *
+                         * Limit by authenticated PhilaLink user,
+                         * not by IP, so multiple legitimate users
+                         * sharing a university/residence network
+                         * do not consume one another's allowance.
+                         *
+                         * 20 messages / 10 minutes allows normal
+                         * conversational use while making mass
+                         * automated abuse far more difficult.
+                         */
+                        if (
+                            path ==
+                            "/api/chatbot/message"
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"chatbot:{identity}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                20,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // WEATHER
+                        // =====================================
+
+                        /*
+                         * Weather calls another external API.
+                         * The allowance is high enough for normal
+                         * dashboard refreshes while preventing
+                         * uncontrolled automated traffic.
+                         */
+                        if (
+                            path.StartsWith(
+                                "/api/weather",
+                                StringComparison
+                                    .OrdinalIgnoreCase
+                            )
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"weather:{identity}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                60,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        10
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // AUTHENTICATED API
+                        // =====================================
+
+                        /*
+                         * Normal authenticated PhilaLink traffic
+                         * receives a broad allowance.
+                         *
+                         * Dashboard pages can make multiple API
+                         * requests at once, so this limit is kept
+                         * intentionally high enough not to disturb
+                         * ordinary application use.
+                         */
+                        if (
+                            httpContext
+                                .User
+                                .Identity
+                                ?.IsAuthenticated ==
+                            true
+                        )
+                        {
+                            return RateLimitPartition
+                                .GetFixedWindowLimiter(
+                                    $"authenticated:{identity}",
+                                    _ =>
+                                        new FixedWindowRateLimiterOptions
+                                        {
+                                            PermitLimit =
+                                                300,
+
+                                            Window =
+                                                TimeSpan
+                                                    .FromMinutes(
+                                                        1
+                                                    ),
+
+                                            QueueLimit =
+                                                0,
+
+                                            AutoReplenishment =
+                                                true
+                                        }
+                                );
+                        }
+
+                        // =====================================
+                        // OTHER ANONYMOUS TRAFFIC
+                        // =====================================
+
+                        /*
+                         * Most API endpoints require authentication
+                         * anyway. This provides a final outer bound
+                         * for malformed, probing or unauthenticated
+                         * requests.
+                         */
+                        return RateLimitPartition
+                            .GetFixedWindowLimiter(
+                                $"anonymous:{clientIp}",
+                                _ =>
+                                    new FixedWindowRateLimiterOptions
+                                    {
+                                        PermitLimit =
+                                            60,
+
+                                        Window =
+                                            TimeSpan
+                                                .FromMinutes(
+                                                    1
+                                                ),
+
+                                        QueueLimit =
+                                            0,
+
+                                        AutoReplenishment =
+                                            true
+                                    }
+                            );
                     }
                 );
+
+        // =============================================
+        // RATE LIMIT RESPONSE
+        // =============================================
 
         options.OnRejected =
             async (
@@ -488,15 +918,38 @@ builder.Services.AddRateLimiter(
                 cancellationToken
             ) =>
             {
-                context
-                    .HttpContext
-                    .Response
-                    .ContentType =
-                        "application/json";
+                var response =
+                    context
+                        .HttpContext
+                        .Response;
 
-                await context
-                    .HttpContext
-                    .Response
+                response.StatusCode =
+                    StatusCodes
+                        .Status429TooManyRequests;
+
+                response.ContentType =
+                    "application/json";
+
+                if (
+                    context.Lease
+                        .TryGetMetadata(
+                            MetadataName
+                                .RetryAfter,
+                            out var retryAfter
+                        )
+                )
+                {
+                    response.Headers[
+                        "Retry-After"
+                    ] =
+                        Math.Ceiling(
+                            retryAfter
+                                .TotalSeconds
+                        )
+                        .ToString();
+                }
+
+                await response
                     .WriteAsJsonAsync(
                         new
                         {
@@ -853,9 +1306,16 @@ app.UseCors(
     "FrontendOnly"
 );
 
-app.UseRateLimiter();
-
+/*
+ * Authentication must run before the rate limiter.
+ *
+ * This allows protected endpoints to be partitioned using
+ * the authenticated user's ID rather than placing everyone
+ * behind the same public IP into one shared bucket.
+ */
 app.UseAuthentication();
+
+app.UseRateLimiter();
 
 app.UseAuthorization();
 
@@ -863,6 +1323,13 @@ app.UseAuthorization();
 // HEALTH
 // =====================================================
 
+/*
+ * Lightweight Render/frontend health endpoint.
+ *
+ * It deliberately performs no database or external API call.
+ * The global limiter gives it a generous 120 requests/minute
+ * per client IP.
+ */
 app.MapGet(
         "/api/health",
         () =>
