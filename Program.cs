@@ -176,15 +176,93 @@ builder.Services.AddSwaggerGen(
 // CORS
 // =====================================================
 
+/*
+ * Only trusted PhilaLink frontend origins should be allowed
+ * to make browser requests to the API.
+ *
+ * Frontend:BaseUrl is already used by Google OAuth and OTP
+ * email links, so the deployed frontend origin is also read
+ * from configuration instead of maintaining a second secret
+ * or environment variable.
+ */
+var allowedOrigins =
+    new List<string>
+    {
+        "https://philalinkmed.vercel.app"
+    };
+
+var configuredFrontendBaseUrl =
+    builder.Configuration[
+        "Frontend:BaseUrl"
+    ];
+
+if (
+    !string.IsNullOrWhiteSpace(
+        configuredFrontendBaseUrl
+    )
+)
+{
+    var normalizedFrontendUrl =
+        configuredFrontendBaseUrl
+            .Trim()
+            .TrimEnd('/');
+
+    if (
+        Uri.TryCreate(
+            normalizedFrontendUrl,
+            UriKind.Absolute,
+            out var frontendUri
+        ) &&
+        (
+            frontendUri.Scheme ==
+                Uri.UriSchemeHttps ||
+            frontendUri.Scheme ==
+                Uri.UriSchemeHttp
+        )
+    )
+    {
+        allowedOrigins.Add(
+            frontendUri.GetLeftPart(
+                UriPartial.Authority
+            )
+        );
+    }
+}
+
+if (
+    builder.Environment
+        .IsDevelopment()
+)
+{
+    allowedOrigins.Add(
+        "http://localhost:5173"
+    );
+
+    allowedOrigins.Add(
+        "https://localhost:5173"
+    );
+}
+
+allowedOrigins =
+    allowedOrigins
+        .Distinct(
+            StringComparer
+                .OrdinalIgnoreCase
+        )
+        .ToList();
+
 builder.Services.AddCors(
     options =>
     {
         options.AddPolicy(
-            "AllowAll",
+            "FrontendOnly",
             policy =>
             {
                 policy
-                    .AllowAnyOrigin()
+                    .WithOrigins(
+                        allowedOrigins
+                            .ToArray()
+                    )
                     .AllowAnyMethod()
                     .AllowAnyHeader();
             }
@@ -528,7 +606,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors(
-    "AllowAll"
+    "FrontendOnly"
 );
 
 app.UseAuthentication();
