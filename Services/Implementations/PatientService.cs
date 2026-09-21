@@ -57,9 +57,9 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task<PatientMeDto> UpdateMeAsync(
-            Guid userId,
-            UpdatePatientProfileDto dto
-        )
+    Guid userId,
+    UpdatePatientProfileDto dto
+)
         {
             var patient =
                 await GetPatientByUserIdAsync(
@@ -89,13 +89,35 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var duplicatePhone =
-                await _context.Users.AnyAsync(
-                    user =>
-                        user.Id != userId &&
-                        user.PhoneNumber ==
-                            dto.PhoneNumber.Trim()
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Email
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Email address is required."
                 );
+            }
+
+            var normalizedPhoneNumber =
+                dto.PhoneNumber.Trim();
+
+            var normalizedEmail =
+                dto.Email
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var duplicatePhone =
+                await _context.Users
+                    .AsNoTracking()
+                    .AnyAsync(
+                        user =>
+                            user.Id !=
+                                userId &&
+                            user.PhoneNumber ==
+                                normalizedPhoneNumber
+                    );
 
             if (duplicatePhone)
             {
@@ -104,14 +126,33 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            var duplicateEmail =
+                await _context.Users
+                    .AsNoTracking()
+                    .AnyAsync(
+                        user =>
+                            user.Id !=
+                                userId &&
+                            user.Email
+                                .ToLower() ==
+                                normalizedEmail
+                    );
+
+            if (duplicateEmail)
+            {
+                throw new InvalidOperationException(
+                    "That email address is already in use."
+                );
+            }
+
             patient.User.FullName =
                 dto.FullName.Trim();
 
             patient.User.PhoneNumber =
-                dto.PhoneNumber.Trim();
+                normalizedPhoneNumber;
 
             patient.User.Email =
-                dto.Email.Trim();
+                normalizedEmail;
 
             patient.User.UpdatedAt =
                 DateTime.UtcNow;
@@ -122,8 +163,12 @@ namespace PersonalProject.Services.Implementations
             patient.Gender =
                 dto.Gender.Trim();
 
+            /*
+             * Keep the patient profile email synchronized with
+             * the main Users record.
+             */
             patient.Email =
-                dto.Email.Trim();
+                normalizedEmail;
 
             patient.AddressLine1 =
                 dto.AddressLine1.Trim();
@@ -133,7 +178,8 @@ namespace PersonalProject.Services.Implementations
                     dto.AddressLine2
                 )
                     ? null
-                    : dto.AddressLine2.Trim();
+                    : dto.AddressLine2
+                        .Trim();
 
             patient.Suburb =
                 dto.Suburb.Trim();
@@ -148,20 +194,26 @@ namespace PersonalProject.Services.Implementations
                 dto.PostalCode.Trim();
 
             patient.EmergencyContactName =
-                dto.EmergencyContactName.Trim();
+                dto.EmergencyContactName
+                    .Trim();
 
             patient.EmergencyContactPhone =
-                dto.EmergencyContactPhone.Trim();
+                dto.EmergencyContactPhone
+                    .Trim();
 
             patient.EmergencyContactRelationship =
-                dto.EmergencyContactRelationship.Trim();
+                dto.EmergencyContactRelationship
+                    .Trim();
 
             patient.IsProfileComplete =
-                IsProfileComplete(patient);
+                IsProfileComplete(
+                    patient
+                );
 
             if (
                 patient.IsProfileComplete &&
-                patient.ProfileCompletedAt == null
+                patient.ProfileCompletedAt ==
+                    null
             )
             {
                 patient.ProfileCompletedAt =
@@ -171,7 +223,8 @@ namespace PersonalProject.Services.Implementations
             patient.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "PatientProfileUpdated",
@@ -179,7 +232,9 @@ namespace PersonalProject.Services.Implementations
                 $"Patient {patient.Id} updated their profile."
             );
 
-            return ToMeDto(patient);
+            return ToMeDto(
+                patient
+            );
         }
 
         // =====================================================
