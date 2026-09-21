@@ -13,6 +13,18 @@ namespace PersonalProject.Services.Implementations
         private readonly PhilaLinkDbContext _context;
         private readonly IAuditLogService _audit;
 
+        /*
+         * South Africa uses UTC+2 throughout the year
+         * and does not currently use daylight saving time.
+         *
+         * Medication daily-dose limits therefore use the
+         * patient's South African calendar day instead of
+         * the raw UTC calendar day.
+         */
+        private static readonly TimeSpan
+            SouthAfricaUtcOffset =
+                TimeSpan.FromHours(2);
+
         public MedicationService(
             PhilaLinkDbContext context,
             IAuditLogService audit
@@ -203,9 +215,9 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * Preserve the existing API response: schedules and
-             * adherence logs are still returned. Read tracking
-             * is unnecessary for this endpoint.
+             * Schedules and adherence logs are returned so the
+             * patient UI can display today's doses, history and
+             * adherence information.
              */
             return await _context.Medications
                 .AsNoTrackingWithIdentityResolution()
@@ -470,6 +482,14 @@ namespace PersonalProject.Services.Implementations
             string? notes
         )
         {
+            var nowUtc =
+                DateTime.UtcNow;
+
+            // -------------------------------------------------
+            // Confirm the authenticated user owns an active
+            // patient profile.
+            // -------------------------------------------------
+
             var patient =
                 await _context.Patients
                     .AsNoTracking()
@@ -497,33 +517,176 @@ namespace PersonalProject.Services.Implementations
             if (patient == null)
             {
                 throw new UnauthorizedAccessException(
-                    "Active Patient profile not found."
+                    "Active patient profile not found."
                 );
             }
 
-            var activeMedicationId =
+            // -------------------------------------------------
+            // Get the medication and its number of active
+            // schedules.
+            //
+            // One active schedule represents one planned dose
+            // per day.
+            // -------------------------------------------------
+
+            var medication =
                 await _context.Medications
                     .AsNoTracking()
                     .Where(
-                        medication =>
-                            medication.Id ==
+                        item =>
+                            item.Id ==
                                 medicationId &&
-                            medication.PatientId ==
-                                patient.Id &&
-                            medication.IsActive
+                            item.PatientId ==
+                                patient.Id
                     )
                     .Select(
-                        medication =>
-                            (Guid?)medication.Id
+                        item =>
+                            new MedicationLoggingAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                IsActive =
+                                    item.IsActive,
+
+                                StartDate =
+                                    item.StartDate,
+
+                                EndDate =
+                                    item.EndDate,
+
+                                ActiveScheduleCount =
+                                    item.Schedules.Count(
+                                        schedule =>
+                                            schedule.IsActive
+                                    )
+                            }
                     )
                     .FirstOrDefaultAsync();
 
-            if (activeMedicationId == null)
+            if (medication == null)
             {
                 throw new KeyNotFoundException(
-                    "Active medication not found."
+                    "Medication not found."
                 );
             }
+
+            // -------------------------------------------------
+            // Medication must currently be active.
+            // -------------------------------------------------
+
+            if (
+                !medication.IsActive
+            )
+            {
+                throw new InvalidOperationException(
+                    "This medication is no longer active."
+                );
+            }
+
+            if (
+                medication.StartDate >
+                nowUtc
+            )
+            {
+                throw new InvalidOperationException(
+                    "This medication has not started yet."
+                );
+            }
+
+            if (
+                medication.EndDate !=
+                    null &&
+                medication.EndDate.Value <
+                    nowUtc
+            )
+            {
+                throw new InvalidOperationException(
+                    "This medication has ended and can no longer be logged."
+                );
+            }
+
+            // -------------------------------------------------
+            // Medication adherence requires at least one active
+            // schedule. Without a schedule we cannot determine
+            // how many doses are expected.
+            // -------------------------------------------------
+
+            if (
+                medication.ActiveScheduleCount <=
+                0
+            )
+            {
+                throw new InvalidOperationException(
+                    "This medication does not have an active dosing schedule."
+                );
+            }
+
+            // -------------------------------------------------
+            // DAILY TAKEN-DOSE LIMIT
+            //
+            // Example:
+            //
+            // 08:00 schedule
+            // 20:00 schedule
+            //
+            // ActiveScheduleCount = 2
+            //
+            // The patient may therefore record at most two
+            // Taken=true logs during the South African
+            // calendar day.
+            //
+            // Skipped logs do not reduce medication supply and
+            // are not included in the taken-dose limit.
+            // -------------------------------------------------
+
+            if (taken)
+            {
+                var (
+                    dayStartUtc,
+                    dayEndUtc
+                ) =
+                    GetSouthAfricaDayBoundsUtc(
+                        nowUtc
+                    );
+
+                var dosesTakenToday =
+                    await _context
+                        .MedicationLogs
+                        .AsNoTracking()
+                        .CountAsync(
+                            log =>
+                                log.MedicationId ==
+                                    medication.Id &&
+                                log.Taken &&
+                                log.TakenAt >=
+                                    dayStartUtc &&
+                                log.TakenAt <
+                                    dayEndUtc
+                        );
+
+                if (
+                    dosesTakenToday >=
+                    medication
+                        .ActiveScheduleCount
+                )
+                {
+                    var doseWord =
+                        medication
+                            .ActiveScheduleCount ==
+                        1
+                            ? "dose"
+                            : "doses";
+
+                    throw new InvalidOperationException(
+                        $"You have already recorded all {medication.ActiveScheduleCount} scheduled {doseWord} for this medication today."
+                    );
+                }
+            }
+
+            // -------------------------------------------------
+            // SAVE ADHERENCE LOG
+            // -------------------------------------------------
 
             var log =
                 new MedicationLog
@@ -532,7 +695,7 @@ namespace PersonalProject.Services.Implementations
                         Guid.NewGuid(),
 
                     MedicationId =
-                        activeMedicationId.Value,
+                        medication.Id,
 
                     Taken =
                         taken,
@@ -545,7 +708,7 @@ namespace PersonalProject.Services.Implementations
                             : notes.Trim(),
 
                     TakenAt =
-                        DateTime.UtcNow
+                        nowUtc
                 };
 
             _context.MedicationLogs.Add(
@@ -554,13 +717,68 @@ namespace PersonalProject.Services.Implementations
 
             await _context.SaveChangesAsync();
 
+            // -------------------------------------------------
+            // AUDIT
+            // -------------------------------------------------
+
             await _audit.LogAsync(
                 taken
                     ? "MedicationTaken"
                     : "MedicationSkipped",
                 patientUserId,
-                $"Medication {activeMedicationId.Value} adherence logged.",
+                $"Medication {medication.Id} adherence logged.",
                 patient.ClinicId
+            );
+        }
+
+        // =====================================================
+        // SOUTH AFRICAN CALENDAR DAY
+        // =====================================================
+
+        private static (
+            DateTime StartUtc,
+            DateTime EndUtc
+        )
+            GetSouthAfricaDayBoundsUtc(
+                DateTime utcNow
+            )
+        {
+            /*
+             * Convert the current UTC instant to SAST.
+             *
+             * Using DateTimeOffset here avoids depending on the
+             * operating system's time-zone database.
+             */
+            var localNow =
+                new DateTimeOffset(
+                    DateTime.SpecifyKind(
+                        utcNow,
+                        DateTimeKind.Utc
+                    )
+                )
+                .ToOffset(
+                    SouthAfricaUtcOffset
+                );
+
+            var localDayStart =
+                new DateTimeOffset(
+                    localNow.Year,
+                    localNow.Month,
+                    localNow.Day,
+                    0,
+                    0,
+                    0,
+                    SouthAfricaUtcOffset
+                );
+
+            var localDayEnd =
+                localDayStart.AddDays(
+                    1
+                );
+
+            return (
+                localDayStart.UtcDateTime,
+                localDayEnd.UtcDateTime
             );
         }
 
@@ -670,6 +888,10 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // INTERNAL QUERY MODELS
+        // =====================================================
+
         private sealed class PatientMedicationAccess
         {
             public Guid Id
@@ -679,6 +901,39 @@ namespace PersonalProject.Services.Implementations
             }
 
             public Guid? ClinicId
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class MedicationLoggingAccess
+        {
+            public Guid Id
+            {
+                get;
+                init;
+            }
+
+            public bool IsActive
+            {
+                get;
+                init;
+            }
+
+            public DateTime StartDate
+            {
+                get;
+                init;
+            }
+
+            public DateTime? EndDate
+            {
+                get;
+                init;
+            }
+
+            public int ActiveScheduleCount
             {
                 get;
                 init;

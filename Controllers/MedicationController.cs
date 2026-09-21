@@ -410,6 +410,33 @@ namespace PersonalProject.Controllers
                 );
             }
             catch (
+                InvalidOperationException ex
+            )
+            {
+                /*
+                 * Medication safety rules from MedicationService
+                 * deliberately use InvalidOperationException for
+                 * situations such as:
+                 *
+                 * - daily dose limit reached
+                 * - medication has ended
+                 * - medication has not started
+                 * - medication is inactive
+                 * - no active dosing schedule exists
+                 *
+                 * These are valid client-side requests that cannot
+                 * currently be performed, so return HTTP 400 rather
+                 * than allowing them to become HTTP 500 errors.
+                 */
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
                 UnauthorizedAccessException
             )
             {
