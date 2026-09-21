@@ -17,11 +17,13 @@ namespace PersonalProject.Controllers
         private readonly IAuthService _authService;
         private readonly IOtpVerificationService _otpService;
         private readonly IConfiguration _config;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             IAuthService authService,
             IOtpVerificationService otpService,
-            IConfiguration config
+            IConfiguration config,
+            ILogger<AuthController> logger
         )
         {
             _authService =
@@ -32,6 +34,9 @@ namespace PersonalProject.Controllers
 
             _config =
                 config;
+
+            _logger =
+                logger;
         }
 
         // =====================================================
@@ -157,13 +162,23 @@ namespace PersonalProject.Controllers
                 InvalidOperationException ex
             )
             {
+                /*
+                 * Keep configuration and infrastructure details
+                 * in server-side logs only. They must never be
+                 * returned to the browser.
+                 */
+                _logger.LogError(
+                    ex,
+                    "Failed to start Google OAuth login."
+                );
+
                 return StatusCode(
                     StatusCodes
                         .Status500InternalServerError,
                     new
                     {
                         message =
-                            ex.Message
+                            "Google sign-in is temporarily unavailable. Please try again."
                     }
                 );
             }
@@ -268,9 +283,19 @@ namespace PersonalProject.Controllers
                 );
             }
             catch (
-                InvalidOperationException
+                InvalidOperationException ex
             )
             {
+                /*
+                 * The underlying OAuth/configuration error is
+                 * useful to us in Render logs but should not be
+                 * exposed to the frontend.
+                 */
+                _logger.LogError(
+                    ex,
+                    "Google OAuth callback failed."
+                );
+
                 return RedirectToGoogleError(
                     "Google sign-in could not be completed. Please try again."
                 );
