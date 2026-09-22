@@ -736,25 +736,24 @@ namespace PersonalProject.Controllers
         // PROXY COLLECTION REMINDERS
         // =====================================================
 
-        private async Task
-            EnsureProxyCollectionRemindersAsync(
-                Guid userId
-            )
+        private async Task EnsureProxyCollectionRemindersAsync(
+            Guid userId
+        )
         {
+            // =====================================================
+            // GET ACTIVE PROXY
+            // =====================================================
+
             var proxy =
                 await _context.Proxies
                     .AsNoTracking()
-                    .Include(
-                        proxyEntity =>
-                            proxyEntity.User
-                    )
+                    .Include(p => p.User)
+                    .Include(p => p.Clinic)
                     .FirstOrDefaultAsync(
-                        proxyEntity =>
-                            proxyEntity.UserId ==
-                                userId &&
-                            proxyEntity.User.Role ==
-                                RoleNames.Proxy &&
-                            proxyEntity.User.IsActive
+                        p =>
+                            p.UserId == userId &&
+                            p.User.Role == RoleNames.Proxy &&
+                            p.User.IsActive
                     );
 
             if (proxy == null)
@@ -762,14 +761,27 @@ namespace PersonalProject.Controllers
                 return;
             }
 
+            if (
+                proxy.ClinicId == Guid.Empty ||
+                proxy.Clinic == null
+            )
+            {
+                return;
+            }
+
+            // =====================================================
+            // GET VALID SAME-CLINIC PATIENTS
+            // =====================================================
+
             var patientIds =
                 await _context.ProxyLinks
                     .AsNoTracking()
                     .Where(
                         link =>
-                            link.ProxyId ==
-                                proxy.Id &&
-                            link.IsActive
+                            link.ProxyId == proxy.Id &&
+                            link.IsActive &&
+                            link.Patient.ClinicId ==
+                                proxy.ClinicId
                     )
                     .Select(
                         link =>
@@ -778,109 +790,127 @@ namespace PersonalProject.Controllers
                     .Distinct()
                     .ToListAsync();
 
-            if (
-                patientIds.Count ==
-                    0
-            )
+            if (patientIds.Count == 0)
             {
                 return;
             }
 
-            var now =
-                DateTime.UtcNow;
+            // =====================================================
+            // COLLECTION WINDOW
+            // =====================================================
+
+            var today =
+                DateTime.UtcNow.Date;
 
             var reminderCutoff =
-                now.AddHours(48);
+                today.AddDays(2);
 
             var collections =
-                await _context
-                    .MedicationCollections
+                await _context.MedicationCollections
                     .AsNoTracking()
                     .Include(
                         collection =>
                             collection.Patient
                     )
-                    .ThenInclude(
-                        patient =>
-                            patient.User
+                        .ThenInclude(
+                            patient =>
+                                patient.User
+                        )
+                    .Include(
+                        collection =>
+                            collection.Clinic
                     )
                     .Where(
                         collection =>
                             patientIds.Contains(
                                 collection.PatientId
                             ) &&
+                            collection.ClinicId ==
+                                proxy.ClinicId &&
                             collection.Status !=
-                                MedicationCollectionStatuses
-                                    .Collected &&
+                                MedicationCollectionStatuses.Collected &&
                             collection.Status !=
-                                MedicationCollectionStatuses
-                                    .Cancelled &&
-                            collection
-                                .ScheduledCollectionDate <=
-                                    reminderCutoff
+                                MedicationCollectionStatuses.Cancelled &&
+                            collection.ScheduledCollectionDate.Date <=
+                                reminderCutoff
                     )
                     .OrderBy(
                         collection =>
-                            collection
-                                .ScheduledCollectionDate
+                            collection.ScheduledCollectionDate
                     )
                     .ToListAsync();
 
-            if (
-                collections.Count ==
-                    0
-            )
-            {
-                return;
-            }
-
-            var existingMessages =
-                await _context.Notifications
-                    .AsNoTracking()
-                    .Where(
-                        notification =>
-                            notification.UserId ==
-                                userId
-                    )
-                    .Select(
-                        notification =>
-                            notification.Message
-                    )
-                    .ToListAsync();
-
-            var existing =
-                existingMessages
-                    .ToHashSet(
-                        StringComparer.Ordinal
-                    );
+            // =====================================================
+            // CREATE REMINDERS
+            // =====================================================
 
             foreach (
-                var collection
-                in collections
+                var collection in collections
             )
             {
-                var date =
+                var collectionDate =
                     collection
                         .ScheduledCollectionDate
-                        .ToString(
-                            "dd MMM yyyy"
+                        .Date;
+
+                string message;
+
+                if (collectionDate < today)
+                {
+                    message =
+                        "Medication collection overdue: " +
+                        $"{collection.Patient.User.FullName}'s medication collection at " +
+                        $"{collection.Clinic.Name} was due on " +
+                        $"{collectionDate:dd MMM yyyy}.";
+                }
+                else if (collectionDate == today)
+                {
+                    message =
+                        "Medication collection due today: " +
+                        $"{collection.Patient.User.FullName}'s medication collection at " +
+                        $"{collection.Clinic.Name} is due today.";
+                }
+                else
+                {
+                    message =
+                        "Upcoming medication collection: " +
+                        $"{collection.Patient.User.FullName}'s medication collection at " +
+                        $"{collection.Clinic.Name} is due on " +
+                        $"{collectionDate:dd MMM yyyy}.";
+                }
+
+                // =====================================================
+                // DUPLICATE PROTECTION
+                // =====================================================
+
+                var collectionReference =
+                    collection.Id.ToString();
+
+                /*
+                 * Collection ID is stored inside the notification
+                 * message so the same collection does not generate
+                 * another notification every time the endpoint is
+                 * refreshed.
+                 */
+                var alreadyExists =
+                    await _context.Notifications
+                        .AsNoTracking()
+                        .AnyAsync(
+                            notification =>
+                                notification.UserId ==
+                                    userId &&
+                                notification.Message.Contains(
+                                    collectionReference
+                                )
                         );
 
-                var message =
-                    collection
-                        .ScheduledCollectionDate <
-                        now
-                        ? $"{collection.Patient.User.FullName}'s medication collection is overdue. It was due on {date}."
-                        : $"{collection.Patient.User.FullName}'s medication collection is due on {date}.";
-
-                if (
-                    existing.Contains(
-                        message
-                    )
-                )
+                if (alreadyExists)
                 {
                     continue;
                 }
+
+                var storedMessage =
+                    $"{message} [Collection: {collectionReference}]";
 
                 _context.Notifications.Add(
                     new Notification
@@ -892,7 +922,7 @@ namespace PersonalProject.Controllers
                             userId,
 
                         Message =
-                            message,
+                            storedMessage,
 
                         IsRead =
                             false,
@@ -901,20 +931,13 @@ namespace PersonalProject.Controllers
                             DateTime.UtcNow
                     }
                 );
-
-                existing.Add(
-                    message
-                );
             }
 
             if (
-                _context
-                    .ChangeTracker
-                    .HasChanges()
+                _context.ChangeTracker.HasChanges()
             )
             {
-                await _context
-                    .SaveChangesAsync();
+                await _context.SaveChangesAsync();
             }
         }
 

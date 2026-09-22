@@ -41,32 +41,19 @@ if (
     );
 }
 
-var connectionStringBuilder =
-    new NpgsqlConnectionStringBuilder(
-        configuredConnectionString
-    )
+var connectionStringBuilder = new NpgsqlConnectionStringBuilder( configuredConnectionString )
     {
-        KeepAlive =
-            30,
+        KeepAlive = 30,
 
-        ConnectionIdleLifetime =
-            300,
+        ConnectionIdleLifetime = 300,
 
-        ConnectionPruningInterval =
-            10
+        ConnectionPruningInterval = 10
     };
 
-builder.Services.AddDbContext<PhilaLinkDbContext>(
-    options =>
-        options.UseNpgsql(
-            connectionStringBuilder
-                .ConnectionString,
-            npgsqlOptions =>
-            {
+builder.Services.AddDbContext<PhilaLinkDbContext>(options => options.UseNpgsql( connectionStringBuilder .ConnectionString, npgsqlOptions =>{
                 npgsqlOptions.EnableRetryOnFailure(
                     maxRetryCount: 3,
-                    maxRetryDelay:
-                        TimeSpan.FromSeconds(5),
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorCodesToAdd: null
                 );
             }
@@ -98,8 +85,7 @@ builder.Services.AddScoped<ILegalDocumentService, LegalDocumentService>();
 builder.Services.AddHttpClient<IChatbotProvider, GeminiChatbotProvider>(
     client =>
     {
-        client.Timeout =
-            TimeSpan.FromSeconds(45);
+        client.Timeout = TimeSpan.FromSeconds(45);
     }
 );
 
@@ -111,8 +97,7 @@ builder.Services.AddHttpClient<IWeatherService, WeatherService>(
                 "https://api.openweathermap.org"
             );
 
-        client.Timeout =
-            TimeSpan.FromSeconds(15);
+        client.Timeout = TimeSpan.FromSeconds(15);
     }
 );
 

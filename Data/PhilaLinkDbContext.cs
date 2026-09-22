@@ -359,6 +359,19 @@ namespace PersonalProject.Data
             // PATIENT -> PROXY LINKS
             // =================================================
 
+            // =================================================
+            // PROXY -> CLINIC
+            // =================================================
+
+            modelBuilder.Entity<Proxy>()
+                .HasOne(proxy => proxy.Clinic)
+                .WithMany()
+                .HasForeignKey(proxy => proxy.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Proxy>()
+                .HasIndex(proxy => proxy.ClinicId);
+
             modelBuilder.Entity<ProxyLink>()
                 .HasOne(pl => pl.Patient)
                 .WithMany(p => p.ProxyLinksAsPatient)

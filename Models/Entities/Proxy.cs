@@ -13,6 +13,22 @@ namespace PersonalProject.Models.Entities
         public User User { get; set; } = null!;
 
         // =====================================================
+        // CLINIC
+        // =====================================================
+
+        /*
+         * A Proxy belongs to one clinic.
+         *
+         * This is the clinic at which the Proxy is registered
+         * to collect medication on behalf of linked patients.
+         *
+         * Proxy access must never cross this clinic boundary.
+         */
+        public Guid ClinicId { get; set; }
+
+        public Clinic Clinic { get; set; } = null!;
+
+        // =====================================================
         // CONTACT
         // =====================================================
 

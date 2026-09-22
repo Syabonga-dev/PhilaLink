@@ -364,7 +364,8 @@ namespace PersonalProject.Services.Implementations
 
             await ValidateProxyAssignmentAsync(
                 collection.PatientId,
-                proxyId
+                proxyId,
+                collection.ClinicId
             );
 
             collection.ProxyId =
@@ -452,7 +453,8 @@ namespace PersonalProject.Services.Implementations
             {
                 await ValidateProxyAssignmentAsync(
                     collection.PatientId,
-                    proxyId.Value
+                    proxyId.Value,
+                    collection.ClinicId
                 );
             }
 
@@ -535,25 +537,52 @@ namespace PersonalProject.Services.Implementations
 
         private async Task ValidateProxyAssignmentAsync(
             Guid patientId,
-            Guid proxyId
+            Guid proxyId,
+            Guid collectionClinicId
         )
         {
+            /*
+             * A Proxy may collect medication for a Patient only when:
+             *
+             * 1. The ProxyLink is active.
+             * 2. The Proxy account is active.
+             * 3. The Proxy has the Proxy role.
+             * 4. The Patient belongs to the collection's clinic.
+             * 5. The Proxy belongs to the collection's clinic.
+             *
+             * This deliberately does NOT trust ProxyLink alone,
+             * because legacy/load-test data may contain cross-clinic
+             * ProxyLinks.
+             */
             var valid =
                 await _context.ProxyLinks
+                    .AsNoTracking()
                     .AnyAsync(
-                        pl =>
-                            pl.PatientId ==
+                        link =>
+                            link.PatientId ==
                                 patientId &&
-                            pl.ProxyId ==
+
+                            link.ProxyId ==
                                 proxyId &&
-                            pl.IsActive &&
-                            pl.Proxy.User.IsActive
+
+                            link.IsActive &&
+
+                            link.Patient.ClinicId ==
+                                collectionClinicId &&
+
+                            link.Proxy.ClinicId ==
+                                collectionClinicId &&
+
+                            link.Proxy.User.Role ==
+                                RoleNames.Proxy &&
+
+                            link.Proxy.User.IsActive
                     );
 
             if (!valid)
             {
                 throw new UnauthorizedAccessException(
-                    "Proxy is not actively assigned to this patient."
+                    "Proxy is not actively assigned to this patient at this clinic."
                 );
             }
         }

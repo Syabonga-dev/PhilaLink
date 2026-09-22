@@ -273,14 +273,37 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<NewStaffAccountDto>
-            RegisterProxyAsync(
-                RegisterProxyDto dto,
-                Guid performedByUserId
-            )
+    RegisterProxyAsync(
+        RegisterProxyDto dto,
+        Guid performedByUserId
+    )
         {
-            await GetAdminActorAsync(
-                performedByUserId
+            var actor =
+                await GetAdminActorAsync(
+                    performedByUserId
+                );
+
+            // ClinicAdmin may only create proxies
+            // for their own clinic.
+            await EnsureClinicAccessAsync(
+                actor,
+                dto.ClinicId
             );
+
+            var clinicExists =
+                await _context.Clinics
+                    .AnyAsync(
+                        clinic =>
+                            clinic.Id ==
+                            dto.ClinicId
+                    );
+
+            if (!clinicExists)
+            {
+                throw new KeyNotFoundException(
+                    "Clinic not found."
+                );
+            }
 
             await using var transaction =
                 await _context.Database
@@ -303,6 +326,10 @@ namespace PersonalProject.Services.Implementations
 
                     UserId =
                         user.Id,
+
+                    // NEW
+                    ClinicId =
+                        dto.ClinicId,
 
                     Email =
                         user.Email,
@@ -355,9 +382,6 @@ namespace PersonalProject.Services.Implementations
                 proxy
             );
 
-            /*
-             * User + Proxy profile are one logical operation.
-             */
             await _context.SaveChangesAsync();
 
             await transaction.CommitAsync();

@@ -21,18 +21,27 @@ namespace PersonalProject.Services.Implementations
             _audit = audit;
         }
 
+        // =====================================================
+        // ASSIGN PROXY
+        // =====================================================
+
         public async Task AssignProxyAsync(
             Guid patientId,
             Guid proxyId,
             Guid performedByUserId
         )
         {
-            var actor = await GetStaffActorAsync(performedByUserId);
+            var actor =
+                await GetStaffActorAsync(
+                    performedByUserId
+                );
 
-            var patient =await _context.Patients
-                            .Include(p => p.User)
-                            .FirstOrDefaultAsync(
-                                p => p.Id == patientId);
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p => p.Id == patientId
+                    );
 
             if (patient == null)
             {
@@ -41,10 +50,16 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Clinic staff may only manage patients belonging
+             * to their own clinic.
+             *
+             * SuperAdmin has actor.ClinicId == null and may
+             * therefore work across clinics.
+             */
             if (
                 actor.ClinicId != null &&
-                patient.ClinicId !=
-                    actor.ClinicId
+                patient.ClinicId != actor.ClinicId
             )
             {
                 throw new UnauthorizedAccessException(
@@ -52,9 +67,17 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            if (patient.ClinicId == null)
+            {
+                throw new InvalidOperationException(
+                    "The patient must be assigned to a clinic before a proxy can be assigned."
+                );
+            }
+
             var proxy =
                 await _context.Proxies
                     .Include(p => p.User)
+                    .Include(p => p.Clinic)
                     .FirstOrDefaultAsync(
                         p => p.Id == proxyId
                     );
@@ -62,8 +85,7 @@ namespace PersonalProject.Services.Implementations
             if (
                 proxy == null ||
                 !proxy.User.IsActive ||
-                proxy.User.Role !=
-                    RoleNames.Proxy
+                proxy.User.Role != RoleNames.Proxy
             )
             {
                 throw new KeyNotFoundException(
@@ -71,14 +93,41 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * CRITICAL CLINIC BOUNDARY
+             *
+             * A Proxy may only be linked to patients belonging
+             * to the clinic where the Proxy is registered.
+             */
+            if (
+                proxy.ClinicId != patient.ClinicId.Value
+            )
+            {
+                throw new InvalidOperationException(
+                    "The proxy and patient must belong to the same clinic."
+                );
+            }
+
+            /*
+             * A ClinicAdmin/Nurse must also be operating inside
+             * the same clinic as the Proxy.
+             */
+            if (
+                actor.ClinicId != null &&
+                proxy.ClinicId != actor.ClinicId.Value
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Proxy does not belong to your clinic."
+                );
+            }
+
             var exists =
                 await _context.ProxyLinks
                     .AnyAsync(
                         p =>
-                            p.PatientId ==
-                                patientId &&
-                            p.ProxyId ==
-                                proxyId &&
+                            p.PatientId == patientId &&
+                            p.ProxyId == proxyId &&
                             p.IsActive
                     );
 
@@ -104,21 +153,30 @@ namespace PersonalProject.Services.Implementations
                     AssignedAt =
                         DateTime.UtcNow,
 
-                    IsActive = true,
-                    EndedAt = null,
-                    EndedByUserId = null
+                    IsActive =
+                        true,
+
+                    EndedAt =
+                        null,
+
+                    EndedByUserId =
+                        null
                 };
 
             if (actor.NurseId != null)
             {
-                link.AssignedByNurseId = actor.NurseId;
+                link.AssignedByNurseId =
+                    actor.NurseId;
             }
             else if (actor.AdminId != null)
             {
-                link.AssignedByAdminId = actor.AdminId;
+                link.AssignedByAdminId =
+                    actor.AdminId;
             }
 
-            _context.ProxyLinks.Add(link);
+            _context.ProxyLinks.Add(
+                link
+            );
 
             await _context.SaveChangesAsync();
 
@@ -128,6 +186,10 @@ namespace PersonalProject.Services.Implementations
                 $"Proxy {proxyId} assigned to patient {patientId}."
             );
         }
+
+        // =====================================================
+        // REMOVE PROXY
+        // =====================================================
 
         public async Task RemoveProxyAsync(
             Guid proxyLinkId,
@@ -142,6 +204,7 @@ namespace PersonalProject.Services.Implementations
             var link =
                 await _context.ProxyLinks
                     .Include(p => p.Patient)
+                    .Include(p => p.Proxy)
                     .FirstOrDefaultAsync(
                         p => p.Id == proxyLinkId
                     );
@@ -155,12 +218,21 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 actor.ClinicId != null &&
-                link.Patient.ClinicId !=
-                    actor.ClinicId
+                link.Patient.ClinicId != actor.ClinicId
             )
             {
                 throw new UnauthorizedAccessException(
                     "You cannot modify proxy links outside your clinic."
+                );
+            }
+
+            if (
+                actor.ClinicId != null &&
+                link.Proxy.ClinicId != actor.ClinicId.Value
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "You cannot modify proxy links for a proxy outside your clinic."
                 );
             }
 
@@ -171,7 +243,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            link.IsActive = false;
+            link.IsActive =
+                false;
 
             link.EndedAt =
                 DateTime.UtcNow;
@@ -188,8 +261,11 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task<
-            List<PatientProxyResponseDto>>
+        // =====================================================
+        // GET PATIENT PROXIES
+        // =====================================================
+
+        public async Task<List<PatientProxyResponseDto>>
             GetPatientProxiesAsync(
                 Guid patientId,
                 Guid performedByUserId
@@ -215,8 +291,7 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 actor.ClinicId != null &&
-                patient.ClinicId !=
-                    actor.ClinicId
+                patient.ClinicId != actor.ClinicId
             )
             {
                 throw new UnauthorizedAccessException(
@@ -224,44 +299,55 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Only return Proxy assignments that are valid
+             * for the patient's current clinic.
+             *
+             * This also prevents legacy cross-clinic links
+             * from being exposed.
+             */
             return await _context.ProxyLinks
                 .Include(pl => pl.Proxy)
                     .ThenInclude(p => p.User)
                 .Where(
                     pl =>
-                        pl.PatientId ==
-                            patientId &&
-                        pl.IsActive
+                        pl.PatientId == patientId &&
+                        pl.IsActive &&
+                        patient.ClinicId != null &&
+                        pl.Proxy.ClinicId ==
+                            patient.ClinicId.Value
                 )
                 .OrderByDescending(
                     pl => pl.AssignedAt
                 )
-                .Select(pl =>
-                    new PatientProxyResponseDto
-                    {
-                        ProxyLinkId =
-                            pl.Id,
+                .Select(
+                    pl =>
+                        new PatientProxyResponseDto
+                        {
+                            ProxyLinkId =
+                                pl.Id,
 
-                        ProxyId =
-                            pl.ProxyId,
+                            ProxyId =
+                                pl.ProxyId,
 
-                        ProxyName =
-                            pl.Proxy.User
-                                .FullName,
+                            ProxyName =
+                                pl.Proxy.User.FullName,
 
-                        PhoneNumber =
-                            pl.Proxy.User
-                                .PhoneNumber,
+                            PhoneNumber =
+                                pl.Proxy.User.PhoneNumber,
 
-                        AssignedAt =
-                            pl.AssignedAt
-                    }
+                            AssignedAt =
+                                pl.AssignedAt
+                        }
                 )
                 .ToListAsync();
         }
 
-        public async Task<
-            List<ProxyPatientResponseDto>>
+        // =====================================================
+        // GET CURRENT PROXY PATIENTS
+        // =====================================================
+
+        public async Task<List<ProxyPatientResponseDto>>
             GetMyPatientsAsync(
                 Guid proxyUserId
             )
@@ -269,12 +355,11 @@ namespace PersonalProject.Services.Implementations
             var proxy =
                 await _context.Proxies
                     .Include(p => p.User)
+                    .Include(p => p.Clinic)
                     .FirstOrDefaultAsync(
                         p =>
-                            p.UserId ==
-                                proxyUserId &&
-                            p.User.Role ==
-                                RoleNames.Proxy &&
+                            p.UserId == proxyUserId &&
+                            p.User.Role == RoleNames.Proxy &&
                             p.User.IsActive
                     );
 
@@ -285,57 +370,151 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * CRITICAL CLINIC FILTER
+             *
+             * A Proxy can only retrieve linked patients whose
+             * ClinicId matches the Proxy's own ClinicId.
+             *
+             * This protects the API even if an old or manually
+             * inserted ProxyLink exists across clinics.
+             */
             return await _context.ProxyLinks
+                .AsNoTracking()
                 .Include(pl => pl.Patient)
                     .ThenInclude(p => p.User)
                 .Include(pl => pl.Patient)
                     .ThenInclude(p => p.Clinic)
                 .Where(
                     pl =>
-                        pl.ProxyId ==
-                            proxy.Id &&
-                        pl.IsActive
+                        pl.ProxyId == proxy.Id &&
+                        pl.IsActive &&
+                        pl.Patient.ClinicId ==
+                            proxy.ClinicId
                 )
                 .OrderBy(
                     pl =>
-                        pl.Patient.User
-                            .FullName
+                        pl.Patient.User.FullName
                 )
-                .Select(pl =>
-                    new ProxyPatientResponseDto
-                    {
-                        ProxyLinkId =
-                            pl.Id,
+                .Select(
+                    pl =>
+                        new ProxyPatientResponseDto
+                        {
+                            ProxyLinkId =
+                                pl.Id,
 
-                        PatientId =
-                            pl.PatientId,
+                            PatientId =
+                                pl.PatientId,
 
-                        PatientName =
-                            pl.Patient.User
-                                .FullName,
+                            PatientName =
+                                pl.Patient.User.FullName,
 
-                        PatientNumber =
-                            pl.Patient
-                                .PatientNumber,
+                            PatientNumber =
+                                pl.Patient.PatientNumber,
 
-                        ClinicId =
-                            pl.Patient.ClinicId,
+                            ClinicId =
+                                pl.Patient.ClinicId,
 
-                        ClinicName =
-                            pl.Patient.Clinic ==
-                                    null
-                                ? null
-                                : pl.Patient
-                                    .Clinic.Name,
+                            ClinicName =
+                                pl.Patient.Clinic == null
+                                    ? null
+                                    : pl.Patient.Clinic.Name,
 
-                        AssignedAt =
-                            pl.AssignedAt
-                    }
+                            AssignedAt =
+                                pl.AssignedAt
+                        }
                 )
                 .ToListAsync();
         }
 
-        private async Task<StaffActor>GetStaffActorAsync(Guid userId)
+        // =====================================================
+        // GET PATIENT'S ASSIGNED PROXY
+        // =====================================================
+
+        public async Task<PatientAssignedWorkerDto?>
+            GetMyAssignedWorkerAsync(
+                Guid patientUserId
+            )
+        {
+            var patient =
+                await _context.Patients
+                    .Include(p => p.User)
+                    .FirstOrDefaultAsync(
+                        p =>
+                            p.UserId == patientUserId &&
+                            p.User.Role == RoleNames.Patient &&
+                            p.User.IsActive
+                    );
+
+            if (patient == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Active patient profile not found."
+                );
+            }
+
+            if (patient.ClinicId == null)
+            {
+                return null;
+            }
+
+            /*
+             * Do not expose a legacy Proxy assignment where
+             * the Proxy belongs to another clinic.
+             */
+            return await _context.ProxyLinks
+                .Include(pl => pl.Proxy)
+                    .ThenInclude(p => p.User)
+                .Where(
+                    pl =>
+                        pl.PatientId == patient.Id &&
+                        pl.IsActive &&
+                        pl.Proxy.User.IsActive &&
+                        pl.Proxy.User.Role ==
+                            RoleNames.Proxy &&
+                        pl.Proxy.ClinicId ==
+                            patient.ClinicId.Value
+                )
+                .OrderByDescending(
+                    pl => pl.AssignedAt
+                )
+                .Select(
+                    pl =>
+                        new PatientAssignedWorkerDto
+                        {
+                            ProxyLinkId =
+                                pl.Id,
+
+                            ProxyId =
+                                pl.ProxyId,
+
+                            FullName =
+                                pl.Proxy.User.FullName,
+
+                            PhoneNumber =
+                                pl.Proxy.User.PhoneNumber,
+
+                            Email =
+                                pl.Proxy.Email,
+
+                            AssignedAt =
+                                pl.AssignedAt,
+
+                            IsActive =
+                                pl.IsActive
+                        }
+                )
+                .FirstOrDefaultAsync();
+        }
+
+        // =====================================================
+        // STAFF ACTOR
+        // =====================================================
+
+        private async Task<StaffActor>
+            GetStaffActorAsync(
+                Guid userId
+            )
         {
             var user =
                 await _context.Users
@@ -354,8 +533,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role ==
-                    RoleNames.Nurse &&
+                user.Role == RoleNames.Nurse &&
                 user.Nurse != null
             )
             {
@@ -370,8 +548,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role ==
-                    RoleNames.ClinicAdmin &&
+                user.Role == RoleNames.ClinicAdmin &&
                 user.Admin?.ClinicId != null
             )
             {
@@ -386,8 +563,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             if (
-                user.Role ==
-                    RoleNames.SuperAdmin &&
+                user.Role == RoleNames.SuperAdmin &&
                 user.Admin != null
             )
             {
@@ -404,75 +580,9 @@ namespace PersonalProject.Services.Implementations
             throw new UnauthorizedAccessException();
         }
 
-        public async Task<PatientAssignedWorkerDto?>
-    GetMyAssignedWorkerAsync(
-        Guid patientUserId
-    )
-        {
-            var patient =
-                await _context.Patients
-                    .Include(p => p.User)
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
-                                patientUserId &&
-                            p.User.Role ==
-                                RoleNames.Patient &&
-                            p.User.IsActive
-                    );
-
-            if (patient == null)
-            {
-                throw new UnauthorizedAccessException(
-                    "Active patient profile not found."
-                );
-            }
-
-            return await _context.ProxyLinks
-                .Include(pl => pl.Proxy)
-                    .ThenInclude(p => p.User)
-                .Where(
-                    pl =>
-                        pl.PatientId ==
-                            patient.Id &&
-                        pl.IsActive &&
-                        pl.Proxy.User.IsActive &&
-                        pl.Proxy.User.Role ==
-                            RoleNames.Proxy
-                )
-                .OrderByDescending(
-                    pl => pl.AssignedAt
-                )
-                .Select(
-                    pl =>
-                        new PatientAssignedWorkerDto
-                        {
-                            ProxyLinkId =
-                                pl.Id,
-
-                            ProxyId =
-                                pl.ProxyId,
-
-                            FullName =
-                                pl.Proxy.User
-                                    .FullName,
-
-                            PhoneNumber =
-                                pl.Proxy.User
-                                    .PhoneNumber,
-
-                            Email =
-                                pl.Proxy.Email,
-
-                            AssignedAt =
-                                pl.AssignedAt,
-
-                            IsActive =
-                                pl.IsActive
-                        }
-                )
-                .FirstOrDefaultAsync();
-        }
+        // =====================================================
+        // INTERNAL MODEL
+        // =====================================================
 
         private class StaffActor
         {
