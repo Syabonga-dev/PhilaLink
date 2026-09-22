@@ -35,11 +35,9 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpGet]
-        public async Task<IActionResult>
-            GetMine()
+        public async Task<IActionResult> GetMine()
         {
-            var userId =
-                GetCurrentUserId();
+            var userId =  GetCurrentUserId();
 
             /*
              * Patient reminders are generated when the patient
@@ -53,9 +51,17 @@ namespace PersonalProject.Controllers
             );
 
             /*
-             * Preserve the existing Proxy collection reminder
-             * behaviour.
+             * Remove legacy/stale Proxy collection reminders
+             * before creating or returning the current feed.
+             *
+             * This protects the notification feed from old
+             * cross-clinic ProxyLinks or patients that are no
+             * longer actively assigned to this Proxy.
              */
+            await RemoveInvalidProxyCollectionNotificationsAsync(
+                userId
+            );
+
             await EnsureProxyCollectionRemindersAsync(
                 userId
             );
@@ -196,9 +202,231 @@ namespace PersonalProject.Controllers
             );
         }
 
+
+
+        // =====================================================
+        // CLEAN INVALID PROXY COLLECTION REMINDERS
+        // =====================================================
+
+        private async Task
+            RemoveInvalidProxyCollectionNotificationsAsync(
+                Guid userId
+            )
+        {
+            var proxy =
+                await _context.Proxies
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
+                                userId &&
+                            item.User.Role ==
+                                RoleNames.Proxy &&
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            /*
+             * This endpoint is shared by several roles.
+             *
+             * If the authenticated account is not an
+             * active Proxy there is nothing to clean.
+             */
+            if (
+                proxy == null ||
+                proxy.ClinicId ==
+                    Guid.Empty
+            )
+            {
+                return;
+            }
+
+            /*
+             * A collection is valid for this Proxy only
+             * when:
+             *
+             * - the Patient is actively linked to Proxy;
+             * - Patient belongs to Proxy's clinic;
+             * - collection belongs to Proxy's clinic.
+             *
+             * We deliberately keep historical reminders
+             * for Collected/Cancelled collections when the
+             * Patient is still legitimately linked.
+             */
+            var validCollectionIds =
+                await _context
+                    .MedicationCollections
+                    .AsNoTracking()
+                    .Where(
+                        collection =>
+                            collection.ClinicId ==
+                                proxy.ClinicId &&
+                            collection.Patient.ClinicId ==
+                                proxy.ClinicId &&
+                            _context.ProxyLinks.Any(
+                                link =>
+                                    link.ProxyId ==
+                                        proxy.Id &&
+                                    link.PatientId ==
+                                        collection.PatientId &&
+                                    link.IsActive &&
+                                    link.Patient.ClinicId ==
+                                        proxy.ClinicId
+                            )
+                    )
+                    .Select(
+                        collection =>
+                            collection.Id
+                    )
+                    .ToListAsync();
+
+            var validIds =
+                validCollectionIds
+                    .ToHashSet();
+
+            /*
+             * Only PhilaLink-generated Proxy collection
+             * reminders contain this marker.
+             *
+             * Other notifications are left untouched.
+             */
+            var proxyNotifications =
+                await _context.Notifications
+                    .Where(
+                        notification =>
+                            notification.UserId ==
+                                userId &&
+                            notification.Message.Contains(
+                                "[Collection: "
+                            )
+                    )
+                    .ToListAsync();
+
+            if (
+                proxyNotifications.Count ==
+                0
+            )
+            {
+                return;
+            }
+
+            var invalidNotifications =
+                proxyNotifications
+                    .Where(
+                        notification =>
+                        {
+                            var collectionId =
+                                TryGetCollectionId(
+                                    notification.Message
+                                );
+
+                            return (
+                                collectionId ==
+                                    null ||
+                                !validIds.Contains(
+                                    collectionId.Value
+                                )
+                            );
+                        }
+                    )
+                    .ToList();
+
+            if (
+                invalidNotifications.Count ==
+                0
+            )
+            {
+                return;
+            }
+
+            _context.Notifications.RemoveRange(
+                invalidNotifications
+            );
+
+            await _context.SaveChangesAsync();
+        }
+
+
+        // =====================================================
+        // COLLECTION REFERENCE PARSER
+        // =====================================================
+
+        private static Guid?
+            TryGetCollectionId(
+                string? message
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    message
+                )
+            )
+            {
+                return null;
+            }
+
+            const string marker =
+                "[Collection: ";
+
+            var start =
+                message.IndexOf(
+                    marker,
+                    StringComparison.Ordinal
+                );
+
+            if (
+                start <
+                0
+            )
+            {
+                return null;
+            }
+
+            start +=
+                marker.Length;
+
+            var end =
+                message.IndexOf(
+                    ']',
+                    start
+                );
+
+            if (
+                end <=
+                start
+            )
+            {
+                return null;
+            }
+
+            var value =
+                message.Substring(
+                    start,
+                    end - start
+                );
+
+            return Guid.TryParse(
+                value,
+                out var collectionId
+            )
+                ? collectionId
+                : null;
+        }
+
         // =====================================================
         // PATIENT REMINDERS
         // =====================================================
+
+
+
 
         private async Task
             EnsurePatientRemindersAsync(
