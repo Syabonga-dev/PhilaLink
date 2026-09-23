@@ -131,7 +131,10 @@ namespace PersonalProject.Services.Implementations
                             item.IsActive
                     );
 
-            if (conversation == null)
+            if (
+                conversation ==
+                null
+            )
             {
                 conversation =
                     new ChatConversation
@@ -178,9 +181,11 @@ namespace PersonalProject.Services.Implementations
                         DateTime.UtcNow
                 };
 
-            _context.ChatMessages.Add(
-                userMessage
-            );
+            _context
+                .ChatMessages
+                .Add(
+                    userMessage
+                );
 
             conversation.Messages.Add(
                 userMessage
@@ -292,9 +297,11 @@ namespace PersonalProject.Services.Implementations
                     responseText.Trim()
                 );
 
-            _context.ChatMessages.Add(
-                assistantMessage
-            );
+            _context
+                .ChatMessages
+                .Add(
+                    assistantMessage
+                );
 
             conversation.Messages.Add(
                 assistantMessage
@@ -306,10 +313,11 @@ namespace PersonalProject.Services.Implementations
             await _context
                 .SaveChangesAsync();
 
-            return CreateResponse(
-                conversation,
-                assistantMessage
-            );
+            return
+                CreateResponse(
+                    conversation,
+                    assistantMessage
+                );
         }
 
         // =====================================================
@@ -351,48 +359,50 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 conversation ==
-                    null
+                null
             )
             {
-                return null;
+                return
+                    null;
             }
 
-            return new ChatbotHistoryDto
-            {
-                ConversationId =
-                    conversation.Id,
+            return
+                new ChatbotHistoryDto
+                {
+                    ConversationId =
+                        conversation.Id,
 
-                StartedAt =
-                    conversation.StartedAt,
+                    StartedAt =
+                        conversation.StartedAt,
 
-                UpdatedAt =
-                    conversation.UpdatedAt,
+                    UpdatedAt =
+                        conversation.UpdatedAt,
 
-                Messages =
-                    conversation.Messages
-                        .OrderBy(
-                            message =>
-                                message.CreatedAt
-                        )
-                        .Select(
-                            message =>
-                                new ChatbotHistoryMessageDto
-                                {
-                                    Id =
-                                        message.Id,
+                    Messages =
+                        conversation.Messages
+                            .OrderBy(
+                                message =>
+                                    message.CreatedAt
+                            )
+                            .Select(
+                                message =>
+                                    new ChatbotHistoryMessageDto
+                                    {
+                                        Id =
+                                            message.Id,
 
-                                    Role =
-                                        message.Role,
+                                        Role =
+                                            message.Role,
 
-                                    Content =
-                                        message.Content,
+                                        Content =
+                                            message.Content,
 
-                                    CreatedAt =
-                                        message.CreatedAt
-                                }
-                        )
-                        .ToList()
-            };
+                                        CreatedAt =
+                                            message.CreatedAt
+                                    }
+                            )
+                            .ToList()
+                };
         }
 
         // =====================================================
@@ -452,9 +462,11 @@ namespace PersonalProject.Services.Implementations
                     responseText
                 );
 
-            _context.ChatMessages.Add(
-                assistantMessage
-            );
+            _context
+                .ChatMessages
+                .Add(
+                    assistantMessage
+                );
 
             conversation.Messages.Add(
                 assistantMessage
@@ -466,10 +478,11 @@ namespace PersonalProject.Services.Implementations
             await _context
                 .SaveChangesAsync();
 
-            return CreateResponse(
-                conversation,
-                assistantMessage
-            );
+            return
+                CreateResponse(
+                    conversation,
+                    assistantMessage
+                );
         }
 
         // =====================================================
@@ -482,7 +495,8 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var patientId =
-                await _context.Patients
+                await _context
+                    .Patients
                     .AsNoTracking()
                     .Where(
                         patient =>
@@ -500,7 +514,7 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 patientId ==
-                    null
+                null
             )
             {
                 throw new UnauthorizedAccessException(
@@ -508,7 +522,8 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            return patientId.Value;
+            return
+                patientId.Value;
         }
 
         private async Task<bool>
@@ -536,7 +551,8 @@ namespace PersonalProject.Services.Implementations
              * Existing accounts created before preferences
              * existed retain the historical default of enabled.
              */
-            return value ??
+            return
+                value ??
                 true;
         }
 
@@ -553,7 +569,8 @@ namespace PersonalProject.Services.Implementations
                 DateTime.UtcNow;
 
             var medications =
-                await _context.Medications
+                await _context
+                    .Medications
                     .AsNoTracking()
                     .AsSplitQuery()
                     .Include(
@@ -592,8 +609,15 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
+            /*
+             * Keep complete allergy records.
+             *
+             * Previously only AllergyName was passed to the AI,
+             * which meant Reaction, Severity and Notes were lost.
+             */
             var allergies =
-                await _context.Allergies
+                await _context
+                    .Allergies
                     .AsNoTracking()
                     .Where(
                         allergy =>
@@ -601,10 +625,6 @@ namespace PersonalProject.Services.Implementations
                                 patientId
                     )
                     .OrderBy(
-                        allergy =>
-                            allergy.AllergyName
-                    )
-                    .Select(
                         allergy =>
                             allergy.AllergyName
                     )
@@ -689,9 +709,27 @@ namespace PersonalProject.Services.Implementations
                 $"Active medications: {FormatMedicationList(medications)}"
             );
 
+            builder.AppendLine();
+
             builder.AppendLine(
-                $"Allergies: {FormatStringList(allergies)}"
+                "RECORDED ALLERGIES"
             );
+
+            builder.AppendLine(
+                "The following allergy information comes from the patient's stored PhilaLink profile."
+            );
+
+            builder.AppendLine(
+                "Use these allergy records when considering medication recommendations."
+            );
+
+            builder.AppendLine(
+                FormatAllergyList(
+                    allergies
+                )
+            );
+
+            builder.AppendLine();
 
             builder.AppendLine(
                 $"Medical conditions: {FormatStringList(conditions)}"
@@ -709,7 +747,7 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 medications.Count ==
-                    0
+                0
             )
             {
                 builder.AppendLine(
@@ -747,7 +785,7 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 latestAssessment ==
-                    null
+                null
             )
             {
                 builder.AppendLine(
@@ -804,6 +842,30 @@ namespace PersonalProject.Services.Implementations
             );
 
             builder.AppendLine(
+                "- Before suggesting an OTC medicine, compare it against the patient's recorded allergies, active medicines and medical conditions above."
+            );
+
+            builder.AppendLine(
+                "- Allergy Reaction, Severity and Notes are clinically relevant context and should be considered when discussing medication safety."
+            );
+
+            builder.AppendLine(
+                "- If a recorded allergy may conflict with a medication or ingredient, clearly identify the allergy and explain the concern."
+            );
+
+            builder.AppendLine(
+                "- Do not invent a medication-allergy conflict when one is not known."
+            );
+
+            builder.AppendLine(
+                "- Inactive ingredients may vary between brands and formulations, so advise the patient to check the exact product ingredients when an allergy could be relevant."
+            );
+
+            builder.AppendLine(
+                "- Do not confuse an allergy with an intolerance."
+            );
+
+            builder.AppendLine(
                 "- Do not treat assessment-entered medications, allergies or conditions as permanent profile records unless they also appear in the stored profile section."
             );
 
@@ -811,9 +873,10 @@ namespace PersonalProject.Services.Implementations
                 "- Never claim that the symptom assessment establishes a confirmed diagnosis."
             );
 
-            return builder
-                .ToString()
-                .Trim();
+            return
+                builder
+                    .ToString()
+                    .Trim();
         }
 
         // =====================================================
@@ -828,7 +891,7 @@ namespace PersonalProject.Services.Implementations
         {
             if (
                 medications.Count ==
-                    0
+                0
             )
             {
                 return
@@ -864,6 +927,81 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
+        // =====================================================
+        // ALLERGY FORMAT
+        // =====================================================
+
+        private static string
+            FormatAllergyList(
+                IReadOnlyCollection<Allergy>
+                    allergies
+            )
+        {
+            if (
+                allergies.Count ==
+                0
+            )
+            {
+                return
+                    "No allergies recorded.";
+            }
+
+            var lines =
+                allergies.Select(
+                    allergy =>
+                    {
+                        var builder =
+                            new StringBuilder();
+
+                        builder.Append(
+                            $"- Allergy: {allergy.AllergyName}"
+                        );
+
+                        if (
+                            !string.IsNullOrWhiteSpace(
+                                allergy.Reaction
+                            )
+                        )
+                        {
+                            builder.Append(
+                                $" | Reaction: {allergy.Reaction}"
+                            );
+                        }
+
+                        if (
+                            !string.IsNullOrWhiteSpace(
+                                allergy.Severity
+                            )
+                        )
+                        {
+                            builder.Append(
+                                $" | Severity: {allergy.Severity}"
+                            );
+                        }
+
+                        if (
+                            !string.IsNullOrWhiteSpace(
+                                allergy.Notes
+                            )
+                        )
+                        {
+                            builder.Append(
+                                $" | Notes: {allergy.Notes}"
+                            );
+                        }
+
+                        return
+                            builder.ToString();
+                    }
+                );
+
+            return
+                string.Join(
+                    Environment.NewLine,
+                    lines
+                );
+        }
+
         private static string
             FormatStringList(
                 IReadOnlyCollection<string>
@@ -872,7 +1010,7 @@ namespace PersonalProject.Services.Implementations
         {
             if (
                 values.Count ==
-                    0
+                0
             )
             {
                 return
@@ -1028,7 +1166,7 @@ namespace PersonalProject.Services.Implementations
 
             if (
                 unitsPerDay >
-                    0
+                0
             )
             {
                 daysRemaining =
@@ -1141,23 +1279,24 @@ namespace PersonalProject.Services.Implementations
                 string content
             )
         {
-            return new ChatMessage
-            {
-                Id =
-                    Guid.NewGuid(),
+            return
+                new ChatMessage
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                ConversationId =
-                    conversationId,
+                    ConversationId =
+                        conversationId,
 
-                Role =
-                    "assistant",
+                    Role =
+                        "assistant",
 
-                Content =
-                    content,
+                    Content =
+                        content,
 
-                CreatedAt =
-                    DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
         }
 
         private static ChatbotMessageResponseDto
@@ -1166,17 +1305,18 @@ namespace PersonalProject.Services.Implementations
                 ChatMessage assistantMessage
             )
         {
-            return new ChatbotMessageResponseDto
-            {
-                ConversationId =
-                    conversation.Id,
+            return
+                new ChatbotMessageResponseDto
+                {
+                    ConversationId =
+                        conversation.Id,
 
-                Message =
-                    assistantMessage.Content,
+                    Message =
+                        assistantMessage.Content,
 
-                CreatedAt =
-                    assistantMessage.CreatedAt
-            };
+                    CreatedAt =
+                        assistantMessage.CreatedAt
+                };
         }
     }
 }
