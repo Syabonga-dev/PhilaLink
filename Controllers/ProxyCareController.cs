@@ -43,17 +43,25 @@ namespace PersonalProject.Controllers
             var activeProxy =
                 proxy!;
 
-            /*
-             * Only active, valid Patient links from the
-             * Proxy's own clinic are exposed.
-             */
             var links =
                 await _context.ProxyLinks
                     .AsNoTracking()
-                    .Include(link => link.Patient)
-                        .ThenInclude(patient => patient.User)
-                    .Include(link => link.Patient)
-                        .ThenInclude(patient => patient.Clinic)
+                    .Include(
+                        link =>
+                            link.Patient
+                    )
+                        .ThenInclude(
+                            patient =>
+                                patient.User
+                        )
+                    .Include(
+                        link =>
+                            link.Patient
+                    )
+                        .ThenInclude(
+                            patient =>
+                                patient.Clinic
+                        )
                     .Where(
                         link =>
                             link.ProxyId ==
@@ -67,7 +75,9 @@ namespace PersonalProject.Controllers
                     )
                     .OrderBy(
                         link =>
-                            link.Patient.User.FullName
+                            link.Patient
+                                .User
+                                .FullName
                     )
                     .ToListAsync();
 
@@ -153,16 +163,22 @@ namespace PersonalProject.Controllers
                                     link.PatientId,
 
                                 PatientName =
-                                    link.Patient.User.FullName,
+                                    link.Patient
+                                        .User
+                                        .FullName,
 
                                 PatientNumber =
-                                    link.Patient.PatientNumber,
+                                    link.Patient
+                                        .PatientNumber,
 
                                 ClinicId =
-                                    link.Patient.ClinicId,
+                                    link.Patient
+                                        .ClinicId,
 
                                 ClinicName =
-                                    link.Patient.Clinic?.Name,
+                                    link.Patient
+                                        .Clinic?
+                                        .Name,
 
                                 AssignedAt =
                                     link.AssignedAt,
@@ -195,10 +211,12 @@ namespace PersonalProject.Controllers
                     collection =>
                         collection
                             .ScheduledCollectionDate
-                            .Date >= today &&
+                            .Date >=
+                            today &&
                         collection
                             .ScheduledCollectionDate
-                            .Date <= dueSoonCutoff
+                            .Date <=
+                            dueSoonCutoff
                 );
 
             var overdue =
@@ -206,7 +224,8 @@ namespace PersonalProject.Controllers
                     collection =>
                         collection
                             .ScheduledCollectionDate
-                            .Date < today
+                            .Date <
+                            today
                 );
 
             var response =
@@ -216,7 +235,9 @@ namespace PersonalProject.Controllers
                         activeProxy.ClinicId,
 
                     ClinicName =
-                        activeProxy.Clinic?.Name ??
+                        activeProxy
+                            .Clinic?
+                            .Name ??
                         string.Empty,
 
                     TotalPatients =
@@ -241,7 +262,26 @@ namespace PersonalProject.Controllers
 
         [HttpGet("collections")]
         public async Task<IActionResult>
-            GetCollections()
+            GetCollections(
+                [FromQuery]
+                Guid? patientId = null,
+
+                [FromQuery]
+                DateTime? from = null,
+
+                [FromQuery]
+                DateTime? to = null,
+
+                [FromQuery]
+                string? status = "all",
+
+                [FromQuery]
+                string? search = null,
+
+                [FromQuery]
+                string sort =
+                    "scheduled-desc"
+            )
         {
             var (
                 proxy,
@@ -255,6 +295,112 @@ namespace PersonalProject.Controllers
 
             var activeProxy =
                 proxy!;
+
+            // =============================================
+            // VALIDATE DATE RANGE
+            // =============================================
+
+            if (
+                from.HasValue &&
+                to.HasValue &&
+                from.Value.Date >
+                    to.Value.Date
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "The start date cannot be after the end date."
+                    }
+                );
+            }
+
+            // =============================================
+            // VALIDATE STATUS
+            // =============================================
+
+            var normalizedStatus =
+                string.IsNullOrWhiteSpace(
+                    status
+                )
+                    ? "all"
+                    : status
+                        .Trim()
+                        .ToLowerInvariant();
+
+            var validStatuses =
+                new HashSet<string>(
+                    StringComparer
+                        .OrdinalIgnoreCase
+                )
+                {
+                    "all",
+                    "pending",
+                    "today",
+                    "tomorrow",
+                    "upcoming",
+                    "overdue",
+                    "collected",
+                    "cancelled"
+                };
+
+            if (
+                !validStatuses.Contains(
+                    normalizedStatus
+                )
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Invalid collection status filter."
+                    }
+                );
+            }
+
+            // =============================================
+            // VALIDATE SORT
+            // =============================================
+
+            var normalizedSort =
+                string.IsNullOrWhiteSpace(
+                    sort
+                )
+                    ? "scheduled-desc"
+                    : sort
+                        .Trim()
+                        .ToLowerInvariant();
+
+            var validSorts =
+                new HashSet<string>(
+                    StringComparer
+                        .OrdinalIgnoreCase
+                )
+                {
+                    "scheduled-asc",
+                    "scheduled-desc"
+                };
+
+            if (
+                !validSorts.Contains(
+                    normalizedSort
+                )
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "Invalid collection sort option."
+                    }
+                );
+            }
+
+            // =============================================
+            // ACCESSIBLE PATIENTS
+            // =============================================
 
             var patientIds =
                 await GetAccessiblePatientIdsAsync(
@@ -270,16 +416,170 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            var collections =
-                await BuildCollectionQuery(
-                        activeProxy,
-                        patientIds
-                    )
-                    .OrderByDescending(
+            /*
+             * If a PatientId was supplied, do not reveal
+             * whether an inaccessible Patient exists.
+             */
+            if (
+                patientId.HasValue &&
+                !patientIds.Contains(
+                    patientId.Value
+                )
+            )
+            {
+                return Ok(
+                    Array.Empty<
+                        ProxyCollectionResponseDto
+                    >()
+                );
+            }
+
+            // =============================================
+            // BASE QUERY
+            // =============================================
+
+            var collectionQuery =
+                BuildCollectionQuery(
+                    activeProxy,
+                    patientIds
+                );
+
+            // =============================================
+            // PATIENT FILTER
+            // =============================================
+
+            if (
+                patientId.HasValue
+            )
+            {
+                collectionQuery =
+                    collectionQuery.Where(
+                        collection =>
+                            collection.PatientId ==
+                            patientId.Value
+                    );
+            }
+
+            // =============================================
+            // DATE RANGE FILTER
+            // =============================================
+
+            if (
+                from.HasValue
+            )
+            {
+                var fromUtc =
+                    DateTime.SpecifyKind(
+                        from.Value.Date,
+                        DateTimeKind.Utc
+                    );
+
+                collectionQuery =
+                    collectionQuery.Where(
                         collection =>
                             collection
-                                .ScheduledCollectionDate
-                    )
+                                .ScheduledCollectionDate >=
+                            fromUtc
+                    );
+            }
+
+            if (
+                to.HasValue
+            )
+            {
+                var toExclusiveUtc =
+                    DateTime.SpecifyKind(
+                        to.Value
+                            .Date
+                            .AddDays(1),
+                        DateTimeKind.Utc
+                    );
+
+                collectionQuery =
+                    collectionQuery.Where(
+                        collection =>
+                            collection
+                                .ScheduledCollectionDate <
+                            toExclusiveUtc
+                    );
+            }
+
+            // =============================================
+            // SEARCH FILTER
+            // =============================================
+
+            if (
+                !string.IsNullOrWhiteSpace(
+                    search
+                )
+            )
+            {
+                var searchTerm =
+                    search.Trim();
+
+                collectionQuery =
+                    collectionQuery.Where(
+                        collection =>
+                            EF.Functions.ILike(
+                                collection.Patient
+                                    .User
+                                    .FullName,
+                                $"%{searchTerm}%"
+                            ) ||
+
+                            EF.Functions.ILike(
+                                collection.Patient
+                                    .PatientNumber,
+                                $"%{searchTerm}%"
+                            ) ||
+
+                            EF.Functions.ILike(
+                                collection.Clinic.Name,
+                                $"%{searchTerm}%"
+                            ) ||
+
+                            collection.Items.Any(
+                                item =>
+                                    EF.Functions.ILike(
+                                        item.Medication.Name,
+                                        $"%{searchTerm}%"
+                                    )
+                            )
+                    );
+            }
+
+            // =============================================
+            // STATUS FILTER
+            // =============================================
+
+            collectionQuery =
+                ApplyStatusFilter(
+                    collectionQuery,
+                    normalizedStatus
+                );
+
+            // =============================================
+            // SORT
+            // =============================================
+
+            collectionQuery =
+                normalizedSort ==
+                "scheduled-asc"
+                    ? collectionQuery
+                        .OrderBy(
+                            collection =>
+                                collection
+                                    .ScheduledCollectionDate
+                        )
+                    : collectionQuery
+                        .OrderByDescending(
+                            collection =>
+                                collection
+                                    .ScheduledCollectionDate
+                        );
+
+            var collections =
+                await collectionQuery
                     .ToListAsync();
 
             var response =
@@ -347,9 +647,8 @@ namespace PersonalProject.Controllers
             if (collection == null)
             {
                 /*
-                 * Deliberately return 404 rather than revealing
-                 * whether a collection exists outside this
-                 * Proxy's authorization boundary.
+                 * Do not reveal whether a Collection exists
+                 * outside this Proxy's authorization boundary.
                  */
                 return NotFound(
                     new
@@ -368,6 +667,136 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
+        // STATUS FILTER
+        // =====================================================
+
+        private static IQueryable<
+            MedicationCollection
+        >
+            ApplyStatusFilter(
+                IQueryable<
+                    MedicationCollection
+                > query,
+                string status
+            )
+        {
+            var today =
+                DateTime.UtcNow.Date;
+
+            var tomorrow =
+                today.AddDays(1);
+
+            var dayAfterTomorrow =
+                tomorrow.AddDays(1);
+
+            switch (status)
+            {
+                case "today":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Cancelled &&
+                            collection
+                                .ScheduledCollectionDate >=
+                                today &&
+                            collection
+                                .ScheduledCollectionDate <
+                                tomorrow
+                    );
+
+                case "tomorrow":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Cancelled &&
+                            collection
+                                .ScheduledCollectionDate >=
+                                tomorrow &&
+                            collection
+                                .ScheduledCollectionDate <
+                                dayAfterTomorrow
+                    );
+
+                case "upcoming":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Cancelled &&
+                            collection
+                                .ScheduledCollectionDate >=
+                                tomorrow
+                    );
+
+                case "overdue":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Cancelled &&
+                            collection
+                                .ScheduledCollectionDate <
+                                today
+                    );
+
+                case "pending":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Collected &&
+                            collection.Status !=
+                                MedicationCollectionStatuses
+                                    .Cancelled &&
+                            collection
+                                .ScheduledCollectionDate >=
+                                today
+                    );
+
+                case "collected":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status ==
+                            MedicationCollectionStatuses
+                                .Collected
+                    );
+
+                case "cancelled":
+
+                    return query.Where(
+                        collection =>
+                            collection.Status ==
+                            MedicationCollectionStatuses
+                                .Cancelled
+                    );
+
+                default:
+
+                    return query;
+            }
+        }
+
+        // =====================================================
         // ACCESSIBLE PATIENT IDS
         // =====================================================
 
@@ -376,7 +805,8 @@ namespace PersonalProject.Controllers
                 Proxy proxy
             )
         {
-            return await _context.ProxyLinks
+            return await _context
+                .ProxyLinks
                 .AsNoTracking()
                 .Where(
                     link =>
@@ -401,7 +831,9 @@ namespace PersonalProject.Controllers
         // COLLECTION QUERY
         // =====================================================
 
-        private IQueryable<MedicationCollection>
+        private IQueryable<
+            MedicationCollection
+        >
             BuildCollectionQuery(
                 Proxy proxy,
                 List<Guid> patientIds
@@ -433,7 +865,8 @@ namespace PersonalProject.Controllers
                     )
                 .Include(
                     collection =>
-                        collection.ProcessedByNurse
+                        collection
+                            .ProcessedByNurse
                 )
                     .ThenInclude(
                         nurse =>
@@ -461,7 +894,8 @@ namespace PersonalProject.Controllers
         // COLLECTION DTO
         // =====================================================
 
-        private static ProxyCollectionResponseDto
+        private static
+            ProxyCollectionResponseDto
             ToProxyCollectionDto(
                 MedicationCollection collection
             )
@@ -506,10 +940,13 @@ namespace PersonalProject.Controllers
                     collection.PatientId,
 
                 PatientName =
-                    collection.Patient.User.FullName,
+                    collection.Patient
+                        .User
+                        .FullName,
 
                 PatientNumber =
-                    collection.Patient.PatientNumber,
+                    collection.Patient
+                        .PatientNumber,
 
                 ClinicId =
                     collection.ClinicId,
@@ -521,15 +958,19 @@ namespace PersonalProject.Controllers
                     collection.ProxyId,
 
                 ProxyName =
-                    collection.Proxy?.User.FullName,
+                    collection.Proxy?
+                        .User
+                        .FullName,
 
                 ProcessedByNurseId =
-                    collection.ProcessedByNurseId,
+                    collection
+                        .ProcessedByNurseId,
 
                 ProcessedByNurseName =
                     collection
                         .ProcessedByNurse?
-                        .User.FullName,
+                        .User
+                        .FullName,
 
                 ScheduledCollectionDate =
                     collection
@@ -549,13 +990,15 @@ namespace PersonalProject.Controllers
                         items
                             .Select(
                                 item =>
-                                    item.MedicationName
+                                    item
+                                        .MedicationName
                             )
                             .Where(
                                 name =>
-                                    !string.IsNullOrWhiteSpace(
-                                        name
-                                    )
+                                    !string
+                                        .IsNullOrWhiteSpace(
+                                            name
+                                        )
                             )
                             .Distinct()
                     ),
@@ -658,7 +1101,9 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            if (proxy.Clinic == null)
+            if (
+                proxy.Clinic == null
+            )
             {
                 return (
                     null,
@@ -679,12 +1124,13 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
-        // COLLECTION DISPLAY STATUS
+        // DISPLAY STATUS
         // =====================================================
 
-        private static string GetDisplayStatus(
-            MedicationCollection collection
-        )
+        private static string
+            GetDisplayStatus(
+                MedicationCollection collection
+            )
         {
             if (
                 collection.Status ==

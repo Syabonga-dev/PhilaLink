@@ -111,4 +111,36 @@
 
         public int Quantity { get; set; }
     }
+
+    public class ProxyCollectionQueryDto
+    {
+        public Guid? PatientId { get; set; }
+
+        public DateTime? From { get; set; }
+
+        public DateTime? To { get; set; }
+
+        /*
+         * Supported values:
+         *
+         * all
+         * pending
+         * today
+         * tomorrow
+         * upcoming
+         * overdue
+         * collected
+         * cancelled
+         */
+        public string? Status { get; set; }
+
+        public string? Search { get; set; }
+
+        /*
+         * scheduled-asc
+         * scheduled-desc
+         */
+        public string Sort { get; set; } =
+            "scheduled-desc";
+    }
 }
