@@ -522,11 +522,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             // -------------------------------------------------
-            // Get the medication and its number of active
-            // schedules.
-            //
-            // One active schedule represents one planned dose
-            // per day.
+            // Load medication logging requirements.
             // -------------------------------------------------
 
             var medication =
@@ -554,6 +550,9 @@ namespace PersonalProject.Services.Implementations
 
                                 EndDate =
                                     item.EndDate,
+
+                                UnitsPerDose =
+                                    item.UnitsPerDose,
 
                                 ActiveScheduleCount =
                                     item.Schedules.Count(
@@ -607,9 +606,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             // -------------------------------------------------
-            // Medication adherence requires at least one active
-            // schedule. Without a schedule we cannot determine
-            // how many doses are expected.
+            // A schedule is required for both Taken and Skipped
+            // entries so adherence is tied to a prescribed dose.
             // -------------------------------------------------
 
             if (
@@ -623,25 +621,150 @@ namespace PersonalProject.Services.Implementations
             }
 
             // -------------------------------------------------
-            // DAILY TAKEN-DOSE LIMIT
+            // TAKEN DOSE SAFETY
             //
-            // Example:
+            // Taken=true requires:
             //
-            // 08:00 schedule
-            // 20:00 schedule
+            // 1. A configured units-per-dose value.
+            // 2. A completed medication collection.
+            // 3. Enough recorded medication remaining.
+            // 4. The daily scheduled-dose limit not reached.
             //
-            // ActiveScheduleCount = 2
-            //
-            // The patient may therefore record at most two
-            // Taken=true logs during the South African
-            // calendar day.
-            //
-            // Skipped logs do not reduce medication supply and
-            // are not included in the taken-dose limit.
+            // Skipped doses do not consume supply, so they do
+            // not require a completed collection.
             // -------------------------------------------------
 
             if (taken)
             {
+                if (
+                    medication.UnitsPerDose ==
+                        null ||
+                    medication.UnitsPerDose <=
+                        0
+                )
+                {
+                    throw new InvalidOperationException(
+                        "The dose amount for this medication has not been configured. Contact your clinic before recording a taken dose."
+                    );
+                }
+
+                // ---------------------------------------------
+                // LATEST COMPLETED COLLECTION
+                // ---------------------------------------------
+
+                var latestCollection =
+                    await _context
+                        .MedicationCollections
+                        .AsNoTracking()
+                        .Where(
+                            collection =>
+                                collection.PatientId ==
+                                    patient.Id &&
+                                collection.Status ==
+                                    MedicationCollectionStatuses
+                                        .Collected &&
+                                collection.CollectedAt !=
+                                    null &&
+                                collection.CollectedAt <=
+                                    nowUtc &&
+                                collection.Items.Any(
+                                    item =>
+                                        item.MedicationId ==
+                                            medication.Id
+                                )
+                        )
+                        .OrderByDescending(
+                            collection =>
+                                collection.CollectedAt
+                        )
+                        .Select(
+                            collection =>
+                                new MedicationDispenseAccess
+                                {
+                                    CollectionId =
+                                        collection.Id,
+
+                                    CollectedAt =
+                                        collection
+                                            .CollectedAt!
+                                            .Value,
+
+                                    DispensedQuantity =
+                                        collection.Items
+                                            .Where(
+                                                item =>
+                                                    item.MedicationId ==
+                                                        medication.Id
+                                            )
+                                            .Sum(
+                                                item =>
+                                                    item.Quantity
+                                            )
+                                }
+                        )
+                        .FirstOrDefaultAsync();
+
+                if (
+                    latestCollection ==
+                    null
+                )
+                {
+                    throw new InvalidOperationException(
+                        "You cannot mark this medication as taken because no completed medication collection has been recorded."
+                    );
+                }
+
+                // ---------------------------------------------
+                // RECORDED SUPPLY REMAINING
+                //
+                // Supply is based on the most recent completed
+                // collection, matching MedicationSupplyController.
+                // Only Taken=true logs consume medication.
+                // ---------------------------------------------
+
+                var takenSinceCollection =
+                    await _context
+                        .MedicationLogs
+                        .AsNoTracking()
+                        .CountAsync(
+                            log =>
+                                log.MedicationId ==
+                                    medication.Id &&
+                                log.Taken &&
+                                log.TakenAt >=
+                                    latestCollection
+                                        .CollectedAt &&
+                                log.TakenAt <=
+                                    nowUtc
+                        );
+
+                var unitsUsed =
+                    takenSinceCollection *
+                    medication
+                        .UnitsPerDose
+                        .Value;
+
+                var unitsRemaining =
+                    latestCollection
+                        .DispensedQuantity -
+                    unitsUsed;
+
+                if (
+                    unitsRemaining <
+                    medication
+                        .UnitsPerDose
+                        .Value
+                )
+                {
+                    throw new InvalidOperationException(
+                        "You cannot mark another dose as taken because your recorded medication supply has been depleted."
+                    );
+                }
+
+                // ---------------------------------------------
+                // DAILY TAKEN-DOSE LIMIT
+                // ---------------------------------------------
+
                 var (
                     dayStartUtc,
                     dayEndUtc
@@ -933,7 +1056,34 @@ namespace PersonalProject.Services.Implementations
                 init;
             }
 
+            public decimal? UnitsPerDose
+            {
+                get;
+                init;
+            }
+
             public int ActiveScheduleCount
+            {
+                get;
+                init;
+            }
+        }
+
+        private sealed class MedicationDispenseAccess
+        {
+            public Guid CollectionId
+            {
+                get;
+                init;
+            }
+
+            public DateTime CollectedAt
+            {
+                get;
+                init;
+            }
+
+            public int DispensedQuantity
             {
                 get;
                 init;
