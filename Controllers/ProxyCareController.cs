@@ -43,6 +43,10 @@ namespace PersonalProject.Controllers
             var activeProxy =
                 proxy!;
 
+            // =================================================
+            // LINKED PATIENTS
+            // =================================================
+
             var links =
                 await _context.ProxyLinks
                     .AsNoTracking()
@@ -90,6 +94,10 @@ namespace PersonalProject.Controllers
                     .Distinct()
                     .ToList();
 
+            // =================================================
+            // ACTIVE COLLECTIONS
+            // =================================================
+
             var activeCollections =
                 patientIds.Count == 0
                     ? new List<MedicationCollection>()
@@ -117,6 +125,93 @@ namespace PersonalProject.Controllers
                         )
                         .ToListAsync();
 
+            // =================================================
+            // DATE BOUNDARIES
+            // =================================================
+
+            var today =
+                DateTime.UtcNow.Date;
+
+            var tomorrow =
+                today.AddDays(1);
+
+            var dayAfterTomorrow =
+                tomorrow.AddDays(1);
+
+            var dueSoonExclusive =
+                today.AddDays(3);
+
+            // =================================================
+            // SUMMARY COUNTS
+            // =================================================
+
+            var dueToday =
+                activeCollections.Count(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate >=
+                            today &&
+                        collection
+                            .ScheduledCollectionDate <
+                            tomorrow
+                );
+
+            var tomorrowCount =
+                activeCollections.Count(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate >=
+                            tomorrow &&
+                        collection
+                            .ScheduledCollectionDate <
+                            dayAfterTomorrow
+                );
+
+            /*
+             * Upcoming means every future active collection
+             * after the current calendar day.
+             *
+             * Tomorrow is therefore included in Upcoming.
+             */
+            var upcoming =
+                activeCollections.Count(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate >=
+                            tomorrow
+                );
+
+            /*
+             * DueSoon is retained for compatibility.
+             *
+             * It covers:
+             * - today
+             * - tomorrow
+             * - two days from today
+             */
+            var dueSoon =
+                activeCollections.Count(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate >=
+                            today &&
+                        collection
+                            .ScheduledCollectionDate <
+                            dueSoonExclusive
+                );
+
+            var overdue =
+                activeCollections.Count(
+                    collection =>
+                        collection
+                            .ScheduledCollectionDate <
+                            today
+                );
+
+            // =================================================
+            // NEXT COLLECTION PER PATIENT
+            // =================================================
+
             var nextCollectionByPatient =
                 activeCollections
                     .GroupBy(
@@ -136,12 +231,6 @@ namespace PersonalProject.Controllers
                                 )
                                 .First()
                     );
-
-            var today =
-                DateTime.UtcNow.Date;
-
-            var dueSoonCutoff =
-                today.AddDays(2);
 
             var patients =
                 links
@@ -201,33 +290,6 @@ namespace PersonalProject.Controllers
                     )
                     .ToList();
 
-            var nextCollections =
-                nextCollectionByPatient
-                    .Values
-                    .ToList();
-
-            var dueSoon =
-                nextCollections.Count(
-                    collection =>
-                        collection
-                            .ScheduledCollectionDate
-                            .Date >=
-                            today &&
-                        collection
-                            .ScheduledCollectionDate
-                            .Date <=
-                            dueSoonCutoff
-                );
-
-            var overdue =
-                nextCollections.Count(
-                    collection =>
-                        collection
-                            .ScheduledCollectionDate
-                            .Date <
-                            today
-                );
-
             var response =
                 new ProxyCareResponseDto
                 {
@@ -242,6 +304,18 @@ namespace PersonalProject.Controllers
 
                     TotalPatients =
                         patients.Count,
+
+                    TotalActiveCollections =
+                        activeCollections.Count,
+
+                    DueToday =
+                        dueToday,
+
+                    Tomorrow =
+                        tomorrowCount,
+
+                    Upcoming =
+                        upcoming,
 
                     DueSoon =
                         dueSoon,
@@ -296,9 +370,9 @@ namespace PersonalProject.Controllers
             var activeProxy =
                 proxy!;
 
-            // =============================================
+            // =================================================
             // VALIDATE DATE RANGE
-            // =============================================
+            // =================================================
 
             if (
                 from.HasValue &&
@@ -316,9 +390,9 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            // =============================================
+            // =================================================
             // VALIDATE STATUS
-            // =============================================
+            // =================================================
 
             var normalizedStatus =
                 string.IsNullOrWhiteSpace(
@@ -360,9 +434,9 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            // =============================================
+            // =================================================
             // VALIDATE SORT
-            // =============================================
+            // =================================================
 
             var normalizedSort =
                 string.IsNullOrWhiteSpace(
@@ -398,9 +472,9 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            // =============================================
-            // ACCESSIBLE PATIENTS
-            // =============================================
+            // =================================================
+            // AUTHORIZED PATIENTS
+            // =================================================
 
             var patientIds =
                 await GetAccessiblePatientIdsAsync(
@@ -417,8 +491,8 @@ namespace PersonalProject.Controllers
             }
 
             /*
-             * If a PatientId was supplied, do not reveal
-             * whether an inaccessible Patient exists.
+             * Do not expose whether another Patient exists
+             * outside this Proxy's authorization boundary.
              */
             if (
                 patientId.HasValue &&
@@ -434,19 +508,15 @@ namespace PersonalProject.Controllers
                 );
             }
 
-            // =============================================
-            // BASE QUERY
-            // =============================================
-
             var collectionQuery =
                 BuildCollectionQuery(
                     activeProxy,
                     patientIds
                 );
 
-            // =============================================
-            // PATIENT FILTER
-            // =============================================
+            // =================================================
+            // PATIENT
+            // =================================================
 
             if (
                 patientId.HasValue
@@ -460,9 +530,9 @@ namespace PersonalProject.Controllers
                     );
             }
 
-            // =============================================
-            // DATE RANGE FILTER
-            // =============================================
+            // =================================================
+            // CUSTOM DATE RANGE
+            // =================================================
 
             if (
                 from.HasValue
@@ -504,9 +574,9 @@ namespace PersonalProject.Controllers
                     );
             }
 
-            // =============================================
-            // SEARCH FILTER
-            // =============================================
+            // =================================================
+            // SEARCH
+            // =================================================
 
             if (
                 !string.IsNullOrWhiteSpace(
@@ -534,23 +604,25 @@ namespace PersonalProject.Controllers
                             ) ||
 
                             EF.Functions.ILike(
-                                collection.Clinic.Name,
+                                collection.Clinic
+                                    .Name,
                                 $"%{searchTerm}%"
                             ) ||
 
                             collection.Items.Any(
                                 item =>
                                     EF.Functions.ILike(
-                                        item.Medication.Name,
+                                        item.Medication
+                                            .Name,
                                         $"%{searchTerm}%"
                                     )
                             )
                     );
             }
 
-            // =============================================
-            // STATUS FILTER
-            // =============================================
+            // =================================================
+            // STATUS
+            // =================================================
 
             collectionQuery =
                 ApplyStatusFilter(
@@ -558,13 +630,13 @@ namespace PersonalProject.Controllers
                     normalizedStatus
                 );
 
-            // =============================================
+            // =================================================
             // SORT
-            // =============================================
+            // =================================================
 
             collectionQuery =
                 normalizedSort ==
-                "scheduled-asc"
+                    "scheduled-asc"
                     ? collectionQuery
                         .OrderBy(
                             collection =>
@@ -582,14 +654,13 @@ namespace PersonalProject.Controllers
                 await collectionQuery
                     .ToListAsync();
 
-            var response =
+            return Ok(
                 collections
                     .Select(
                         ToProxyCollectionDto
                     )
-                    .ToList();
-
-            return Ok(response);
+                    .ToList()
+            );
         }
 
         // =====================================================
@@ -647,8 +718,9 @@ namespace PersonalProject.Controllers
             if (collection == null)
             {
                 /*
-                 * Do not reveal whether a Collection exists
-                 * outside this Proxy's authorization boundary.
+                 * Intentionally return 404 rather than
+                 * revealing whether an inaccessible Collection
+                 * exists.
                  */
                 return NotFound(
                     new
@@ -667,7 +739,7 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
-        // STATUS FILTER
+        // COLLECTION STATUS FILTER
         // =====================================================
 
         private static IQueryable<
@@ -797,7 +869,7 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
-        // ACCESSIBLE PATIENT IDS
+        // ACCESSIBLE PATIENTS
         // =====================================================
 
         private async Task<List<Guid>>
@@ -990,8 +1062,7 @@ namespace PersonalProject.Controllers
                         items
                             .Select(
                                 item =>
-                                    item
-                                        .MedicationName
+                                    item.MedicationName
                             )
                             .Where(
                                 name =>
@@ -1049,7 +1120,8 @@ namespace PersonalProject.Controllers
             }
 
             var proxy =
-                await _context.Proxies
+                await _context
+                    .Proxies
                     .AsNoTracking()
                     .Include(
                         proxyEntity =>

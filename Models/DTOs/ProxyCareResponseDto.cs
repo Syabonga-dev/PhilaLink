@@ -7,8 +7,28 @@
         public string ClinicName { get; set; } =
             string.Empty;
 
+        // =====================================================
+        // DASHBOARD SUMMARY
+        // =====================================================
+
         public int TotalPatients { get; set; }
 
+        public int TotalActiveCollections { get; set; }
+
+        public int DueToday { get; set; }
+
+        public int Tomorrow { get; set; }
+
+        /*
+         * Future active collections after today.
+         * Includes tomorrow and later dates.
+         */
+        public int Upcoming { get; set; }
+
+        /*
+         * Retained for backward compatibility.
+         * Today through two days from today.
+         */
         public int DueSoon { get; set; }
 
         public int Overdue { get; set; }
@@ -79,9 +99,21 @@
 
         public DateTime? CollectedAt { get; set; }
 
+        /*
+         * Display status returned by the API:
+         *
+         * Pending
+         * Overdue
+         * Collected
+         * Cancelled
+         */
         public string Status { get; set; } =
             string.Empty;
 
+        /*
+         * Convenience value containing the names of all
+         * medications included in this collection.
+         */
         public string MedicationName { get; set; } =
             string.Empty;
 
@@ -110,37 +142,5 @@
             string.Empty;
 
         public int Quantity { get; set; }
-    }
-
-    public class ProxyCollectionQueryDto
-    {
-        public Guid? PatientId { get; set; }
-
-        public DateTime? From { get; set; }
-
-        public DateTime? To { get; set; }
-
-        /*
-         * Supported values:
-         *
-         * all
-         * pending
-         * today
-         * tomorrow
-         * upcoming
-         * overdue
-         * collected
-         * cancelled
-         */
-        public string? Status { get; set; }
-
-        public string? Search { get; set; }
-
-        /*
-         * scheduled-asc
-         * scheduled-desc
-         */
-        public string Sort { get; set; } =
-            "scheduled-desc";
     }
 }
