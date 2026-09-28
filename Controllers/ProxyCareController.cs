@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
+using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using System.Security.Claims;
 
@@ -29,17 +30,22 @@ namespace PersonalProject.Controllers
         [HttpGet("care")]
         public async Task<IActionResult> GetCare()
         {
-            var proxy =
-                await GetActiveProxyAsync();
+            var (
+                proxy,
+                error
+            ) = await ResolveActiveProxyAsync();
+
+            if (error != null)
+            {
+                return error;
+            }
+
+            var activeProxy =
+                proxy!;
 
             /*
-             * CRITICAL CLINIC BOUNDARY
-             *
-             * A Proxy can only see active links for patients
-             * belonging to the Proxy's registered clinic.
-             *
-             * This also protects against legacy/bad ProxyLinks
-             * that may already exist in the database.
+             * Only active, valid Patient links from the
+             * Proxy's own clinic are exposed.
              */
             var links =
                 await _context.ProxyLinks
@@ -50,10 +56,14 @@ namespace PersonalProject.Controllers
                         .ThenInclude(patient => patient.Clinic)
                     .Where(
                         link =>
-                            link.ProxyId == proxy.Id &&
+                            link.ProxyId ==
+                                activeProxy.Id &&
                             link.IsActive &&
                             link.Patient.ClinicId ==
-                                proxy.ClinicId
+                                activeProxy.ClinicId &&
+                            link.Patient.User.IsActive &&
+                            link.Patient.User.Role ==
+                                RoleNames.Patient
                     )
                     .OrderBy(
                         link =>
@@ -70,15 +80,6 @@ namespace PersonalProject.Controllers
                     .Distinct()
                     .ToList();
 
-            /*
-             * Collections are restricted twice:
-             *
-             * 1. Patient must be one of this Proxy's valid
-             *    same-clinic linked patients.
-             *
-             * 2. Collection itself must belong to the Proxy's
-             *    registered clinic.
-             */
             var activeCollections =
                 patientIds.Count == 0
                     ? new List<MedicationCollection>()
@@ -91,15 +92,18 @@ namespace PersonalProject.Controllers
                                     collection.PatientId
                                 ) &&
                                 collection.ClinicId ==
-                                    proxy.ClinicId &&
+                                    activeProxy.ClinicId &&
                                 collection.Status !=
-                                    MedicationCollectionStatuses.Collected &&
+                                    MedicationCollectionStatuses
+                                        .Collected &&
                                 collection.Status !=
-                                    MedicationCollectionStatuses.Cancelled
+                                    MedicationCollectionStatuses
+                                        .Cancelled
                         )
                         .OrderBy(
                             collection =>
-                                collection.ScheduledCollectionDate
+                                collection
+                                    .ScheduledCollectionDate
                         )
                         .ToListAsync();
 
@@ -117,7 +121,8 @@ namespace PersonalProject.Controllers
                             group
                                 .OrderBy(
                                     collection =>
-                                        collection.ScheduledCollectionDate
+                                        collection
+                                            .ScheduledCollectionDate
                                 )
                                 .First()
                     );
@@ -139,39 +144,37 @@ namespace PersonalProject.Controllers
                                     out var nextCollection
                                 );
 
-                            return new
+                            return new ProxyCarePatientDto
                             {
-                                proxyLinkId =
+                                ProxyLinkId =
                                     link.Id,
 
-                                patientId =
+                                PatientId =
                                     link.PatientId,
 
-                                patientName =
+                                PatientName =
                                     link.Patient.User.FullName,
 
-                                patientNumber =
+                                PatientNumber =
                                     link.Patient.PatientNumber,
 
-                                clinicId =
+                                ClinicId =
                                     link.Patient.ClinicId,
 
-                                clinicName =
-                                    link.Patient.Clinic == null
-                                        ? null
-                                        : link.Patient.Clinic.Name,
+                                ClinicName =
+                                    link.Patient.Clinic?.Name,
 
-                                assignedAt =
+                                AssignedAt =
                                     link.AssignedAt,
 
-                                nextCollectionId =
+                                NextCollectionId =
                                     nextCollection?.Id,
 
-                                nextCollectionDate =
+                                NextCollectionDate =
                                     nextCollection?
                                         .ScheduledCollectionDate,
 
-                                collectionStatus =
+                                CollectionStatus =
                                     nextCollection == null
                                         ? "None"
                                         : GetDisplayStatus(
@@ -206,25 +209,30 @@ namespace PersonalProject.Controllers
                             .Date < today
                 );
 
-            return Ok(
-                new
+            var response =
+                new ProxyCareResponseDto
                 {
-                    clinicId =
-                        proxy.ClinicId,
+                    ClinicId =
+                        activeProxy.ClinicId,
 
-                    clinicName =
-                        proxy.Clinic?.Name,
+                    ClinicName =
+                        activeProxy.Clinic?.Name ??
+                        string.Empty,
 
-                    totalPatients =
+                    TotalPatients =
                         patients.Count,
 
-                    dueSoon,
+                    DueSoon =
+                        dueSoon,
 
-                    overdue,
+                    Overdue =
+                        overdue,
 
-                    patients
-                }
-            );
+                    Patients =
+                        patients
+                };
+
+            return Ok(response);
         }
 
         // =====================================================
@@ -235,196 +243,371 @@ namespace PersonalProject.Controllers
         public async Task<IActionResult>
             GetCollections()
         {
-            var proxy =
-                await GetActiveProxyAsync();
+            var (
+                proxy,
+                error
+            ) = await ResolveActiveProxyAsync();
 
-            /*
-             * Only obtain patients who:
-             *
-             * - are actively linked to this Proxy; AND
-             * - belong to the Proxy's registered clinic.
-             */
+            if (error != null)
+            {
+                return error;
+            }
+
+            var activeProxy =
+                proxy!;
+
             var patientIds =
-                await _context.ProxyLinks
-                    .AsNoTracking()
-                    .Where(
-                        link =>
-                            link.ProxyId == proxy.Id &&
-                            link.IsActive &&
-                            link.Patient.ClinicId ==
-                                proxy.ClinicId
-                    )
-                    .Select(
-                        link =>
-                            link.PatientId
-                    )
-                    .Distinct()
-                    .ToListAsync();
+                await GetAccessiblePatientIdsAsync(
+                    activeProxy
+                );
 
             if (patientIds.Count == 0)
             {
                 return Ok(
-                    Array.Empty<object>()
+                    Array.Empty<
+                        ProxyCollectionResponseDto
+                    >()
                 );
             }
 
-            /*
-             * Collection access is also restricted by ClinicId.
-             *
-             * Even if malformed data contains a collection for
-             * one of these PatientIds at another clinic, that
-             * collection will not be exposed to this Proxy.
-             */
             var collections =
-                await _context
-                    .MedicationCollections
-                    .AsNoTracking()
-                    .Include(
-                        collection =>
-                            collection.Patient
-                    )
-                        .ThenInclude(
-                            patient =>
-                                patient.User
-                        )
-                    .Include(
-                        collection =>
-                            collection.Clinic
-                    )
-                    .Include(
-                        collection =>
-                            collection.Proxy
-                    )
-                        .ThenInclude(
-                            proxyEntity =>
-                                proxyEntity!.User
-                        )
-                    .Include(
-                        collection =>
-                            collection.ProcessedByNurse
-                    )
-                        .ThenInclude(
-                            nurse =>
-                                nurse!.User
-                        )
-                    .Include(
-                        collection =>
-                            collection.Items
-                    )
-                        .ThenInclude(
-                            item =>
-                                item.Medication
-                        )
-                    .Where(
-                        collection =>
-                            patientIds.Contains(
-                                collection.PatientId
-                            ) &&
-                            collection.ClinicId ==
-                                proxy.ClinicId
+                await BuildCollectionQuery(
+                        activeProxy,
+                        patientIds
                     )
                     .OrderByDescending(
                         collection =>
-                            collection.ScheduledCollectionDate
+                            collection
+                                .ScheduledCollectionDate
                     )
                     .ToListAsync();
 
             var response =
-                collections.Select(
-                    collection =>
-                        new
-                        {
-                            id =
-                                collection.Id,
-
-                            patientId =
-                                collection.PatientId,
-
-                            patientName =
-                                collection.Patient.User.FullName,
-
-                            patientNumber =
-                                collection.Patient.PatientNumber,
-
-                            clinicId =
-                                collection.ClinicId,
-
-                            clinicName =
-                                collection.Clinic.Name,
-
-                            proxyId =
-                                collection.ProxyId,
-
-                            proxyName =
-                                collection.Proxy == null
-                                    ? null
-                                    : collection.Proxy
-                                        .User.FullName,
-
-                            processedByNurseId =
-                                collection.ProcessedByNurseId,
-
-                            processedByNurseName =
-                                collection.ProcessedByNurse == null
-                                    ? null
-                                    : collection
-                                        .ProcessedByNurse
-                                        .User.FullName,
-
-                            scheduledCollectionDate =
-                                collection
-                                    .ScheduledCollectionDate,
-
-                            collectedAt =
-                                collection.CollectedAt,
-
-                            status =
-                                GetDisplayStatus(
-                                    collection
-                                ),
-
-                            medicationName =
-                                string.Join(
-                                    ", ",
-                                    collection.Items
-                                        .Select(
-                                            item =>
-                                                item.Medication.Name
-                                        )
-                                        .Where(
-                                            name =>
-                                                !string.IsNullOrWhiteSpace(
-                                                    name
-                                                )
-                                        )
-                                        .Distinct()
-                                ),
-
-                            notes =
-                                collection.Notes
-                        }
-                );
+                collections
+                    .Select(
+                        ToProxyCollectionDto
+                    )
+                    .ToList();
 
             return Ok(response);
+        }
+
+        // =====================================================
+        // SINGLE COLLECTION DETAILS
+        // =====================================================
+
+        [HttpGet(
+            "collections/{collectionId:guid}"
+        )]
+        public async Task<IActionResult>
+            GetCollection(
+                Guid collectionId
+            )
+        {
+            var (
+                proxy,
+                error
+            ) = await ResolveActiveProxyAsync();
+
+            if (error != null)
+            {
+                return error;
+            }
+
+            var activeProxy =
+                proxy!;
+
+            var patientIds =
+                await GetAccessiblePatientIdsAsync(
+                    activeProxy
+                );
+
+            if (patientIds.Count == 0)
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            "Collection not found."
+                    }
+                );
+            }
+
+            var collection =
+                await BuildCollectionQuery(
+                        activeProxy,
+                        patientIds
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                            collectionId
+                    );
+
+            if (collection == null)
+            {
+                /*
+                 * Deliberately return 404 rather than revealing
+                 * whether a collection exists outside this
+                 * Proxy's authorization boundary.
+                 */
+                return NotFound(
+                    new
+                    {
+                        message =
+                            "Collection not found."
+                    }
+                );
+            }
+
+            return Ok(
+                ToProxyCollectionDto(
+                    collection
+                )
+            );
+        }
+
+        // =====================================================
+        // ACCESSIBLE PATIENT IDS
+        // =====================================================
+
+        private async Task<List<Guid>>
+            GetAccessiblePatientIdsAsync(
+                Proxy proxy
+            )
+        {
+            return await _context.ProxyLinks
+                .AsNoTracking()
+                .Where(
+                    link =>
+                        link.ProxyId ==
+                            proxy.Id &&
+                        link.IsActive &&
+                        link.Patient.ClinicId ==
+                            proxy.ClinicId &&
+                        link.Patient.User.IsActive &&
+                        link.Patient.User.Role ==
+                            RoleNames.Patient
+                )
+                .Select(
+                    link =>
+                        link.PatientId
+                )
+                .Distinct()
+                .ToListAsync();
+        }
+
+        // =====================================================
+        // COLLECTION QUERY
+        // =====================================================
+
+        private IQueryable<MedicationCollection>
+            BuildCollectionQuery(
+                Proxy proxy,
+                List<Guid> patientIds
+            )
+        {
+            return _context
+                .MedicationCollections
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(
+                    collection =>
+                        collection.Patient
+                )
+                    .ThenInclude(
+                        patient =>
+                            patient.User
+                    )
+                .Include(
+                    collection =>
+                        collection.Clinic
+                )
+                .Include(
+                    collection =>
+                        collection.Proxy
+                )
+                    .ThenInclude(
+                        proxyEntity =>
+                            proxyEntity!.User
+                    )
+                .Include(
+                    collection =>
+                        collection.ProcessedByNurse
+                )
+                    .ThenInclude(
+                        nurse =>
+                            nurse!.User
+                    )
+                .Include(
+                    collection =>
+                        collection.Items
+                )
+                    .ThenInclude(
+                        item =>
+                            item.Medication
+                    )
+                .Where(
+                    collection =>
+                        patientIds.Contains(
+                            collection.PatientId
+                        ) &&
+                        collection.ClinicId ==
+                            proxy.ClinicId
+                );
+        }
+
+        // =====================================================
+        // COLLECTION DTO
+        // =====================================================
+
+        private static ProxyCollectionResponseDto
+            ToProxyCollectionDto(
+                MedicationCollection collection
+            )
+        {
+            var items =
+                collection.Items
+                    .OrderBy(
+                        item =>
+                            item.Medication.Name
+                    )
+                    .Select(
+                        item =>
+                            new ProxyCollectionItemDto
+                            {
+                                Id =
+                                    item.Id,
+
+                                MedicationId =
+                                    item.MedicationId,
+
+                                MedicationName =
+                                    item.Medication.Name,
+
+                                Dosage =
+                                    item.Medication.Dosage,
+
+                                Form =
+                                    item.Medication.Form,
+
+                                Quantity =
+                                    item.Quantity
+                            }
+                    )
+                    .ToList();
+
+            return new ProxyCollectionResponseDto
+            {
+                Id =
+                    collection.Id,
+
+                PatientId =
+                    collection.PatientId,
+
+                PatientName =
+                    collection.Patient.User.FullName,
+
+                PatientNumber =
+                    collection.Patient.PatientNumber,
+
+                ClinicId =
+                    collection.ClinicId,
+
+                ClinicName =
+                    collection.Clinic.Name,
+
+                ProxyId =
+                    collection.ProxyId,
+
+                ProxyName =
+                    collection.Proxy?.User.FullName,
+
+                ProcessedByNurseId =
+                    collection.ProcessedByNurseId,
+
+                ProcessedByNurseName =
+                    collection
+                        .ProcessedByNurse?
+                        .User.FullName,
+
+                ScheduledCollectionDate =
+                    collection
+                        .ScheduledCollectionDate,
+
+                CollectedAt =
+                    collection.CollectedAt,
+
+                Status =
+                    GetDisplayStatus(
+                        collection
+                    ),
+
+                MedicationName =
+                    string.Join(
+                        ", ",
+                        items
+                            .Select(
+                                item =>
+                                    item.MedicationName
+                            )
+                            .Where(
+                                name =>
+                                    !string.IsNullOrWhiteSpace(
+                                        name
+                                    )
+                            )
+                            .Distinct()
+                    ),
+
+                Notes =
+                    collection.Notes,
+
+                Items =
+                    items
+            };
         }
 
         // =====================================================
         // CURRENT PROXY
         // =====================================================
 
-        private async Task<Proxy>
-            GetActiveProxyAsync()
+        private async Task<(
+            Proxy? Proxy,
+            IActionResult? Error
+        )>
+            ResolveActiveProxyAsync()
         {
-            var userId =
-                GetCurrentUserId();
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
 
-            /*
-             * Clinic is deliberately loaded here because
-             * ClinicId is now part of the Proxy's authorization
-             * boundary.
-             */
+            if (
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
+                !Guid.TryParse(
+                    value,
+                    out var userId
+                )
+            )
+            {
+                return (
+                    null,
+                    Unauthorized(
+                        new
+                        {
+                            message =
+                                "Authenticated user identifier is missing or invalid."
+                        }
+                    )
+                );
+            }
+
             var proxy =
                 await _context.Proxies
+                    .AsNoTracking()
                     .Include(
                         proxyEntity =>
                             proxyEntity.User
@@ -444,34 +627,55 @@ namespace PersonalProject.Controllers
 
             if (proxy == null)
             {
-                throw new UnauthorizedAccessException(
-                    "Active proxy profile not found."
+                return (
+                    null,
+                    StatusCode(
+                        StatusCodes
+                            .Status403Forbidden,
+                        new
+                        {
+                            message =
+                                "Active proxy profile not found."
+                        }
+                    )
                 );
             }
 
-            /*
-             * Guid.Empty must never behave as a valid clinic.
-             * This also catches incorrectly migrated legacy
-             * Proxy accounts.
-             */
             if (
                 proxy.ClinicId ==
                 Guid.Empty
             )
             {
-                throw new InvalidOperationException(
-                    "Proxy account is not assigned to a clinic."
+                return (
+                    null,
+                    Conflict(
+                        new
+                        {
+                            message =
+                                "Proxy account is not assigned to a clinic."
+                        }
+                    )
                 );
             }
 
             if (proxy.Clinic == null)
             {
-                throw new InvalidOperationException(
-                    "Proxy clinic could not be found."
+                return (
+                    null,
+                    Conflict(
+                        new
+                        {
+                            message =
+                                "Proxy clinic could not be found."
+                        }
+                    )
                 );
             }
 
-            return proxy;
+            return (
+                proxy,
+                null
+            );
         }
 
         // =====================================================
@@ -484,7 +688,8 @@ namespace PersonalProject.Controllers
         {
             if (
                 collection.Status ==
-                MedicationCollectionStatuses.Collected
+                MedicationCollectionStatuses
+                    .Collected
             )
             {
                 return MedicationCollectionStatuses
@@ -493,7 +698,8 @@ namespace PersonalProject.Controllers
 
             if (
                 collection.Status ==
-                MedicationCollectionStatuses.Cancelled
+                MedicationCollectionStatuses
+                    .Cancelled
             )
             {
                 return MedicationCollectionStatuses
@@ -508,33 +714,6 @@ namespace PersonalProject.Controllers
                         .Overdue
                     : MedicationCollectionStatuses
                         .Pending;
-        }
-
-        // =====================================================
-        // CURRENT USER ID
-        // =====================================================
-
-        private Guid GetCurrentUserId()
-        {
-            var value =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
-
-            if (
-                string.IsNullOrWhiteSpace(
-                    value
-                ) ||
-                !Guid.TryParse(
-                    value,
-                    out var userId
-                )
-            )
-            {
-                throw new UnauthorizedAccessException();
-            }
-
-            return userId;
         }
     }
 }
