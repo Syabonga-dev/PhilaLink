@@ -36,8 +36,6 @@
         public int CollectionsDueToday { get; set; }
 
         public int OverdueCollections { get; set; }
-
-        public int LowStockItems { get; set; }
     }
 
     public class NursePatientDto
@@ -73,6 +71,4 @@
 
         public int Count { get; set; }
     }
-
-
 }

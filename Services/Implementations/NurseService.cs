@@ -10,27 +10,30 @@ namespace PersonalProject.Services.Implementations
     public class NurseService :
         INurseService
     {
-        private readonly PhilaLinkDbContext _context;
+        private readonly PhilaLinkDbContext
+            _context;
 
         public NurseService(
             PhilaLinkDbContext context
         )
         {
-            _context = context;
+            _context =
+                context;
         }
 
-        public async Task<NurseMeDto> GetMeAsync(
-            Guid userId
-        )
+        // =====================================================
+        // CURRENT NURSE
+        // =====================================================
+
+        public async Task<NurseMeDto>
+            GetMeAsync(
+                Guid userId
+            )
         {
             var nurse =
                 await GetActiveNurseAsync(
                     userId
                 );
-
-            await _context.Entry(nurse)
-                .Reference(n => n.Clinic)
-                .LoadAsync();
 
             return new NurseMeDto
             {
@@ -63,6 +66,10 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
+        // =====================================================
+        // DASHBOARD
+        // =====================================================
+
         public async Task<NurseDashboardDto>
             GetDashboardAsync(
                 Guid userId
@@ -80,72 +87,67 @@ namespace PersonalProject.Services.Implementations
                 DateTime.UtcNow.Date;
 
             var tomorrow =
-                today.AddDays(1);
+                today.AddDays(
+                    1
+                );
 
             var clinicPatients =
                 await _context.Patients
+                    .AsNoTracking()
                     .CountAsync(
-                        p =>
-                            p.ClinicId ==
+                        patient =>
+                            patient.ClinicId ==
                                 clinicId &&
-                            p.User.IsActive
+                            patient.User.IsActive
                     );
 
             var appointmentsToday =
                 await _context.Appointments
+                    .AsNoTracking()
                     .CountAsync(
-                        a =>
-                            a.ClinicId ==
+                        appointment =>
+                            appointment.ClinicId ==
                                 clinicId &&
-                            a.ScheduledAt >=
+                            appointment.ScheduledAt >=
                                 today &&
-                            a.ScheduledAt <
+                            appointment.ScheduledAt <
                                 tomorrow &&
-                            a.Status !=
+                            appointment.Status !=
                                 AppointmentStatuses.Cancelled
                     );
 
             var collectionsDueToday =
                 await _context
                     .MedicationCollections
+                    .AsNoTracking()
                     .CountAsync(
-                        c =>
-                            c.ClinicId ==
+                        collection =>
+                            collection.ClinicId ==
                                 clinicId &&
-                            c.ScheduledCollectionDate >=
+                            collection.ScheduledCollectionDate >=
                                 today &&
-                            c.ScheduledCollectionDate <
+                            collection.ScheduledCollectionDate <
                                 tomorrow &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Collected &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Cancelled
                     );
 
             var overdueCollections =
                 await _context
                     .MedicationCollections
+                    .AsNoTracking()
                     .CountAsync(
-                        c =>
-                            c.ClinicId ==
+                        collection =>
+                            collection.ClinicId ==
                                 clinicId &&
-                            c.ScheduledCollectionDate <
+                            collection.ScheduledCollectionDate <
                                 today &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Collected &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Cancelled
-                    );
-
-            var lowStockItems =
-                await _context.ClinicStocks
-                    .CountAsync(
-                        s =>
-                            s.ClinicId ==
-                                clinicId &&
-                            s.IsActive &&
-                            s.QuantityOnHand <=
-                                s.ReorderLevel
                     );
 
             return new NurseDashboardDto
@@ -160,12 +162,13 @@ namespace PersonalProject.Services.Implementations
                     collectionsDueToday,
 
                 OverdueCollections =
-                    overdueCollections,
-
-                LowStockItems =
-                    lowStockItems
+                    overdueCollections
             };
         }
+
+        // =====================================================
+        // CLINIC PATIENTS
+        // =====================================================
 
         public async Task<List<NursePatientDto>>
             GetClinicPatientsAsync(
@@ -178,44 +181,57 @@ namespace PersonalProject.Services.Implementations
                 );
 
             return await _context.Patients
-                .Include(p => p.User)
+                .AsNoTracking()
                 .Where(
-                    p =>
-                        p.ClinicId ==
+                    patient =>
+                        patient.ClinicId ==
                             nurse.ClinicId &&
-                        p.User.IsActive
+                        patient.User.IsActive
                 )
                 .OrderBy(
-                    p => p.User.FullName
+                    patient =>
+                        patient.User.FullName
                 )
                 .Select(
-                    p =>
+                    patient =>
                         new NursePatientDto
                         {
                             PatientId =
-                                p.Id,
+                                patient.Id,
 
                             UserId =
-                                p.UserId,
+                                patient.UserId,
 
                             PatientNumber =
-                                p.PatientNumber,
+                                patient.PatientNumber,
 
                             FullName =
-                                p.User.FullName,
+                                patient.User.FullName,
 
                             DateOfBirth =
-                                p.DateOfBirth,
+                                patient.DateOfBirth,
 
                             Gender =
-                                p.Gender,
+                                patient.Gender,
 
                             PhoneNumber =
-                                p.User.PhoneNumber
+                                patient.User.PhoneNumber
                         }
                 )
                 .ToListAsync();
         }
+
+        // =====================================================
+        // URGENT NURSE ALERTS
+        // =====================================================
+        //
+        // Stock alerts deliberately do not live here.
+        //
+        // Clinic inventory and reorder monitoring are the
+        // responsibility of the ClinicAdmin.
+        //
+        // Nurse alerts should concern direct patient-care work.
+        // =====================================================
 
         public async Task<List<NurseAlertDto>>
             GetUrgentAlertsAsync(
@@ -236,33 +252,26 @@ namespace PersonalProject.Services.Implementations
             var overdueCollections =
                 await _context
                     .MedicationCollections
+                    .AsNoTracking()
                     .CountAsync(
-                        c =>
-                            c.ClinicId ==
+                        collection =>
+                            collection.ClinicId ==
                                 clinicId &&
-                            c.ScheduledCollectionDate <
+                            collection.ScheduledCollectionDate <
                                 today &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Collected &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Cancelled
-                    );
-
-            var lowStockItems =
-                await _context.ClinicStocks
-                    .CountAsync(
-                        s =>
-                            s.ClinicId ==
-                                clinicId &&
-                            s.IsActive &&
-                            s.QuantityOnHand <=
-                                s.ReorderLevel
                     );
 
             var alerts =
                 new List<NurseAlertDto>();
 
-            if (overdueCollections > 0)
+            if (
+                overdueCollections >
+                0
+            )
             {
                 alerts.Add(
                     new NurseAlertDto
@@ -282,28 +291,12 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (lowStockItems > 0)
-            {
-                alerts.Add(
-                    new NurseAlertDto
-                    {
-                        Code =
-                            "LOW_STOCK",
-
-                        Severity =
-                            "Medium",
-
-                        Count =
-                            lowStockItems,
-
-                        Message =
-                            $"{lowStockItems} clinic stock item(s) are at or below reorder level."
-                    }
-                );
-            }
-
             return alerts;
         }
+
+        // =====================================================
+        // ACTIVE NURSE
+        // =====================================================
 
         private async Task<Nurse>
             GetActiveNurseAsync(
@@ -312,21 +305,31 @@ namespace PersonalProject.Services.Implementations
         {
             var nurse =
                 await _context.Nurses
-                    .Include(n => n.User)
-                    .Include(n => n.Clinic)
+                    .AsNoTracking()
+                    .Include(
+                        item =>
+                            item.User
+                    )
+                    .Include(
+                        item =>
+                            item.Clinic
+                    )
                     .FirstOrDefaultAsync(
-                        n =>
-                            n.UserId ==
+                        item =>
+                            item.UserId ==
                                 userId &&
-                            n.User.Role ==
+                            item.User.Role ==
                                 RoleNames.Nurse &&
-                            n.User.IsActive
+                            item.User.IsActive
                     );
 
-            if (nurse == null)
+            if (
+                nurse ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
-                    "Active Nurse account required."
+                    "An active Nurse profile with an assigned clinic is required."
                 );
             }
 

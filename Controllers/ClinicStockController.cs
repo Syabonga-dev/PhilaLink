@@ -9,108 +9,214 @@ namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/clinic-stock")]
-    [Authorize(Policy = "ClinicStaff")]
-    public class ClinicStockController : ControllerBase
+    [Authorize(Roles = RoleNames.ClinicAdmin)]
+    public class ClinicStockController :
+        ControllerBase
     {
-        private readonly IClinicStockService _stockService;
+        private readonly IClinicStockService
+            _stockService;
 
-        public ClinicStockController(IClinicStockService stockService)
+        public ClinicStockController(
+            IClinicStockService stockService
+        )
         {
-            _stockService = stockService;
+            _stockService =
+                stockService;
         }
+
+        // =====================================================
+        // GET CLINIC STOCK
+        // =====================================================
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult>
+            GetAll()
         {
             try
             {
-                return Ok(await _stockService.GetAllAsync(GetCurrentUserId()));
+                return Ok(
+                    await _stockService
+                        .GetAllAsync(
+                            GetCurrentUserId()
+                        )
+                );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
+
+        // =====================================================
+        // CREATE STOCK ITEM
+        // =====================================================
 
         [HttpPost]
-        [Authorize(Roles = RoleNames.ClinicAdmin)]
-        public async Task<IActionResult> Create(CreateClinicStockDto dto)
+        public async Task<IActionResult>
+            Create(
+                CreateClinicStockDto dto
+            )
         {
             try
             {
-                var result = await _stockService.CreateAsync(dto, GetCurrentUserId());
+                var result =
+                    await _stockService
+                        .CreateAsync(
+                            dto,
+                            GetCurrentUserId()
+                        );
 
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(
-                    new { message = ex.Message }
+                return Ok(
+                    result
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
+
+        // =====================================================
+        // UPDATE STOCK ITEM
+        // =====================================================
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = RoleNames.ClinicAdmin)]
-        public async Task<IActionResult> Update(Guid id, UpdateClinicStockDto dto)
+        public async Task<IActionResult>
+            Update(
+                Guid id,
+                UpdateClinicStockDto dto
+            )
         {
             try
             {
-                return Ok(await _stockService.UpdateAsync(id, dto, GetCurrentUserId()));
+                return Ok(
+                    await _stockService
+                        .UpdateAsync(
+                            id,
+                            dto,
+                            GetCurrentUserId()
+                        )
+                );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
+
+        // =====================================================
+        // ADJUST QUANTITY
+        // =====================================================
 
         [HttpPatch("{id:guid}/adjust")]
-        public async Task<IActionResult> Adjust(Guid id, AdjustClinicStockDto dto)
+        public async Task<IActionResult>
+            Adjust(
+                Guid id,
+                AdjustClinicStockDto dto
+            )
         {
             try
             {
-                return Ok(await _stockService.AdjustAsync(id, dto, GetCurrentUserId()));
+                return Ok(
+                    await _stockService
+                        .AdjustAsync(
+                            id,
+                            dto,
+                            GetCurrentUserId()
+                        )
+                );
             }
-            catch (KeyNotFoundException ex)
+            catch (
+                KeyNotFoundException ex
+            )
             {
                 return NotFound(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (InvalidOperationException ex)
+            catch (
+                InvalidOperationException ex
+            )
             {
                 return BadRequest(
-                    new { message = ex.Message }
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
-            catch (UnauthorizedAccessException)
+            catch (
+                UnauthorizedAccessException
+            )
             {
                 return Forbid();
             }
         }
 
-        private Guid GetCurrentUserId()
+        // =====================================================
+        // CURRENT USER
+        // =====================================================
+
+        private Guid
+            GetCurrentUserId()
         {
-            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var value =
+                User.FindFirstValue(
+                    ClaimTypes
+                        .NameIdentifier
+                );
 
             if (
-                string.IsNullOrWhiteSpace(value) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                ) ||
                 !Guid.TryParse(
                     value,
                     out var userId

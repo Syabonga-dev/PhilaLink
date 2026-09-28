@@ -10,40 +10,70 @@ namespace PersonalProject.Services.Implementations
     public class ClinicStockService :
         IClinicStockService
     {
-        private readonly PhilaLinkDbContext _context;
-        private readonly IAuditLogService _audit;
+        private readonly PhilaLinkDbContext
+            _context;
+
+        private readonly IAuditLogService
+            _audit;
 
         public ClinicStockService(
             PhilaLinkDbContext context,
             IAuditLogService audit
         )
         {
-            _context = context;
-            _audit = audit;
+            _context =
+                context;
+
+            _audit =
+                audit;
         }
 
+        // =====================================================
+        // LIST STOCK
+        // =====================================================
+
         public async Task<List<ClinicStockResponseDto>>
-            GetAllAsync(Guid performedByUserId)
+            GetAllAsync(
+                Guid performedByUserId
+            )
         {
             var clinicId =
-                await GetStaffClinicIdAsync(
+                await GetClinicAdminClinicIdAsync(
                     performedByUserId
                 );
 
             var stock =
                 await _context.ClinicStocks
-                    .Include(s => s.Clinic)
-                    .Where(
-                        s => s.ClinicId == clinicId
+                    .AsNoTracking()
+                    .Include(
+                        item =>
+                            item.Clinic
                     )
-                    .OrderBy(s => s.MedicationName)
-                    .ThenBy(s => s.Strength)
+                    .Where(
+                        item =>
+                            item.ClinicId ==
+                                clinicId
+                    )
+                    .OrderBy(
+                        item =>
+                            item.MedicationName
+                    )
+                    .ThenBy(
+                        item =>
+                            item.Strength
+                    )
                     .ToListAsync();
 
             return stock
-                .Select(ToDto)
+                .Select(
+                    ToDto
+                )
                 .ToList();
         }
+
+        // =====================================================
+        // CREATE
+        // =====================================================
 
         public async Task<ClinicStockResponseDto>
             CreateAsync(
@@ -51,12 +81,18 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            var clinicId = await GetStaffClinicIdAsync(performedByUserId);
+            var clinicId =
+                await GetClinicAdminClinicIdAsync(
+                    performedByUserId
+                );
 
-            if (dto.ClinicId != clinicId)
+            if (
+                dto.ClinicId !=
+                clinicId
+            )
             {
                 throw new UnauthorizedAccessException(
-                    "You can only manage stock for your clinic."
+                    "You can only manage stock for your own clinic."
                 );
             }
 
@@ -65,66 +101,148 @@ namespace PersonalProject.Services.Implementations
                 dto.ReorderLevel
             );
 
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.MedicationName
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Medication name is required."
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Strength
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Strength is required."
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Form
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Medication form is required."
+                );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    dto.Unit
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Stock unit is required."
+                );
+            }
+
+            var medicationName =
+                dto.MedicationName
+                    .Trim();
+
+            var strength =
+                dto.Strength
+                    .Trim();
+
+            var form =
+                dto.Form
+                    .Trim();
+
+            var unit =
+                dto.Unit
+                    .Trim();
+
             var duplicate =
-                await _context.ClinicStocks
-                    .AnyAsync(s =>
-                        s.ClinicId == clinicId &&
-                        s.MedicationName ==
-                            dto.MedicationName.Trim() &&
-                        s.Strength ==
-                            dto.Strength.Trim() &&
-                        s.Form ==
-                            dto.Form.Trim()
+                await _context
+                    .ClinicStocks
+                    .AnyAsync(
+                        item =>
+                            item.ClinicId ==
+                                clinicId &&
+                            item.MedicationName ==
+                                medicationName &&
+                            item.Strength ==
+                                strength &&
+                            item.Form ==
+                                form
                     );
 
-            if (duplicate)
+            if (
+                duplicate
+            )
             {
                 throw new InvalidOperationException(
                     "This stock item already exists for the clinic."
                 );
             }
 
-            var stock = new ClinicStock
-            {
-                Id = Guid.NewGuid(),
+            var stock =
+                new ClinicStock
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                ClinicId = clinicId,
+                    ClinicId =
+                        clinicId,
 
-                MedicationName =
-                    dto.MedicationName.Trim(),
+                    MedicationName =
+                        medicationName,
 
-                Strength =
-                    dto.Strength.Trim(),
+                    Strength =
+                        strength,
 
-                Form =
-                    dto.Form.Trim(),
+                    Form =
+                        form,
 
-                Unit =
-                    dto.Unit.Trim(),
+                    Unit =
+                        unit,
 
-                QuantityOnHand =
-                    dto.QuantityOnHand,
+                    QuantityOnHand =
+                        dto.QuantityOnHand,
 
-                ReorderLevel =
-                    dto.ReorderLevel,
+                    ReorderLevel =
+                        dto.ReorderLevel,
 
-                IsActive = true,
+                    IsActive =
+                        true,
 
-                CreatedAt = DateTime.UtcNow
-            };
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
-            _context.ClinicStocks.Add(stock);
+            _context.ClinicStocks
+                .Add(
+                    stock
+                );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
-            await _audit.LogAsync(
-                "ClinicStockCreated",
-                performedByUserId,
-                $"Stock item {stock.Id} created."
+            await _audit
+                .LogAsync(
+                    "ClinicStockCreated",
+                    performedByUserId,
+                    $"Stock item {stock.Id} created."
+                );
+
+            return await GetDtoAsync(
+                stock.Id,
+                clinicId
             );
-
-            return await GetDtoAsync(stock.Id);
         }
+
+        // =====================================================
+        // UPDATE
+        // =====================================================
 
         public async Task<ClinicStockResponseDto>
             UpdateAsync(
@@ -134,7 +252,7 @@ namespace PersonalProject.Services.Implementations
             )
         {
             var clinicId =
-                await GetStaffClinicIdAsync(
+                await GetClinicAdminClinicIdAsync(
                     performedByUserId
                 );
 
@@ -144,35 +262,57 @@ namespace PersonalProject.Services.Implementations
             );
 
             var stock =
-                await _context.ClinicStocks
+                await _context
+                    .ClinicStocks
                     .FirstOrDefaultAsync(
-                        s =>
-                            s.Id == stockId &&
-                            s.ClinicId == clinicId
+                        item =>
+                            item.Id ==
+                                stockId &&
+                            item.ClinicId ==
+                                clinicId
                     );
 
-            if (stock == null)
+            if (
+                stock ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Clinic stock item not found."
                 );
             }
 
-            stock.QuantityOnHand = dto.QuantityOnHand;
-            stock.ReorderLevel = dto.ReorderLevel;
-            stock.IsActive = dto.IsActive;
-            stock.UpdatedAt = DateTime.UtcNow;
+            stock.QuantityOnHand =
+                dto.QuantityOnHand;
 
-            await _context.SaveChangesAsync();
+            stock.ReorderLevel =
+                dto.ReorderLevel;
 
-            await _audit.LogAsync(
-                "ClinicStockUpdated",
-                performedByUserId,
-                $"Stock item {stock.Id} updated."
+            stock.IsActive =
+                dto.IsActive;
+
+            stock.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context
+                .SaveChangesAsync();
+
+            await _audit
+                .LogAsync(
+                    "ClinicStockUpdated",
+                    performedByUserId,
+                    $"Stock item {stock.Id} updated."
+                );
+
+            return await GetDtoAsync(
+                stock.Id,
+                clinicId
             );
-
-            return await GetDtoAsync(stock.Id);
         }
+
+        // =====================================================
+        // ADJUST QUANTITY
+        // =====================================================
 
         public async Task<ClinicStockResponseDto>
             AdjustAsync(
@@ -181,7 +321,10 @@ namespace PersonalProject.Services.Implementations
                 Guid performedByUserId
             )
         {
-            if (dto.QuantityChange == 0)
+            if (
+                dto.QuantityChange ==
+                0
+            )
             {
                 throw new InvalidOperationException(
                     "Quantity change cannot be zero."
@@ -189,19 +332,25 @@ namespace PersonalProject.Services.Implementations
             }
 
             var clinicId =
-                await GetStaffClinicIdAsync(
+                await GetClinicAdminClinicIdAsync(
                     performedByUserId
                 );
 
             var stock =
-                await _context.ClinicStocks
+                await _context
+                    .ClinicStocks
                     .FirstOrDefaultAsync(
-                        s =>
-                            s.Id == stockId &&
-                            s.ClinicId == clinicId
+                        item =>
+                            item.Id ==
+                                stockId &&
+                            item.ClinicId ==
+                                clinicId
                     );
 
-            if (stock == null)
+            if (
+                stock ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Clinic stock item not found."
@@ -212,89 +361,147 @@ namespace PersonalProject.Services.Implementations
                 stock.QuantityOnHand +
                 dto.QuantityChange;
 
-            if (newQuantity < 0)
+            if (
+                newQuantity <
+                0
+            )
             {
                 throw new InvalidOperationException(
                     "Stock quantity cannot become negative."
                 );
             }
 
-            stock.QuantityOnHand = newQuantity;
-            stock.UpdatedAt = DateTime.UtcNow;
+            stock.QuantityOnHand =
+                newQuantity;
 
-            await _context.SaveChangesAsync();
+            stock.UpdatedAt =
+                DateTime.UtcNow;
 
-            await _audit.LogAsync(
-                "ClinicStockAdjusted",
-                performedByUserId,
-                $"Stock item {stock.Id} changed by " +
-                $"{dto.QuantityChange}. " +
-                $"Reason: {dto.Reason ?? "Not supplied"}"
+            await _context
+                .SaveChangesAsync();
+
+            await _audit
+                .LogAsync(
+                    "ClinicStockAdjusted",
+                    performedByUserId,
+                    $"Stock item {stock.Id} changed by " +
+                    $"{dto.QuantityChange}. " +
+                    $"Reason: {dto.Reason ?? "Not supplied"}"
+                );
+
+            return await GetDtoAsync(
+                stock.Id,
+                clinicId
             );
-
-            return await GetDtoAsync(stock.Id);
         }
+
+        // =====================================================
+        // GET ONE
+        // =====================================================
 
         private async Task<ClinicStockResponseDto>
-            GetDtoAsync(Guid id)
+            GetDtoAsync(
+                Guid stockId,
+                Guid clinicId
+            )
         {
             var stock =
-                await _context.ClinicStocks
-                    .Include(s => s.Clinic)
-                    .FirstAsync(s => s.Id == id);
+                await _context
+                    .ClinicStocks
+                    .AsNoTracking()
+                    .Include(
+                        item =>
+                            item.Clinic
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                stockId &&
+                            item.ClinicId ==
+                                clinicId
+                    );
 
-            return ToDto(stock);
+            if (
+                stock ==
+                null
+            )
+            {
+                throw new KeyNotFoundException(
+                    "Clinic stock item not found."
+                );
+            }
+
+            return ToDto(
+                stock
+            );
         }
 
+        // =====================================================
+        // CLINIC ADMIN BOUNDARY
+        // =====================================================
+
         private async Task<Guid>
-            GetStaffClinicIdAsync(
+            GetClinicAdminClinicIdAsync(
                 Guid userId
             )
         {
-            var user = await _context.Users
-                .Include(u => u.Admin)
-                .Include(u => u.Nurse)
-                .FirstOrDefaultAsync(
-                    u => u.Id == userId
+            var user =
+                await _context.Users
+                    .AsNoTracking()
+                    .Include(
+                        item =>
+                            item.Admin
+                    )
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                userId
+                    );
+
+            if (
+                user ==
+                    null ||
+                !user.IsActive ||
+                user.Role !=
+                    RoleNames.ClinicAdmin ||
+                user.Admin?.ClinicId ==
+                    null
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "An active ClinicAdmin account with an assigned clinic is required."
                 );
-
-            if (user == null || !user.IsActive)
-            {
-                throw new UnauthorizedAccessException();
             }
 
-            if (
-                user.Role == RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId != null
-            )
-            {
-                return user.Admin.ClinicId.Value;
-            }
-
-            if (
-                user.Role == RoleNames.Nurse &&
-                user.Nurse != null
-            )
-            {
-                return user.Nurse.ClinicId;
-            }
-
-            throw new UnauthorizedAccessException();
+            return user.Admin
+                .ClinicId
+                .Value;
         }
 
-        private static void ValidateQuantities(
-            int quantity,
-            int reorderLevel
-        )
+        // =====================================================
+        // VALIDATION
+        // =====================================================
+
+        private static void
+            ValidateQuantities(
+                int quantity,
+                int reorderLevel
+            )
         {
-            if (quantity < 0)
+            if (
+                quantity <
+                0
+            )
             {
                 throw new InvalidOperationException(
                     "Quantity on hand cannot be negative."
                 );
             }
 
-            if (reorderLevel < 0)
+            if (
+                reorderLevel <
+                0
+            )
             {
                 throw new InvalidOperationException(
                     "Reorder level cannot be negative."
@@ -302,15 +509,22 @@ namespace PersonalProject.Services.Implementations
             }
         }
 
-        private static ClinicStockResponseDto ToDto(
-            ClinicStock stock
-        )
+        // =====================================================
+        // DTO
+        // =====================================================
+
+        private static ClinicStockResponseDto
+            ToDto(
+                ClinicStock stock
+            )
         {
             return new ClinicStockResponseDto
             {
-                Id = stock.Id,
+                Id =
+                    stock.Id,
 
-                ClinicId = stock.ClinicId,
+                ClinicId =
+                    stock.ClinicId,
 
                 ClinicName =
                     stock.Clinic.Name,
