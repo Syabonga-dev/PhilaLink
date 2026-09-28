@@ -393,141 +393,208 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<MedicationCollectionResponseDto>
-            CompleteAsync(
-                Guid collectionId,
-                CompleteMedicationCollectionDto dto,
-                Guid performedByUserId
-            )
+    CompleteAsync(
+        Guid collectionId,
+        CompleteMedicationCollectionDto dto,
+        Guid performedByUserId
+    )
         {
+            /*
+             * Resolve the Nurse first.
+             *
+             * Capture the IDs as scalar values because the execution
+             * strategy may retry the transaction. We deliberately do
+             * not rely on the tracked Nurse entity inside the retry.
+             */
             var nurse =
                 await GetActiveNurseAsync(
                     performedByUserId
                 );
 
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
-
-            var collection =
-                await GetCollectionQuery()
-                    .FirstOrDefaultAsync(
-                        c =>
-                            c.Id ==
-                                collectionId &&
-                            c.ClinicId ==
-                                nurse.ClinicId
-                    );
-
-            if (collection == null)
-            {
-                throw new KeyNotFoundException(
-                    "Collection not found."
-                );
-            }
-
-            if (
-                collection.Status ==
-                MedicationCollectionStatuses.Collected
-            )
-            {
-                throw new InvalidOperationException(
-                    "Collection has already been completed."
-                );
-            }
-
-            if (
-                collection.Status ==
-                MedicationCollectionStatuses.Cancelled
-            )
-            {
-                throw new InvalidOperationException(
-                    "Cancelled collection cannot be completed."
-                );
-            }
-
-            var proxyId =
-                dto.ProxyId ??
-                collection.ProxyId;
-
-            if (proxyId != null)
-            {
-                await ValidateProxyAssignmentAsync(
-                    collection.PatientId,
-                    proxyId.Value,
-                    collection.ClinicId
-                );
-            }
-
-            foreach (var item in collection.Items)
-            {
-                var stock =
-                    item.ClinicStock;
-
-                if (!stock.IsActive)
-                {
-                    throw new InvalidOperationException(
-                        $"{stock.MedicationName} stock is inactive."
-                    );
-                }
-
-                if (
-                    stock.QuantityOnHand <
-                    item.Quantity
-                )
-                {
-                    throw new InvalidOperationException(
-                        $"Insufficient stock for {stock.MedicationName}."
-                    );
-                }
-
-                stock.QuantityOnHand -=
-                    item.Quantity;
-
-                stock.UpdatedAt =
-                    DateTime.UtcNow;
-            }
-
-            collection.ProxyId =
-                proxyId;
-
-            collection.ProcessedByNurseId =
+            var nurseId =
                 nurse.Id;
 
-            collection.CollectedAt =
-                DateTime.UtcNow;
+            var clinicId =
+                nurse.ClinicId;
 
-            collection.Status =
-                MedicationCollectionStatuses.Collected;
+            /*
+             * Program.cs enables Npgsql retry-on-failure.
+             *
+             * When retry-on-failure is enabled, explicit transactions
+             * must be executed through EF Core's execution strategy.
+             */
+            var strategy =
+                _context.Database
+                    .CreateExecutionStrategy();
 
-            if (
-                !string.IsNullOrWhiteSpace(
-                    dto.Notes
-                )
-            )
-            {
-                collection.Notes =
-                    string.IsNullOrWhiteSpace(
-                        collection.Notes
+            await strategy.ExecuteAsync(
+                async () =>
+                {
+                    /*
+                     * A previous failed attempt may have left tracked
+                     * entities in memory with modified values.
+                     *
+                     * Clearing ensures every retry starts from the
+                     * actual database state.
+                     */
+                    _context.ChangeTracker.Clear();
+
+                    await using var transaction =
+                        await _context.Database
+                            .BeginTransactionAsync();
+
+                    var collection =
+                        await GetCollectionQuery()
+                            .FirstOrDefaultAsync(
+                                c =>
+                                    c.Id ==
+                                        collectionId &&
+                                    c.ClinicId ==
+                                        clinicId
+                            );
+
+                    if (collection == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Collection not found."
+                        );
+                    }
+
+                    if (
+                        collection.Status ==
+                        MedicationCollectionStatuses.Collected
                     )
-                        ? dto.Notes
-                        : $"{collection.Notes}\n{dto.Notes}";
-            }
+                    {
+                        throw new InvalidOperationException(
+                            "Collection has already been completed."
+                        );
+                    }
 
-            collection.UpdatedAt =
-                DateTime.UtcNow;
+                    if (
+                        collection.Status ==
+                        MedicationCollectionStatuses.Cancelled
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "Cancelled collection cannot be completed."
+                        );
+                    }
 
-            await _context.SaveChangesAsync();
+                    var proxyId =
+                        dto.ProxyId ??
+                        collection.ProxyId;
 
-            await _audit.LogAsync(
-                "MedicationCollectionCompleted",
-                performedByUserId,
-                $"Collection {collection.Id} completed."
+                    if (
+                        proxyId !=
+                        null
+                    )
+                    {
+                        await ValidateProxyAssignmentAsync(
+                            collection.PatientId,
+                            proxyId.Value,
+                            collection.ClinicId
+                        );
+                    }
+
+                    /*
+                     * Completing the collection automatically consumes
+                     * clinic stock.
+                     *
+                     * The Nurse does not manage inventory directly.
+                     * The stock deduction is part of the medication
+                     * collection workflow.
+                     */
+                    foreach (
+                        var item
+                        in collection.Items
+                    )
+                    {
+                        var stock =
+                            item.ClinicStock;
+
+                        if (
+                            !stock.IsActive
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                $"{stock.MedicationName} stock is inactive."
+                            );
+                        }
+
+                        if (
+                            stock.QuantityOnHand <
+                            item.Quantity
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                $"Insufficient stock for {stock.MedicationName}."
+                            );
+                        }
+
+                        stock.QuantityOnHand -=
+                            item.Quantity;
+
+                        stock.UpdatedAt =
+                            DateTime.UtcNow;
+                    }
+
+                    collection.ProxyId =
+                        proxyId;
+
+                    collection.ProcessedByNurseId =
+                        nurseId;
+
+                    collection.CollectedAt =
+                        DateTime.UtcNow;
+
+                    collection.Status =
+                        MedicationCollectionStatuses.Collected;
+
+                    if (
+                        !string.IsNullOrWhiteSpace(
+                            dto.Notes
+                        )
+                    )
+                    {
+                        collection.Notes =
+                            string.IsNullOrWhiteSpace(
+                                collection.Notes
+                            )
+                                ? dto.Notes
+                                : $"{collection.Notes}\n{dto.Notes}";
+                    }
+
+                    collection.UpdatedAt =
+                        DateTime.UtcNow;
+
+                    await _context
+                        .SaveChangesAsync();
+
+                    /*
+                     * AuditLogService uses the same scoped DbContext,
+                     * therefore this audit record is also included in
+                     * the transaction.
+                     */
+                    await _audit.LogAsync(
+                        "MedicationCollectionCompleted",
+                        performedByUserId,
+                        $"Collection {collection.Id} completed.",
+                        clinicId
+                    );
+
+                    await transaction
+                        .CommitAsync();
+                }
             );
 
-            await transaction.CommitAsync();
+            /*
+             * Remove transaction tracking and reload the committed
+             * representation returned to the frontend.
+             */
+            _context.ChangeTracker.Clear();
 
             return await GetDtoAsync(
-                collection.Id
+                collectionId
             );
         }
 
