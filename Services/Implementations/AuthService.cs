@@ -6,6 +6,7 @@ using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
+using PersonalProject.Utilities;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -189,6 +190,11 @@ namespace PersonalProject.Services.Implementations
 
                     Email =
                         user.Email,
+
+                    DateOfBirth =
+                        SouthAfricanIdNumber.GetDateOfBirth(
+                            user.IdNumber
+                        ),
 
                     IsProfileComplete =
                         false,

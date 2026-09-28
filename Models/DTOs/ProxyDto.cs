@@ -1,4 +1,4 @@
-﻿namespace PersonalProject.Models.DTOs
+namespace PersonalProject.Models.DTOs
 {
     // =====================================================
     // PROXY ASSIGNMENT
@@ -112,8 +112,6 @@
         public string Gender { get; set; } =
             string.Empty;
 
-        public string RelationshipToPatient { get; set; } =
-            string.Empty;
 
         // -------------------------------------------------
         // ADDRESS
@@ -189,6 +187,7 @@
      * - ProxyId
      * - UserId
      * - IdNumber
+     * - DateOfBirth (updated through the identity endpoint)
      * - ClinicId
      * - Role
      * - IsActive
@@ -216,13 +215,10 @@
         // PERSONAL
         // -------------------------------------------------
 
-        public DateOnly DateOfBirth { get; set; }
 
         public string Gender { get; set; } =
             string.Empty;
 
-        public string RelationshipToPatient { get; set; } =
-            string.Empty;
 
         // -------------------------------------------------
         // ADDRESS

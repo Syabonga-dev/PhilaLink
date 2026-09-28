@@ -1,4 +1,4 @@
-﻿namespace PersonalProject.Models.DTOs
+namespace PersonalProject.Models.DTOs
 {
     public class RegisterProxyDto
     {
@@ -36,11 +36,9 @@
         // PERSONAL INFORMATION
         // =====================================================
 
-        public DateOnly DateOfBirth { get; set; }
 
         public string Gender { get; set; } = string.Empty;
 
-        public string RelationshipToPatient { get; set; } = string.Empty;
 
         // =====================================================
         // EMERGENCY CONTACT

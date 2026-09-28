@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
@@ -157,8 +157,6 @@ namespace PersonalProject.Services.Implementations
             patient.User.UpdatedAt =
                 DateTime.UtcNow;
 
-            patient.DateOfBirth =
-                dto.DateOfBirth;
 
             patient.Gender =
                 dto.Gender.Trim();

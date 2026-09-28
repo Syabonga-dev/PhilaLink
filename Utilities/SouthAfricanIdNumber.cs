@@ -1,4 +1,4 @@
-﻿namespace PersonalProject.Utilities
+namespace PersonalProject.Utilities
 {
     public static class SouthAfricanIdNumber
     {

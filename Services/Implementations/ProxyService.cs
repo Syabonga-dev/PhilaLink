@@ -182,16 +182,11 @@ namespace PersonalProject.Services.Implementations
             proxy.Email =
                 normalizedEmail;
 
-            proxy.DateOfBirth =
-                dto.DateOfBirth;
 
             proxy.Gender =
                 dto.Gender
                     .Trim();
 
-            proxy.RelationshipToPatient =
-                dto.RelationshipToPatient
-                    .Trim();
 
             proxy.AddressLine1 =
                 dto.AddressLine1
@@ -972,8 +967,6 @@ namespace PersonalProject.Services.Implementations
                 Gender =
                     proxy.Gender,
 
-                RelationshipToPatient =
-                    proxy.RelationshipToPatient,
 
                 AddressLine1 =
                     proxy.AddressLine1,

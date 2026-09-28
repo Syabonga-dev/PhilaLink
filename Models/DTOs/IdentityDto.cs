@@ -1,4 +1,4 @@
-﻿namespace PersonalProject.Models.DTOs
+namespace PersonalProject.Models.DTOs
 {
     public class UpdateDateOfBirthDto
     {

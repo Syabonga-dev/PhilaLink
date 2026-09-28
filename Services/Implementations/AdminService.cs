@@ -1,4 +1,4 @@
-﻿using BCrypt.Net;
+using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
 using PersonalProject.Data;
 using PersonalProject.Models;
@@ -6,6 +6,7 @@ using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
+using PersonalProject.Utilities;
 
 namespace PersonalProject.Services.Implementations
 {
@@ -357,13 +358,13 @@ namespace PersonalProject.Services.Implementations
                         dto.PostalCode.Trim(),
 
                     DateOfBirth =
-                        dto.DateOfBirth,
+                        SouthAfricanIdNumber.GetDateOfBirth(
+                            user.IdNumber
+                        ),
 
                     Gender =
                         dto.Gender.Trim(),
 
-                    RelationshipToPatient =
-                        dto.RelationshipToPatient.Trim(),
 
                     EmergencyContactName =
                         dto.EmergencyContactName.Trim(),

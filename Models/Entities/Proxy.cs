@@ -58,7 +58,6 @@ namespace PersonalProject.Models.Entities
 
         public string Gender { get; set; } = string.Empty;
 
-        public string RelationshipToPatient { get; set; } = string.Empty;
 
         // =====================================================
         // EMERGENCY CONTACT
