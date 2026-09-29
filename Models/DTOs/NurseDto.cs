@@ -225,11 +225,7 @@ namespace PersonalProject.Models.DTOs
         public List<PatientAllergyDto> Allergies { get; set; } =
             new();
 
-        public List<NurseConditionDto> Conditions { get; set; } =
-            new();
-
-        public List<NurseMedicationDto> Medications { get; set; } =
-            new();
+        
 
         public List<NurseCollectionDto> Collections { get; set; } =
             new();
@@ -412,6 +408,22 @@ namespace PersonalProject.Models.DTOs
 
         public bool IsActive { get; set; } =
             true;
+    }
+
+        public class NurseHealthMetricWriteDto
+    {
+        public string MetricType { get; set; } =
+            string.Empty;
+
+        public string Value { get; set; } =
+            string.Empty;
+
+        public string Unit { get; set; } =
+            string.Empty;
+
+        public string? Status { get; set; }
+
+        public string? Note { get; set; }
     }
 
     public class NurseScheduleCollectionDto
