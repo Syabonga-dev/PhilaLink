@@ -757,6 +757,49 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
+                                var healthMetrics =
+                await _context.HealthMetrics
+                    .AsNoTracking()
+                    .Where(
+                        metric =>
+                            metric.PatientId ==
+                                patient.Id
+                    )
+                    .OrderByDescending(
+                        metric =>
+                            metric.RecordedAt
+                    )
+                    .Take(
+                        20
+                    )
+                    .Select(
+                        metric =>
+                            new HealthMetricResponseDto
+                            {
+                                Id =
+                                    metric.Id,
+
+                                MetricType =
+                                    metric.MetricType,
+
+                                Value =
+                                    metric.Value,
+
+                                Unit =
+                                    metric.Unit,
+
+                                Status =
+                                    metric.Status,
+
+                                Note =
+                                    metric.Note,
+
+                                RecordedAt =
+                                    metric.RecordedAt
+                            }
+                    )
+                    .ToListAsync();
+
             var medications =
                 await _context.Medications
                     .AsNoTracking()
@@ -957,6 +1000,7 @@ namespace PersonalProject.Services.Implementations
 
                 Conditions =
                     conditions,
+                    HealthMetrics = healthMetrics,
 
                 Medications =
                     medications
@@ -1094,6 +1138,81 @@ namespace PersonalProject.Services.Implementations
             };
         }
 
+                // =====================================================
+        // CLINIC INVENTORY FOR PRESCRIBING
+        // =====================================================
+
+        public async Task<List<ClinicStockResponseDto>>
+            GetClinicStockAsync(
+                Guid userId
+            )
+        {
+            var nurse =
+                await GetActiveNurseAsync(
+                    userId,
+                    false
+                );
+
+            return await _context.ClinicStocks
+                .AsNoTracking()
+                .Where(
+                    stock =>
+                        stock.ClinicId ==
+                            nurse.ClinicId &&
+                        stock.IsActive &&
+                        stock.QuantityOnHand >
+                            0
+                )
+                .OrderBy(
+                    stock =>
+                        stock.MedicationName
+                )
+                .ThenBy(
+                    stock =>
+                        stock.Strength
+                )
+                .ThenBy(
+                    stock =>
+                        stock.Form
+                )
+                .Select(
+                    stock =>
+                        new ClinicStockResponseDto
+                        {
+                            Id =
+                                stock.Id,
+
+                            ClinicId =
+                                stock.ClinicId,
+
+                            ClinicName =
+                                stock.Clinic.Name,
+
+                            MedicationName =
+                                stock.MedicationName,
+
+                            Strength =
+                                stock.Strength,
+
+                            Form =
+                                stock.Form,
+
+                            Unit =
+                                stock.Unit,
+
+                            QuantityOnHand =
+                                stock.QuantityOnHand,
+
+                            ReorderLevel =
+                                stock.ReorderLevel,
+
+                            IsActive =
+                                stock.IsActive
+                        }
+                )
+                .ToListAsync();
+        }
+
         // =====================================================
         // CLINIC PROXIES
         // =====================================================
@@ -1143,6 +1262,120 @@ namespace PersonalProject.Services.Implementations
                         }
                 )
                 .ToListAsync();
+        }
+
+                // =====================================================
+        // HEALTH METRICS
+        // =====================================================
+
+        public async Task<HealthMetricResponseDto>
+            CreateHealthMetricAsync(
+                Guid userId,
+                Guid patientId,
+                NurseHealthMetricWriteDto dto
+            )
+        {
+            var (
+                nurse,
+                patient
+            ) =
+                await GetClinicPatientAsync(
+                    userId,
+                    patientId
+                );
+
+            var metricType =
+                dto.MetricType
+                    .Trim();
+
+            var value =
+                dto.Value
+                    .Trim();
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    metricType
+                ) ||
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "Metric type and value are required."
+                );
+            }
+
+            var metric =
+                new HealthMetric
+                {
+                    Id =
+                        Guid.NewGuid(),
+
+                    PatientId =
+                        patient.Id,
+
+                    MetricType =
+                        metricType,
+
+                    Value =
+                        value,
+
+                    Unit =
+                        dto.Unit?.Trim() ??
+                        string.Empty,
+
+                    Status =
+                        CleanOptional(
+                            dto.Status
+                        ),
+
+                    Note =
+                        CleanOptional(
+                            dto.Note
+                        ),
+
+                    RecordedAt =
+                        DateTime.UtcNow
+                };
+
+            _context.HealthMetrics.Add(
+                metric
+            );
+
+            await _context
+                .SaveChangesAsync();
+
+            await _audit.LogAsync(
+                "PatientHealthMetricRecorded",
+                userId,
+                $"Health metric {metric.Id} ({metric.MetricType}) recorded for patient {patient.Id}.",
+                nurse.ClinicId
+            );
+
+            return new HealthMetricResponseDto
+            {
+                Id =
+                    metric.Id,
+
+                MetricType =
+                    metric.MetricType,
+
+                Value =
+                    metric.Value,
+
+                Unit =
+                    metric.Unit,
+
+                Status =
+                    metric.Status,
+
+                Note =
+                    metric.Note,
+
+                RecordedAt =
+                    metric.RecordedAt
+            };
         }
 
         // =====================================================
