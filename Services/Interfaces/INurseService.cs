@@ -33,6 +33,18 @@ namespace PersonalProject.Services.Interfaces
                 Guid patientId
             );
 
+                Task<List<ClinicStockResponseDto>>
+            GetClinicStockAsync(
+                Guid userId
+            );
+
+        Task<HealthMetricResponseDto>
+            CreateHealthMetricAsync(
+                Guid userId,
+                Guid patientId,
+                NurseHealthMetricWriteDto dto
+            );
+
         Task<List<NurseClinicProxyDto>>
             GetClinicProxiesAsync(
                 Guid userId
