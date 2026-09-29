@@ -121,8 +121,11 @@ namespace PersonalProject.Services.Implementations
             {
                 return new WeatherTipResultDto
                 {
-                    NotificationCreated = false,
-                    Message = null
+                    NotificationCreated =
+                        false,
+
+                    Message =
+                        null
                 };
             }
 
@@ -198,16 +201,50 @@ namespace PersonalProject.Services.Implementations
                     "weather"
                 )[0];
 
+            string? providerLocationName =
+                null;
+
+            if (
+                root.TryGetProperty(
+                    "name",
+                    out var name
+                )
+            )
+            {
+                providerLocationName =
+                    name.GetString();
+            }
+
+            /*
+             * OpenWeather occasionally returns the nearest
+             * observing station rather than the useful locality.
+             *
+             * Example:
+             *
+             * Port Elizabeth Airport
+             *
+             * The patient-facing PhilaLink location should be:
+             *
+             * Gqeberha
+             *
+             * Location normalization is deliberately performed
+             * here, before the DTO leaves the weather service,
+             * so every consumer receives the same clean name:
+             *
+             * - WeatherChip
+             * - Weather notifications
+             * - Future weather features
+             */
+            var normalizedLocationName =
+                NormalizeLocationName(
+                    providerLocationName,
+                    fallbackName
+                );
+
             return new CurrentWeatherDto
             {
                 LocationName =
-                    root.TryGetProperty(
-                        "name",
-                        out var name
-                    )
-                        ? name.GetString()
-                            ?? fallbackName
-                        : fallbackName,
+                    normalizedLocationName,
 
                 TemperatureC =
                     main.GetProperty(
@@ -393,8 +430,7 @@ namespace PersonalProject.Services.Implementations
              * Patient/Clinic entity graphs.
              *
              * We still verify that the Patient account exists,
-             * has the Patient role and is active. This preserves
-             * the previous authorization behaviour.
+             * has the Patient role and is active.
              */
             if (
                 latitude.HasValue &&
@@ -443,9 +479,6 @@ namespace PersonalProject.Services.Implementations
              * - Clinic name
              * - Latitude
              * - Longitude
-             *
-             * This replaces the previous loading of complete
-             * Patient, User and Clinic entities.
              */
             var patientLocation =
                 await _context.Patients
@@ -537,6 +570,157 @@ namespace PersonalProject.Services.Implementations
 
                 patientLocation
                     .ClinicName
+            );
+        }
+
+        // =====================================================
+        // HUMAN-READABLE LOCATION NAME
+        // =====================================================
+
+        private static string
+            NormalizeLocationName(
+                string? locationName,
+                string fallbackName
+            )
+        {
+            /*
+             * Prefer the weather provider's locality when one
+             * exists. Otherwise use the clinic/current-location
+             * fallback supplied by ResolveWeatherLocationAsync.
+             */
+            var value =
+                string.IsNullOrWhiteSpace(
+                    locationName
+                )
+                    ? fallbackName
+                    : locationName;
+
+            value =
+                CollapseWhitespace(
+                    value
+                );
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+            )
+            {
+                return
+                    "Current location";
+            }
+
+            /*
+             * Weather providers sometimes identify GPS
+             * coordinates by the nearest observation station.
+             *
+             * Strip those station suffixes so the patient sees
+             * a useful locality instead of an airport or
+             * meteorological station.
+             *
+             * Longest suffixes are checked first.
+             */
+            var stationSuffixes =
+                new[]
+                {
+                    " International Airport",
+                    " Meteorological Station",
+                    " Weather Station",
+                    " Airport",
+                    " Airfield",
+                    " Aerodrome"
+                };
+
+            foreach (
+                var suffix in
+                    stationSuffixes
+            )
+            {
+                if (
+                    !value.EndsWith(
+                        suffix,
+                        StringComparison
+                            .OrdinalIgnoreCase
+                    )
+                )
+                {
+                    continue;
+                }
+
+                value =
+                    value[
+                        ..^suffix.Length
+                    ]
+                    .Trim();
+
+                break;
+            }
+
+            /*
+             * OpenWeather and some station datasets still use
+             * the city's former official name.
+             *
+             * PhilaLink displays the current city name.
+             */
+            if (
+                value.Equals(
+                    "Port Elizabeth",
+                    StringComparison
+                        .OrdinalIgnoreCase
+                )
+            )
+            {
+                return
+                    "Gqeberha";
+            }
+
+            /*
+             * Defensive fallback in case the provider returned
+             * only a station-style suffix.
+             */
+            if (
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+            )
+            {
+                value =
+                    CollapseWhitespace(
+                        fallbackName
+                    );
+            }
+
+            return
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+                    ? "Current location"
+                    : value;
+        }
+
+        private static string
+            CollapseWhitespace(
+                string? value
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    value
+                )
+            )
+            {
+                return
+                    string.Empty;
+            }
+
+            return string.Join(
+                " ",
+                value
+                    .Split(
+                        (char[]?)null,
+                        StringSplitOptions
+                            .RemoveEmptyEntries
+                    )
             );
         }
 
