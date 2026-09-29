@@ -4,6 +4,14 @@ namespace PersonalProject.Models.DTOs
     {
         public Guid PatientId { get; set; }
 
+        // Nurse must select medication from clinic inventory.
+        public Guid ClinicStockId { get; set; }
+
+        /*
+         * Kept for compatibility with existing clients.
+         * The backend now takes Name, Dosage/Strength and Form
+         * from ClinicStock instead of trusting free text.
+         */
         public string Name { get; set; } =
             string.Empty;
 
