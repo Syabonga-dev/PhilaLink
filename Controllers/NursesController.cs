@@ -196,6 +196,31 @@ namespace PersonalProject.Controllers
             }
         }
 
+        
+        // =====================================================
+        // CLINIC INVENTORY
+        // =====================================================
+
+        [HttpGet("me/stock")]
+        public async Task<IActionResult>
+            ClinicStock()
+        {
+            try
+            {
+                return Ok(
+                    await _nurseService
+                        .GetClinicStockAsync(
+                            GetCurrentUserId()
+                        )
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
+            {
+                return Forbid();
+            }
+        }
         // =====================================================
         // CLINIC PROXIES
         // =====================================================
@@ -221,6 +246,62 @@ namespace PersonalProject.Controllers
             }
         }
 
+        
+        // =====================================================
+        // HEALTH METRICS
+        // =====================================================
+
+        [HttpPost(
+            "me/patients/{patientId:guid}/health-metrics"
+        )]
+        public async Task<IActionResult>
+            CreateHealthMetric(
+                Guid patientId,
+                NurseHealthMetricWriteDto dto
+            )
+        {
+            try
+            {
+                return Ok(
+                    await _nurseService
+                        .CreateHealthMetricAsync(
+                            GetCurrentUserId(),
+                            patientId,
+                            dto
+                        )
+                );
+            }
+            catch (
+                KeyNotFoundException ex
+            )
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
+            {
+                return Forbid();
+            }
+        }
         // =====================================================
         // ALLERGIES
         // =====================================================
