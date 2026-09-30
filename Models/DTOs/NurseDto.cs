@@ -225,7 +225,14 @@ namespace PersonalProject.Models.DTOs
         public List<PatientAllergyDto> Allergies { get; set; } =
             new();
 
-        
+        public List<NurseConditionDto> Conditions { get; set; } =
+            new();
+
+        public List<HealthMetricResponseDto> HealthMetrics { get; set; } =
+            new();
+
+        public List<NurseMedicationDto> Medications { get; set; } =
+            new();
 
         public List<NurseCollectionDto> Collections { get; set; } =
             new();
@@ -410,7 +417,7 @@ namespace PersonalProject.Models.DTOs
             true;
     }
 
-        public class NurseHealthMetricWriteDto
+    public class NurseHealthMetricWriteDto
     {
         public string MetricType { get; set; } =
             string.Empty;
