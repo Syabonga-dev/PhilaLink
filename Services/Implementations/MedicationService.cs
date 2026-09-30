@@ -30,15 +30,211 @@ namespace PersonalProject.Services.Implementations
             IAuditLogService audit
         )
         {
-            _context = context;
-            _audit = audit;
+            _context =
+                context;
+
+            _audit =
+                audit;
         }
 
         // =====================================================
         // CLINIC STAFF: CREATE
         // =====================================================
 
+        public async Task<Medication>
+            CreateMedicationAsync(
+                MedicationCreateDto dto,
+                Guid performedByUserId
+            )
+        {
+            var clinicId =
+                await GetStaffClinicIdAsync(
+                    performedByUserId
+                );
 
+            if (
+                dto.ClinicStockId ==
+                    Guid.Empty
+            )
+            {
+                throw new InvalidOperationException(
+                    "Select a medication from the clinic inventory."
+                );
+            }
+
+            var stock =
+                await _context
+                    .ClinicStocks
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                dto.ClinicStockId &&
+                            item.ClinicId ==
+                                clinicId &&
+                            item.IsActive
+                    );
+
+            if (
+                stock ==
+                null
+            )
+            {
+                throw new InvalidOperationException(
+                    "The selected medication is not available in your clinic inventory."
+                );
+            }
+
+            if (
+                stock.QuantityOnHand <=
+                0
+            )
+            {
+                throw new InvalidOperationException(
+                    "The selected medication is currently out of stock."
+                );
+            }
+
+            var patient =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
+                                dto.PatientId &&
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new PatientMedicationAccess
+                            {
+                                Id =
+                                    item.Id,
+
+                                ClinicId =
+                                    item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (
+                patient ==
+                null
+            )
+            {
+                throw new KeyNotFoundException(
+                    "Patient not found."
+                );
+            }
+
+            if (
+                patient.ClinicId !=
+                clinicId
+            )
+            {
+                throw new UnauthorizedAccessException(
+                    "Patient does not belong to your clinic."
+                );
+            }
+
+            if (
+                dto.UnitsPerDose !=
+                    null &&
+                dto.UnitsPerDose <=
+                    0
+            )
+            {
+                throw new InvalidOperationException(
+                    "Units per dose must be greater than zero."
+                );
+            }
+
+            var medication =
+                new Medication
+                {
+                    Id =
+                        Guid.NewGuid(),
+
+                    PatientId =
+                        patient.Id,
+
+                    /*
+                     * Medication identity comes directly from
+                     * ClinicStock so collection scheduling can
+                     * reliably find the same inventory item.
+                     */
+                    Name =
+                        stock
+                            .MedicationName
+                            .Trim(),
+
+                    Dosage =
+                        stock
+                            .Strength
+                            .Trim(),
+
+                    Form =
+                        stock
+                            .Form
+                            .Trim(),
+
+                    Instructions =
+                        dto.Instructions
+                            .Trim(),
+
+                    UnitsPerDose =
+                        dto.UnitsPerDose,
+
+                    PrescribedBy =
+                        string.IsNullOrWhiteSpace(
+                            dto.PrescribedBy
+                        )
+                            ? null
+                            : dto
+                                .PrescribedBy
+                                .Trim(),
+
+                    ConditionName =
+                        string.IsNullOrWhiteSpace(
+                            dto.ConditionName
+                        )
+                            ? null
+                            : dto
+                                .ConditionName
+                                .Trim(),
+
+                    StartDate =
+                        dto.StartDate ==
+                            default
+                            ? DateTime.UtcNow
+                            : dto.StartDate,
+
+                    EndDate =
+                        dto.EndDate,
+
+                    IsActive =
+                        true,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+            _context.Medications.Add(
+                medication
+            );
+
+            await _context
+                .SaveChangesAsync();
+
+            await _audit.LogAsync(
+                "MedicationCreated",
+                performedByUserId,
+                $"Medication {medication.Id} created for patient {patient.Id} from clinic stock {stock.Id}.",
+                clinicId
+            );
+
+            return medication;
+        }
 
         // =====================================================
         // PATIENT: OWN MEDICATIONS
@@ -66,18 +262,16 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (patientId == null)
+            if (
+                patientId ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Active patient profile not found."
                 );
             }
 
-            /*
-             * Schedules and adherence logs are returned so the
-             * patient UI can display today's doses, history and
-             * adherence information.
-             */
             return await _context.Medications
                 .AsNoTrackingWithIdentityResolution()
                 .AsSplitQuery()
@@ -141,7 +335,10 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (
+                patient ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Patient not found."
@@ -201,7 +398,10 @@ namespace PersonalProject.Services.Implementations
                     medicationId
                 );
 
-            if (medication == null)
+            if (
+                medication ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Medication not found."
@@ -242,7 +442,9 @@ namespace PersonalProject.Services.Implementations
                             schedule.IsActive
                     );
 
-            if (duplicate)
+            if (
+                duplicate
+            )
             {
                 throw new InvalidOperationException(
                     "That medication schedule already exists."
@@ -269,7 +471,8 @@ namespace PersonalProject.Services.Implementations
                 schedule
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "MedicationScheduleAdded",
@@ -299,7 +502,10 @@ namespace PersonalProject.Services.Implementations
                     medicationId
                 );
 
-            if (medication == null)
+            if (
+                medication ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Medication not found."
@@ -344,11 +550,6 @@ namespace PersonalProject.Services.Implementations
             var nowUtc =
                 DateTime.UtcNow;
 
-            // -------------------------------------------------
-            // Confirm the authenticated user owns an active
-            // patient profile.
-            // -------------------------------------------------
-
             var patient =
                 await _context.Patients
                     .AsNoTracking()
@@ -373,16 +574,15 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (
+                patient ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active patient profile not found."
                 );
             }
-
-            // -------------------------------------------------
-            // Load medication logging requirements.
-            // -------------------------------------------------
 
             var medication =
                 await _context.Medications
@@ -422,16 +622,15 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (medication == null)
+            if (
+                medication ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Medication not found."
                 );
             }
-
-            // -------------------------------------------------
-            // Medication must currently be active.
-            // -------------------------------------------------
 
             if (
                 !medication.IsActive
@@ -464,11 +663,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // -------------------------------------------------
-            // A schedule is required for both Taken and Skipped
-            // entries so adherence is tied to a prescribed dose.
-            // -------------------------------------------------
-
             if (
                 medication.ActiveScheduleCount <=
                 0
@@ -479,21 +673,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // -------------------------------------------------
-            // TAKEN DOSE SAFETY
-            //
-            // Taken=true requires:
-            //
-            // 1. A configured units-per-dose value.
-            // 2. A completed medication collection.
-            // 3. Enough recorded medication remaining.
-            // 4. The daily scheduled-dose limit not reached.
-            //
-            // Skipped doses do not consume supply, so they do
-            // not require a completed collection.
-            // -------------------------------------------------
-
-            if (taken)
+            if (
+                taken
+            )
             {
                 if (
                     medication.UnitsPerDose ==
@@ -506,10 +688,6 @@ namespace PersonalProject.Services.Implementations
                         "The dose amount for this medication has not been configured. Contact your clinic before recording a taken dose."
                     );
                 }
-
-                // ---------------------------------------------
-                // LATEST COMPLETED COLLECTION
-                // ---------------------------------------------
 
                 var latestCollection =
                     await _context
@@ -573,14 +751,6 @@ namespace PersonalProject.Services.Implementations
                     );
                 }
 
-                // ---------------------------------------------
-                // RECORDED SUPPLY REMAINING
-                //
-                // Supply is based on the most recent completed
-                // collection, matching MedicationSupplyController.
-                // Only Taken=true logs consume medication.
-                // ---------------------------------------------
-
                 var takenSinceCollection =
                     await _context
                         .MedicationLogs
@@ -619,10 +789,6 @@ namespace PersonalProject.Services.Implementations
                         "You cannot mark another dose as taken because your recorded medication supply has been depleted."
                     );
                 }
-
-                // ---------------------------------------------
-                // DAILY TAKEN-DOSE LIMIT
-                // ---------------------------------------------
 
                 var (
                     dayStartUtc,
@@ -666,10 +832,6 @@ namespace PersonalProject.Services.Implementations
                 }
             }
 
-            // -------------------------------------------------
-            // SAVE ADHERENCE LOG
-            // -------------------------------------------------
-
             var log =
                 new MedicationLog
                 {
@@ -697,11 +859,8 @@ namespace PersonalProject.Services.Implementations
                 log
             );
 
-            await _context.SaveChangesAsync();
-
-            // -------------------------------------------------
-            // AUDIT
-            // -------------------------------------------------
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 taken
@@ -725,12 +884,6 @@ namespace PersonalProject.Services.Implementations
                 DateTime utcNow
             )
         {
-            /*
-             * Convert the current UTC instant to SAST.
-             *
-             * Using DateTimeOffset here avoids depending on the
-             * operating system's time-zone database.
-             */
             var localNow =
                 new DateTimeOffset(
                     DateTime.SpecifyKind(
@@ -822,14 +975,16 @@ namespace PersonalProject.Services.Implementations
                                     user.Role,
 
                                 AdminClinicId =
-                                    user.Admin == null
+                                    user.Admin ==
+                                        null
                                         ? null
                                         : user
                                             .Admin
                                             .ClinicId,
 
                                 NurseClinicId =
-                                    user.Nurse == null
+                                    user.Nurse ==
+                                        null
                                         ? null
                                         : (Guid?)user
                                             .Nurse
@@ -838,7 +993,10 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (staff == null)
+            if (
+                staff ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active staff account required."
@@ -852,7 +1010,9 @@ namespace PersonalProject.Services.Implementations
                     null
             )
             {
-                return staff.AdminClinicId.Value;
+                return staff
+                    .AdminClinicId
+                    .Value;
             }
 
             if (
@@ -862,7 +1022,9 @@ namespace PersonalProject.Services.Implementations
                     null
             )
             {
-                return staff.NurseClinicId.Value;
+                return staff
+                    .NurseClinicId
+                    .Value;
             }
 
             throw new UnauthorizedAccessException(
@@ -970,7 +1132,8 @@ namespace PersonalProject.Services.Implementations
             {
                 get;
                 init;
-            } = string.Empty;
+            } =
+                string.Empty;
 
             public Guid? AdminClinicId
             {
