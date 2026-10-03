@@ -5,6 +5,15 @@ namespace PersonalProject.Models.DTOs
         public string ReportType { get; set; } =
             "Appointments";
 
+        /*
+         * ClinicAdmin ignores this value because its scope is
+         * resolved from the authenticated account.
+         *
+         * SuperAdmin uses it as an optional clinic filter.
+         * null = all clinics.
+         */
+        public Guid? ClinicId { get; set; }
+
         public DateTime? DateFrom { get; set; }
 
         public DateTime? DateTo { get; set; }
