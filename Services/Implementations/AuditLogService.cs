@@ -10,7 +10,8 @@ namespace PersonalProject.Services.Implementations
     public class AuditLogService :
         IAuditLogService
     {
-        private readonly PhilaLinkDbContext _context;
+        private readonly PhilaLinkDbContext
+            _context;
 
         public AuditLogService(
             PhilaLinkDbContext context
@@ -19,10 +20,6 @@ namespace PersonalProject.Services.Implementations
             _context =
                 context;
         }
-
-        // =====================================================
-        // WRITE AUDIT LOG
-        // =====================================================
 
         public async Task LogAsync(
             string action,
@@ -33,15 +30,24 @@ namespace PersonalProject.Services.Implementations
         {
             var user =
                 await _context.Users
-                    .Include(u => u.Admin)
-                    .Include(u => u.Nurse)
+                    .Include(
+                        item =>
+                            item.Admin
+                    )
+                    .Include(
+                        item =>
+                            item.Nurse
+                    )
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
+                        item =>
+                            item.Id ==
                             userId
                     );
 
-            if (user == null)
+            if (
+                user ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "User performing audit action was not found."
@@ -49,11 +55,17 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * If the caller does not explicitly provide a clinic,
-             * infer clinic scope from the authenticated staff
-             * profile.
+             * When a clinic is not explicitly supplied,
+             * infer it from a clinic-scoped staff account.
+             *
+             * SuperAdmin activity remains system-wide unless
+             * the caller explicitly associates the action
+             * with a clinic.
              */
-            if (clinicId == null)
+            if (
+                clinicId ==
+                null
+            )
             {
                 if (
                     user.Role ==
@@ -63,16 +75,19 @@ namespace PersonalProject.Services.Implementations
                 )
                 {
                     clinicId =
-                        user.Admin.ClinicId;
+                        user.Admin
+                            .ClinicId;
                 }
                 else if (
                     user.Role ==
                         RoleNames.Nurse &&
-                    user.Nurse != null
+                    user.Nurse !=
+                        null
                 )
                 {
                     clinicId =
-                        user.Nurse.ClinicId;
+                        user.Nurse
+                            .ClinicId;
                 }
             }
 
@@ -99,17 +114,14 @@ namespace PersonalProject.Services.Implementations
                         DateTime.UtcNow
                 };
 
-            _context.AuditLogs.Add(
-                log
-            );
+            _context.AuditLogs
+                .Add(
+                    log
+                );
 
             await _context
                 .SaveChangesAsync();
         }
-
-        // =====================================================
-        // READ AUDIT LOG
-        // =====================================================
 
         public async Task<List<AuditLogResponseDto>>
             GetVisibleLogsAsync(
@@ -118,31 +130,37 @@ namespace PersonalProject.Services.Implementations
         {
             var user =
                 await _context.Users
-                    .Include(u => u.Admin)
+                    .Include(
+                        item =>
+                            item.Admin
+                    )
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
+                        item =>
+                            item.Id ==
                             requestingUserId
                     );
 
             if (
-                user == null ||
+                user ==
+                    null ||
                 !user.IsActive
             )
             {
                 throw new UnauthorizedAccessException();
             }
 
-            IQueryable<AuditLog> query =
-                _context.AuditLogs
-                    .Include(
-                        a =>
-                            a.PerformedByUser
-                    )
-                    .Include(
-                        a =>
-                            a.Clinic
-                    );
+            IQueryable<AuditLog>
+                query =
+                    _context.AuditLogs
+                        .AsNoTracking()
+                        .Include(
+                            item =>
+                                item.PerformedByUser
+                        )
+                        .Include(
+                            item =>
+                                item.Clinic
+                        );
 
             if (
                 user.Role ==
@@ -150,7 +168,8 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 /*
-                 * SuperAdmin has system-wide audit visibility.
+                 * SuperAdmin intentionally sees all audit
+                 * activity across the platform.
                  */
             }
             else if (
@@ -161,51 +180,72 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 var clinicId =
-                    user.Admin.ClinicId.Value;
+                    user.Admin
+                        .ClinicId
+                        .Value;
 
                 query =
                     query.Where(
-                        a =>
-                            a.ClinicId ==
+                        item =>
+                            item.ClinicId ==
                             clinicId
                     );
             }
             else
             {
-                /*
-                 * Nurses, Patients, Proxies and unsupported
-                 * roles must never read the audit history.
-                 */
                 throw new UnauthorizedAccessException();
             }
 
             return await query
                 .OrderByDescending(
-                    a =>
-                        a.Timestamp
+                    item =>
+                        item.Timestamp
                 )
                 .Select(
-                    a =>
+                    item =>
                         new AuditLogResponseDto
                         {
                             Id =
-                                a.Id,
+                                item.Id,
 
                             Action =
-                                a.Action,
+                                item.Action,
+
+                            PerformedByUserId =
+                                item.PerformedByUserId,
 
                             PerformedBy =
-                                a.PerformedByUser ==
-                                    null
+                                item.PerformedByUser ==
+                                null
                                     ? "System"
-                                    : a.PerformedByUser
+                                    : item
+                                        .PerformedByUser
                                         .FullName,
 
+                            PerformedByRole =
+                                item.PerformedByUser ==
+                                null
+                                    ? "System"
+                                    : item
+                                        .PerformedByUser
+                                        .Role,
+
+                            ClinicId =
+                                item.ClinicId,
+
+                            ClinicName =
+                                item.Clinic ==
+                                null
+                                    ? null
+                                    : item
+                                        .Clinic
+                                        .Name,
+
                             Details =
-                                a.Details,
+                                item.Details,
 
                             Timestamp =
-                                a.Timestamp
+                                item.Timestamp
                         }
                 )
                 .ToListAsync();
