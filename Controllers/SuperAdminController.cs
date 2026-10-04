@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using PersonalProject.Data;
 using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
+using PersonalProject.Utilities;
 using System.Security.Claims;
 
 namespace PersonalProject.Controllers
@@ -21,9 +24,17 @@ namespace PersonalProject.Controllers
         private readonly IAuditLogService
             _audit;
 
+        private readonly IConfiguration
+            _configuration;
+
+        private readonly ILogger<SuperAdminController>
+            _logger;
+
         public SuperAdminController(
             PhilaLinkDbContext context,
-            IAuditLogService audit
+            IAuditLogService audit,
+            IConfiguration configuration,
+            ILogger<SuperAdminController> logger
         )
         {
             _context =
@@ -31,6 +42,12 @@ namespace PersonalProject.Controllers
 
             _audit =
                 audit;
+
+            _configuration =
+                configuration;
+
+            _logger =
+                logger;
         }
 
         [HttpGet("me")]
@@ -84,12 +101,6 @@ namespace PersonalProject.Controllers
                 );
         }
 
-        /*
-         * Unlike /api/clinics, this endpoint intentionally
-         * returns inactive clinics too.
-         *
-         * SuperAdmin must be able to reactivate them.
-         */
         [HttpGet("clinics")]
         public async Task<IActionResult>
             GetClinics()
@@ -214,12 +225,10 @@ namespace PersonalProject.Controllers
             );
         }
 
-        /*
-         * ASSIGN / REASSIGN
-         *
-         * If the account is already assigned elsewhere,
-         * this operation changes the clinic boundary.
-         */
+        // =====================================================
+        // ASSIGN / REASSIGN CLINIC ADMIN
+        // =====================================================
+
         [HttpPatch(
             "clinic-admins/{userId:guid}/assign"
         )]
@@ -315,7 +324,42 @@ namespace PersonalProject.Controllers
                 admin.ClinicId;
 
             var previousClinicName =
-                admin.Clinic?.Name;
+                admin.Clinic
+                    ?.Name;
+
+            string eventType;
+            string auditAction;
+
+            if (
+                previousClinicId ==
+                null
+            )
+            {
+                eventType =
+                    "assigned";
+
+                auditAction =
+                    "ClinicAdminAssigned";
+            }
+            else if (
+                previousClinicId ==
+                clinic.Id
+            )
+            {
+                eventType =
+                    "confirmed";
+
+                auditAction =
+                    "ClinicAdminAssignmentConfirmed";
+            }
+            else
+            {
+                eventType =
+                    "reassigned";
+
+                auditAction =
+                    "ClinicAdminReassigned";
+            }
 
             admin.ClinicId =
                 clinic.Id;
@@ -326,34 +370,75 @@ namespace PersonalProject.Controllers
             await _context
                 .SaveChangesAsync();
 
+            var currentUserId =
+                GetCurrentUserId();
+
             await _audit
                 .LogAsync(
-                    "ClinicAdminAssigned",
-                    GetCurrentUserId(),
-                    previousClinicId ==
-                        clinic.Id
-                        ? $"Clinic Administrator {admin.UserId} assignment to {clinic.Name} was confirmed."
-                        : $"Clinic Administrator {admin.UserId} was assigned to {clinic.Name}. Previous clinic: {previousClinicName ?? "Unassigned"}.",
+                    auditAction,
+                    currentUserId,
+                    eventType ==
+                        "reassigned"
+                        ? $"Clinic Administrator {admin.UserId} was reassigned from {previousClinicName ?? "Unassigned"} to {clinic.Name}."
+                        : $"Clinic Administrator {admin.UserId} was assigned to {clinic.Name}.",
                     clinic.Id
                 );
 
-            return Ok(
+            var emailSent =
+                await TrySendAssignmentEmailAsync(
+                    admin.User.Email,
+                    admin.User.FullName,
+                    eventType,
+                    clinic.Name,
+                    previousClinicName
+                );
+
+            await _audit
+                .LogAsync(
+                    emailSent
+                        ? "ClinicAdminAssignmentEmailSent"
+                        : "ClinicAdminAssignmentEmailDeliveryFailed",
+                    currentUserId,
+                    emailSent
+                        ? $"Clinic assignment notification sent to {admin.User.Email}."
+                        : $"Clinic assignment was saved, but notification delivery to {admin.User.Email} failed.",
+                    clinic.Id
+                );
+
+            var result =
                 await GetClinicAdminDtoAsync(
                     userId
-                )
+                );
+
+            return Ok(
+                new
+                {
+                    result.UserId,
+                    result.AdminId,
+                    result.FullName,
+                    result.Email,
+                    result.PhoneNumber,
+                    result.IsActive,
+                    result.ClinicId,
+                    result.ClinicName,
+                    result.CreatedAt,
+                    result.UpdatedAt,
+
+                    notificationEmailSent =
+                        emailSent,
+
+                    notificationEmailMessage =
+                        emailSent
+                            ? $"Assignment notification sent to {result.Email}."
+                            : $"The clinic assignment was saved, but the notification email could not be delivered to {result.Email}."
+                }
             );
         }
 
-        /*
-         * DEASSIGN
-         *
-         * The User/Admin records remain intact.
-         * ClinicId becomes null.
-         *
-         * Existing ClinicAdmin scoped endpoints already require
-         * ClinicId, therefore the account cannot read another
-         * clinic simply because it remains active.
-         */
+        // =====================================================
+        // DEASSIGN CLINIC ADMIN
+        // =====================================================
+
         [HttpPatch(
             "clinic-admins/{userId:guid}/deassign"
         )]
@@ -398,37 +483,116 @@ namespace PersonalProject.Controllers
                 admin.ClinicId;
 
             var previousClinicName =
-                admin.Clinic?.Name;
+                admin.Clinic
+                    ?.Name;
 
             if (
-                previousClinicId !=
+                previousClinicId ==
                 null
             )
             {
-                admin.ClinicId =
-                    null;
-
-                admin.UpdatedAt =
-                    DateTime.UtcNow;
-
-                await _context
-                    .SaveChangesAsync();
-
-                await _audit
-                    .LogAsync(
-                        "ClinicAdminDeassigned",
-                        GetCurrentUserId(),
-                        $"Clinic Administrator {admin.UserId} was deassigned from {previousClinicName ?? "their clinic"}.",
-                        previousClinicId
+                var alreadyUnassigned =
+                    await GetClinicAdminDtoAsync(
+                        userId
                     );
+
+                return Ok(
+                    new
+                    {
+                        alreadyUnassigned.UserId,
+                        alreadyUnassigned.AdminId,
+                        alreadyUnassigned.FullName,
+                        alreadyUnassigned.Email,
+                        alreadyUnassigned.PhoneNumber,
+                        alreadyUnassigned.IsActive,
+                        alreadyUnassigned.ClinicId,
+                        alreadyUnassigned.ClinicName,
+                        alreadyUnassigned.CreatedAt,
+                        alreadyUnassigned.UpdatedAt,
+
+                        notificationEmailSent =
+                            (bool?)null,
+
+                        notificationEmailMessage =
+                            "The Clinic Administrator was already unassigned."
+                    }
+                );
             }
 
-            return Ok(
+            admin.ClinicId =
+                null;
+
+            admin.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context
+                .SaveChangesAsync();
+
+            var currentUserId =
+                GetCurrentUserId();
+
+            await _audit
+                .LogAsync(
+                    "ClinicAdminDeassigned",
+                    currentUserId,
+                    $"Clinic Administrator {admin.UserId} was deassigned from {previousClinicName ?? "their clinic"}.",
+                    previousClinicId
+                );
+
+            var emailSent =
+                await TrySendAssignmentEmailAsync(
+                    admin.User.Email,
+                    admin.User.FullName,
+                    "deassigned",
+                    null,
+                    previousClinicName
+                );
+
+            await _audit
+                .LogAsync(
+                    emailSent
+                        ? "ClinicAdminDeassignmentEmailSent"
+                        : "ClinicAdminDeassignmentEmailDeliveryFailed",
+                    currentUserId,
+                    emailSent
+                        ? $"Clinic deassignment notification sent to {admin.User.Email}."
+                        : $"Clinic deassignment was saved, but notification delivery to {admin.User.Email} failed.",
+                    previousClinicId
+                );
+
+            var result =
                 await GetClinicAdminDtoAsync(
                     userId
-                )
+                );
+
+            return Ok(
+                new
+                {
+                    result.UserId,
+                    result.AdminId,
+                    result.FullName,
+                    result.Email,
+                    result.PhoneNumber,
+                    result.IsActive,
+                    result.ClinicId,
+                    result.ClinicName,
+                    result.CreatedAt,
+                    result.UpdatedAt,
+
+                    notificationEmailSent =
+                        emailSent,
+
+                    notificationEmailMessage =
+                        emailSent
+                            ? $"Deassignment notification sent to {result.Email}."
+                            : $"The deassignment was saved, but the notification email could not be delivered to {result.Email}."
+                }
             );
         }
+
+        // =====================================================
+        // ANALYTICS
+        // =====================================================
 
         [HttpGet("analytics")]
         public async Task<IActionResult>
@@ -932,6 +1096,10 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // HELPERS
+        // =====================================================
+
         private async Task<SuperAdminClinicAdminDto>
             GetClinicAdminDtoAsync(
                 Guid userId
@@ -994,6 +1162,44 @@ namespace PersonalProject.Controllers
                 .FirstAsync();
         }
 
+        private async Task<bool>
+            TrySendAssignmentEmailAsync(
+                string email,
+                string fullName,
+                string eventType,
+                string? clinicName,
+                string? previousClinicName
+            )
+        {
+            try
+            {
+                await AccountEmailSender
+                    .SendClinicAdminAssignmentAsync(
+                        _configuration,
+                        _logger,
+                        email,
+                        fullName,
+                        eventType,
+                        clinicName,
+                        previousClinicName
+                    );
+
+                return true;
+            }
+            catch (
+                Exception ex
+            )
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Clinic Administrator assignment changed but notification email to {Email} could not be delivered.",
+                    email
+                );
+
+                return false;
+            }
+        }
+
         private static (
             DateTime From,
             DateTime To,
@@ -1048,10 +1254,12 @@ namespace PersonalProject.Controllers
                     from,
                     DateTimeKind.Utc
                 ),
+
                 DateTime.SpecifyKind(
                     to,
                     DateTimeKind.Utc
                 ),
+
                 DateTime.SpecifyKind(
                     to.AddDays(
                         1
@@ -1102,6 +1310,7 @@ namespace PersonalProject.Controllers
                     .ToDictionary(
                         group =>
                             group.Key,
+
                         group =>
                             group.Count()
                     );
@@ -1114,6 +1323,7 @@ namespace PersonalProject.Controllers
                     .ToDictionary(
                         group =>
                             group.Key,
+
                         group =>
                             group.Count()
                     );
@@ -1126,6 +1336,7 @@ namespace PersonalProject.Controllers
                     .ToDictionary(
                         group =>
                             group.Key,
+
                         group =>
                             group.Count()
                     );
