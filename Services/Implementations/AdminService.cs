@@ -51,19 +51,16 @@ namespace PersonalProject.Services.Implementations
                     .AnyAsync(
                         c =>
                             c.Id ==
-                            dto.ClinicId
+                            dto.ClinicId &&
+                            c.IsActive
                     );
 
             if (!clinicExists)
             {
                 throw new KeyNotFoundException(
-                    "Clinic not found."
+                    "Active clinic not found."
                 );
             }
-
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
 
             var (user, tempPassword) =
                 await CreateUserAsync(
@@ -98,14 +95,16 @@ namespace PersonalProject.Services.Implementations
             );
 
             /*
-             * User + Admin profile are persisted together.
+             * User + Admin are tracked by the same DbContext
+             * and persisted by one SaveChanges call.
              *
-             * If either insert fails, the transaction is never
-             * committed and no orphan User account remains.
+             * EF Core automatically wraps this SaveChanges
+             * operation in a transaction. This keeps creation
+             * atomic while remaining compatible with the
+             * Npgsql retry execution strategy configured in
+             * Program.cs.
              */
             await _context.SaveChangesAsync();
-
-            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -138,13 +137,14 @@ namespace PersonalProject.Services.Implementations
                     .AnyAsync(
                         c =>
                             c.Id ==
-                            dto.ClinicId
+                            dto.ClinicId &&
+                            c.IsActive
                     );
 
             if (!clinicExists)
             {
                 throw new KeyNotFoundException(
-                    "Clinic not found."
+                    "Active clinic not found."
                 );
             }
 
@@ -170,10 +170,6 @@ namespace PersonalProject.Services.Implementations
                     "A nurse with that employee number or registration number already exists."
                 );
             }
-
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
 
             var (user, tempPassword) =
                 await CreateUserAsync(
@@ -257,11 +253,13 @@ namespace PersonalProject.Services.Implementations
             );
 
             /*
-             * User + Nurse profile are one logical operation.
+             * User + Nurse are inserted by one SaveChanges call.
+             *
+             * SaveChanges is transactional by default and can
+             * be retried safely by the configured Npgsql
+             * execution strategy.
              */
             await _context.SaveChangesAsync();
-
-            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -274,18 +272,21 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<NewStaffAccountDto>
-    RegisterProxyAsync(
-        RegisterProxyDto dto,
-        Guid performedByUserId
-    )
+            RegisterProxyAsync(
+                RegisterProxyDto dto,
+                Guid performedByUserId
+            )
         {
             var actor =
                 await GetAdminActorAsync(
                     performedByUserId
                 );
 
-            // ClinicAdmin may only create proxies
-            // for their own clinic.
+            /*
+             * ClinicAdmin may only create proxies for their
+             * own assigned clinic. SuperAdmin may create one
+             * for any active clinic.
+             */
             await EnsureClinicAccessAsync(
                 actor,
                 dto.ClinicId
@@ -296,19 +297,16 @@ namespace PersonalProject.Services.Implementations
                     .AnyAsync(
                         clinic =>
                             clinic.Id ==
-                            dto.ClinicId
+                                dto.ClinicId &&
+                            clinic.IsActive
                     );
 
             if (!clinicExists)
             {
                 throw new KeyNotFoundException(
-                    "Clinic not found."
+                    "Active clinic not found."
                 );
             }
-
-            await using var transaction =
-                await _context.Database
-                    .BeginTransactionAsync();
 
             var (user, tempPassword) =
                 await CreateUserAsync(
@@ -328,7 +326,6 @@ namespace PersonalProject.Services.Implementations
                     UserId =
                         user.Id,
 
-                    // NEW
                     ClinicId =
                         dto.ClinicId,
 
@@ -365,7 +362,6 @@ namespace PersonalProject.Services.Implementations
                     Gender =
                         dto.Gender.Trim(),
 
-
                     EmergencyContactName =
                         dto.EmergencyContactName.Trim(),
 
@@ -383,9 +379,11 @@ namespace PersonalProject.Services.Implementations
                 proxy
             );
 
+            /*
+             * User + Proxy are inserted atomically by the
+             * single SaveChanges operation.
+             */
             await _context.SaveChangesAsync();
-
-            await transaction.CommitAsync();
 
             return CreateNewAccountResponse(
                 user,
@@ -1100,39 +1098,75 @@ namespace PersonalProject.Services.Implementations
             var tempPassword =
                 GenerateTempPassword();
 
-            var now = DateTime.UtcNow;
+            var now =
+                DateTime.UtcNow;
 
-            var user = new User
-            {
-                Id = Guid.NewGuid(),
-                FullName = normalizedFullName,
-                IdNumber = normalizedIdNumber,
-                PhoneNumber = normalizedPhoneNumber,
-                Email = normalizedEmail,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
-                Role = role,
-                IsActive = true,
+            var user =
+                new User
+                {
+                    Id =
+                        Guid.NewGuid(),
 
-                /*
-                 * Staff accounts are created through an
-                 * authenticated administrator workflow.
-                 */
-                IsVerified = true,
-                VerifiedAt = now,
-                MustChangePassword = true,
-                CreatedAt = now
-            };
+                    FullName =
+                        normalizedFullName,
+
+                    IdNumber =
+                        normalizedIdNumber,
+
+                    PhoneNumber =
+                        normalizedPhoneNumber,
+
+                    Email =
+                        normalizedEmail,
+
+                    PasswordHash =
+                        BCrypt.Net.BCrypt
+                            .HashPassword(
+                                tempPassword
+                            ),
+
+                    Role =
+                        role,
+
+                    IsActive =
+                        true,
+
+                    /*
+                     * Staff accounts are created through an
+                     * authenticated administrator workflow.
+                     */
+                    IsVerified =
+                        true,
+
+                    VerifiedAt =
+                        now,
+
+                    MustChangePassword =
+                        true,
+
+                    CreatedAt =
+                        now
+                };
 
             /*
-             * Deliberately do NOT call SaveChanges here.
+             * Do not call SaveChanges here.
              *
-             * The caller creates the corresponding Admin,
-             * Nurse, or Proxy profile first and then saves the
-             * complete account inside one transaction.
+             * The caller first attaches the corresponding
+             * Admin, Nurse or Proxy profile. Both entities are
+             * then persisted together by one SaveChanges call.
+             *
+             * That SaveChanges call is automatically
+             * transactional and remains compatible with
+             * EnableRetryOnFailure.
              */
-            _context.Users.Add(user);
+            _context.Users.Add(
+                user
+            );
 
-            return (user, tempPassword);
+            return (
+                user,
+                tempPassword
+            );
         }
 
         // =====================================================
