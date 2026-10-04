@@ -1,5 +1,6 @@
-using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using PersonalProject.Data;
 using PersonalProject.Models;
 using PersonalProject.Models.Constants;
@@ -10,15 +11,32 @@ using PersonalProject.Utilities;
 
 namespace PersonalProject.Services.Implementations
 {
-    public class AdminService : IAdminService
+    public class AdminService :
+        IAdminService
     {
-        private readonly PhilaLinkDbContext _context;
+        private readonly PhilaLinkDbContext
+            _context;
+
+        private readonly IConfiguration
+            _configuration;
+
+        private readonly ILogger<AdminService>
+            _logger;
 
         public AdminService(
-            PhilaLinkDbContext context
+            PhilaLinkDbContext context,
+            IConfiguration configuration,
+            ILogger<AdminService> logger
         )
         {
-            _context = context;
+            _context =
+                context;
+
+            _configuration =
+                configuration;
+
+            _logger =
+                logger;
         }
 
         // =====================================================
@@ -46,23 +64,29 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var clinicExists =
+            var clinic =
                 await _context.Clinics
-                    .AnyAsync(
-                        c =>
-                            c.Id ==
-                            dto.ClinicId &&
-                            c.IsActive
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                dto.ClinicId &&
+                            item.IsActive
                     );
 
-            if (!clinicExists)
+            if (
+                clinic ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Active clinic not found."
                 );
             }
 
-            var (user, tempPassword) =
+            var (
+                user,
+                temporaryPassword
+            ) =
                 await CreateUserAsync(
                     dto.FullName,
                     dto.IdNumber,
@@ -84,7 +108,7 @@ namespace PersonalProject.Services.Implementations
                         user.Email,
 
                     ClinicId =
-                        dto.ClinicId,
+                        clinic.Id,
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -95,20 +119,26 @@ namespace PersonalProject.Services.Implementations
             );
 
             /*
-             * User + Admin are tracked by the same DbContext
-             * and persisted by one SaveChanges call.
-             *
-             * EF Core automatically wraps this SaveChanges
-             * operation in a transaction. This keeps creation
-             * atomic while remaining compatible with the
-             * Npgsql retry execution strategy configured in
-             * Program.cs.
+             * User + Admin are persisted by one SaveChanges.
+             * EF Core automatically treats the operation
+             * transactionally and it remains compatible with
+             * Npgsql EnableRetryOnFailure.
              */
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
+
+            var emailSent =
+                await TrySendInvitationAsync(
+                    user,
+                    temporaryPassword,
+                    clinic.Name
+                );
 
             return CreateNewAccountResponse(
                 user,
-                tempPassword
+                clinic.Id,
+                clinic.Name,
+                emailSent
             );
         }
 
@@ -127,21 +157,24 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            await EnsureClinicAccessAsync(
+            EnsureClinicAdminAccess(
                 actor,
                 dto.ClinicId
             );
 
-            var clinicExists =
+            var clinic =
                 await _context.Clinics
-                    .AnyAsync(
-                        c =>
-                            c.Id ==
-                            dto.ClinicId &&
-                            c.IsActive
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
+                                dto.ClinicId &&
+                            item.IsActive
                     );
 
-            if (!clinicExists)
+            if (
+                clinic ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Active clinic not found."
@@ -149,29 +182,36 @@ namespace PersonalProject.Services.Implementations
             }
 
             var employeeNumber =
-                dto.EmployeeNumber.Trim();
+                dto.EmployeeNumber
+                    .Trim();
 
             var registrationNumber =
-                dto.RegistrationNumber.Trim();
+                dto.RegistrationNumber
+                    .Trim();
 
             var professionalIdentifierExists =
                 await _context.Nurses
                     .AnyAsync(
-                        n =>
-                            n.EmployeeNumber ==
+                        nurse =>
+                            nurse.EmployeeNumber ==
                                 employeeNumber ||
-                            n.RegistrationNumber ==
+                            nurse.RegistrationNumber ==
                                 registrationNumber
                     );
 
-            if (professionalIdentifierExists)
+            if (
+                professionalIdentifierExists
+            )
             {
                 throw new InvalidOperationException(
                     "A nurse with that employee number or registration number already exists."
                 );
             }
 
-            var (user, tempPassword) =
+            var (
+                user,
+                temporaryPassword
+            ) =
                 await CreateUserAsync(
                     dto.FullName,
                     dto.IdNumber,
@@ -196,53 +236,64 @@ namespace PersonalProject.Services.Implementations
                         registrationNumber,
 
                     Qualification =
-                        dto.Qualification.Trim(),
+                        dto.Qualification
+                            .Trim(),
 
                     ClinicId =
-                        dto.ClinicId,
+                        clinic.Id,
 
                     Email =
                         user.Email,
 
                     AddressLine1 =
-                        dto.AddressLine1.Trim(),
+                        dto.AddressLine1
+                            .Trim(),
 
                     AddressLine2 =
                         string.IsNullOrWhiteSpace(
                             dto.AddressLine2
                         )
                             ? null
-                            : dto.AddressLine2.Trim(),
+                            : dto.AddressLine2
+                                .Trim(),
 
                     Suburb =
-                        dto.Suburb.Trim(),
+                        dto.Suburb
+                            .Trim(),
 
                     City =
-                        dto.City.Trim(),
+                        dto.City
+                            .Trim(),
 
                     Province =
-                        dto.Province.Trim(),
+                        dto.Province
+                            .Trim(),
 
                     PostalCode =
-                        dto.PostalCode.Trim(),
+                        dto.PostalCode
+                            .Trim(),
 
                     DateOfBirth =
                         dto.DateOfBirth,
 
                     Gender =
-                        dto.Gender.Trim(),
+                        dto.Gender
+                            .Trim(),
 
                     EmploymentDate =
                         dto.EmploymentDate,
 
                     EmergencyContactName =
-                        dto.EmergencyContactName.Trim(),
+                        dto.EmergencyContactName
+                            .Trim(),
 
                     EmergencyContactPhone =
-                        dto.EmergencyContactPhone.Trim(),
+                        dto.EmergencyContactPhone
+                            .Trim(),
 
                     EmergencyContactRelationship =
-                        dto.EmergencyContactRelationship.Trim(),
+                        dto.EmergencyContactRelationship
+                            .Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -252,18 +303,21 @@ namespace PersonalProject.Services.Implementations
                 nurse
             );
 
-            /*
-             * User + Nurse are inserted by one SaveChanges call.
-             *
-             * SaveChanges is transactional by default and can
-             * be retried safely by the configured Npgsql
-             * execution strategy.
-             */
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
+
+            var emailSent =
+                await TrySendInvitationAsync(
+                    user,
+                    temporaryPassword,
+                    clinic.Name
+                );
 
             return CreateNewAccountResponse(
                 user,
-                tempPassword
+                clinic.Id,
+                clinic.Name,
+                emailSent
             );
         }
 
@@ -282,33 +336,34 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            /*
-             * ClinicAdmin may only create proxies for their
-             * own assigned clinic. SuperAdmin may create one
-             * for any active clinic.
-             */
-            await EnsureClinicAccessAsync(
+            EnsureClinicAdminAccess(
                 actor,
                 dto.ClinicId
             );
 
-            var clinicExists =
+            var clinic =
                 await _context.Clinics
-                    .AnyAsync(
-                        clinic =>
-                            clinic.Id ==
+                    .FirstOrDefaultAsync(
+                        item =>
+                            item.Id ==
                                 dto.ClinicId &&
-                            clinic.IsActive
+                            item.IsActive
                     );
 
-            if (!clinicExists)
+            if (
+                clinic ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Active clinic not found."
                 );
             }
 
-            var (user, tempPassword) =
+            var (
+                user,
+                temporaryPassword
+            ) =
                 await CreateUserAsync(
                     dto.FullName,
                     dto.IdNumber,
@@ -327,49 +382,60 @@ namespace PersonalProject.Services.Implementations
                         user.Id,
 
                     ClinicId =
-                        dto.ClinicId,
+                        clinic.Id,
 
                     Email =
                         user.Email,
 
                     AddressLine1 =
-                        dto.AddressLine1.Trim(),
+                        dto.AddressLine1
+                            .Trim(),
 
                     AddressLine2 =
                         string.IsNullOrWhiteSpace(
                             dto.AddressLine2
                         )
                             ? null
-                            : dto.AddressLine2.Trim(),
+                            : dto.AddressLine2
+                                .Trim(),
 
                     Suburb =
-                        dto.Suburb.Trim(),
+                        dto.Suburb
+                            .Trim(),
 
                     City =
-                        dto.City.Trim(),
+                        dto.City
+                            .Trim(),
 
                     Province =
-                        dto.Province.Trim(),
+                        dto.Province
+                            .Trim(),
 
                     PostalCode =
-                        dto.PostalCode.Trim(),
+                        dto.PostalCode
+                            .Trim(),
 
                     DateOfBirth =
-                        SouthAfricanIdNumber.GetDateOfBirth(
-                            user.IdNumber
-                        ),
+                        SouthAfricanIdNumber
+                            .GetDateOfBirth(
+                                user.IdNumber
+                            ),
 
                     Gender =
-                        dto.Gender.Trim(),
+                        dto.Gender
+                            .Trim(),
 
                     EmergencyContactName =
-                        dto.EmergencyContactName.Trim(),
+                        dto.EmergencyContactName
+                            .Trim(),
 
                     EmergencyContactPhone =
-                        dto.EmergencyContactPhone.Trim(),
+                        dto.EmergencyContactPhone
+                            .Trim(),
 
                     EmergencyContactRelationship =
-                        dto.EmergencyContactRelationship.Trim(),
+                        dto.EmergencyContactRelationship
+                            .Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -379,15 +445,241 @@ namespace PersonalProject.Services.Implementations
                 proxy
             );
 
-            /*
-             * User + Proxy are inserted atomically by the
-             * single SaveChanges operation.
-             */
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
+
+            var emailSent =
+                await TrySendInvitationAsync(
+                    user,
+                    temporaryPassword,
+                    clinic.Name
+                );
 
             return CreateNewAccountResponse(
                 user,
-                tempPassword
+                clinic.Id,
+                clinic.Name,
+                emailSent
+            );
+        }
+
+        // =====================================================
+        // RESEND ACCOUNT INVITATION
+        // =====================================================
+
+        public async Task<NewStaffAccountDto>
+            ResendAccountInvitationAsync(
+                Guid targetUserId,
+                Guid performedByUserId
+            )
+        {
+            var actor =
+                await GetAdminActorAsync(
+                    performedByUserId
+                );
+
+            var target =
+                await _context.Users
+                    .Include(
+                        user =>
+                            user.Admin
+                    )
+                    .ThenInclude(
+                        admin =>
+                            admin!.Clinic
+                    )
+                    .Include(
+                        user =>
+                            user.Nurse
+                    )
+                    .ThenInclude(
+                        nurse =>
+                            nurse!.Clinic
+                    )
+                    .Include(
+                        user =>
+                            user.Proxy
+                    )
+                    .ThenInclude(
+                        proxy =>
+                            proxy!.Clinic
+                    )
+                    .FirstOrDefaultAsync(
+                        user =>
+                            user.Id ==
+                            targetUserId
+                    );
+
+            if (
+                target ==
+                null
+            )
+            {
+                throw new KeyNotFoundException(
+                    "Account not found."
+                );
+            }
+
+            if (
+                !target.IsActive
+            )
+            {
+                throw new InvalidOperationException(
+                    "The account is inactive. Activate it before resending an invitation."
+                );
+            }
+
+            if (
+                !target.MustChangePassword
+            )
+            {
+                throw new InvalidOperationException(
+                    "This account has already completed first-login password setup. Use the normal password-reset flow instead."
+                );
+            }
+
+            Guid? clinicId;
+            string? clinicName;
+
+            switch (
+                target.Role
+            )
+            {
+                case RoleNames.ClinicAdmin:
+                {
+                    if (
+                        actor.User.Role !=
+                        RoleNames.SuperAdmin
+                    )
+                    {
+                        throw new UnauthorizedAccessException(
+                            "Only a SuperAdmin can resend a Clinic Administrator invitation."
+                        );
+                    }
+
+                    clinicId =
+                        target.Admin
+                            ?.ClinicId;
+
+                    clinicName =
+                        target.Admin
+                            ?.Clinic
+                            ?.Name;
+
+                    break;
+                }
+
+                case RoleNames.Nurse:
+                {
+                    if (
+                        actor.User.Role !=
+                        RoleNames.ClinicAdmin
+                    )
+                    {
+                        throw new UnauthorizedAccessException(
+                            "Only a Clinic Administrator can resend a Nurse invitation."
+                        );
+                    }
+
+                    clinicId =
+                        target.Nurse
+                            ?.ClinicId;
+
+                    clinicName =
+                        target.Nurse
+                            ?.Clinic
+                            ?.Name;
+
+                    EnsureClinicAdminAccess(
+                        actor,
+                        clinicId ??
+                            Guid.Empty
+                    );
+
+                    break;
+                }
+
+                case RoleNames.Proxy:
+                {
+                    if (
+                        actor.User.Role !=
+                        RoleNames.ClinicAdmin
+                    )
+                    {
+                        throw new UnauthorizedAccessException(
+                            "Only a Clinic Administrator can resend a Proxy invitation."
+                        );
+                    }
+
+                    clinicId =
+                        target.Proxy
+                            ?.ClinicId;
+
+                    clinicName =
+                        target.Proxy
+                            ?.Clinic
+                            ?.Name;
+
+                    EnsureClinicAdminAccess(
+                        actor,
+                        clinicId ??
+                            Guid.Empty
+                    );
+
+                    break;
+                }
+
+                default:
+                    throw new InvalidOperationException(
+                        "This account type does not use administrator-issued invitations."
+                    );
+            }
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    target.Email
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    "The account does not have an email address."
+                );
+            }
+
+            var temporaryPassword =
+                GenerateTempPassword();
+
+            /*
+             * Resending an invitation invalidates the previous
+             * temporary credential.
+             */
+            target.PasswordHash =
+                BCrypt.Net.BCrypt
+                    .HashPassword(
+                        temporaryPassword
+                    );
+
+            target.MustChangePassword =
+                true;
+
+            target.UpdatedAt =
+                DateTime.UtcNow;
+
+            await _context
+                .SaveChangesAsync();
+
+            var emailSent =
+                await TrySendInvitationAsync(
+                    target,
+                    temporaryPassword,
+                    clinicName
+                );
+
+            return CreateNewAccountResponse(
+                target,
+                clinicId,
+                clinicName,
+                emailSent
             );
         }
 
@@ -408,10 +700,22 @@ namespace PersonalProject.Services.Implementations
 
             var query =
                 _context.Users
-                    .Include(u => u.Nurse)
-                    .Include(u => u.Proxy)
-                    .Include(u => u.Patient)
-                    .Include(u => u.Admin)
+                    .Include(
+                        user =>
+                            user.Nurse
+                    )
+                    .Include(
+                        user =>
+                            user.Proxy
+                    )
+                    .Include(
+                        user =>
+                            user.Patient
+                    )
+                    .Include(
+                        user =>
+                            user.Admin
+                    )
                     .AsQueryable();
 
             if (
@@ -422,8 +726,8 @@ namespace PersonalProject.Services.Implementations
             {
                 query =
                     query.Where(
-                        u =>
-                            u.Role ==
+                        user =>
+                            user.Role ==
                             role
                     );
             }
@@ -444,28 +748,32 @@ namespace PersonalProject.Services.Implementations
                 }
 
                 var clinicId =
-                    actor.Admin.ClinicId.Value;
+                    actor.Admin
+                        .ClinicId
+                        .Value;
 
                 query =
                     query.Where(
-                        u =>
+                        user =>
                             (
-                                u.Role ==
+                                user.Role ==
                                     RoleNames.Nurse &&
-                                u.Nurse != null &&
-                                u.Nurse.ClinicId ==
+                                user.Nurse !=
+                                    null &&
+                                user.Nurse.ClinicId ==
                                     clinicId
                             )
                             ||
                             (
-                                u.Role ==
+                                user.Role ==
                                     RoleNames.Patient &&
-                                u.Patient != null &&
-                                u.Patient.ClinicId ==
+                                user.Patient !=
+                                    null &&
+                                user.Patient.ClinicId ==
                                     clinicId
                             )
                             ||
-                            u.Id ==
+                            user.Id ==
                                 performedByUserId
                     );
             }
@@ -473,30 +781,30 @@ namespace PersonalProject.Services.Implementations
             var users =
                 await query
                     .OrderBy(
-                        u =>
-                            u.FullName
+                        user =>
+                            user.FullName
                     )
                     .ToListAsync();
 
             return users
                 .Select(
-                    u =>
+                    user =>
                         new AdminAccountDto
                         {
                             UserId =
-                                u.Id,
+                                user.Id,
 
                             FullName =
-                                u.FullName,
+                                user.FullName,
 
                             IdNumber =
-                                u.IdNumber,
+                                user.IdNumber,
 
                             Role =
-                                u.Role,
+                                user.Role,
 
                             IsActive =
-                                u.IsActive
+                                user.IsActive
                         }
                 )
                 .ToList();
@@ -530,10 +838,10 @@ namespace PersonalProject.Services.Implementations
                     ActiveNurses =
                         await _context.Users
                             .CountAsync(
-                                u =>
-                                    u.Role ==
+                                user =>
+                                    user.Role ==
                                         RoleNames.Nurse &&
-                                    u.IsActive
+                                    user.IsActive
                             ),
 
                     TotalProxies =
@@ -543,10 +851,10 @@ namespace PersonalProject.Services.Implementations
                     ActiveProxies =
                         await _context.Users
                             .CountAsync(
-                                u =>
-                                    u.Role ==
+                                user =>
+                                    user.Role ==
                                         RoleNames.Proxy &&
-                                    u.IsActive
+                                    user.IsActive
                             ),
 
                     TotalPatients =
@@ -556,17 +864,17 @@ namespace PersonalProject.Services.Implementations
                     ActivePatients =
                         await _context.Users
                             .CountAsync(
-                                u =>
-                                    u.Role ==
+                                user =>
+                                    user.Role ==
                                         RoleNames.Patient &&
-                                    u.IsActive
+                                    user.IsActive
                             ),
 
                     TotalProxyLinks =
                         await _context.ProxyLinks
                             .CountAsync(
-                                pl =>
-                                    pl.IsActive
+                                link =>
+                                    link.IsActive
                             )
                 };
             }
@@ -582,18 +890,20 @@ namespace PersonalProject.Services.Implementations
             }
 
             var clinicId =
-                actor.Admin.ClinicId.Value;
+                actor.Admin
+                    .ClinicId
+                    .Value;
 
             var clinicPatientIds =
                 _context.Patients
                     .Where(
-                        p =>
-                            p.ClinicId ==
+                        patient =>
+                            patient.ClinicId ==
                             clinicId
                     )
                     .Select(
-                        p =>
-                            p.Id
+                        patient =>
+                            patient.Id
                     );
 
             return new AdminDashboardDto
@@ -601,56 +911,58 @@ namespace PersonalProject.Services.Implementations
                 TotalNurses =
                     await _context.Nurses
                         .CountAsync(
-                            n =>
-                                n.ClinicId ==
+                            nurse =>
+                                nurse.ClinicId ==
                                 clinicId
                         ),
 
                 ActiveNurses =
                     await _context.Nurses
                         .Where(
-                            n =>
-                                n.ClinicId ==
+                            nurse =>
+                                nurse.ClinicId ==
                                 clinicId
                         )
                         .CountAsync(
-                            n =>
-                                n.User.IsActive
+                            nurse =>
+                                nurse.User
+                                    .IsActive
                         ),
 
                 TotalPatients =
                     await _context.Patients
                         .CountAsync(
-                            p =>
-                                p.ClinicId ==
+                            patient =>
+                                patient.ClinicId ==
                                 clinicId
                         ),
 
                 ActivePatients =
                     await _context.Patients
                         .Where(
-                            p =>
-                                p.ClinicId ==
+                            patient =>
+                                patient.ClinicId ==
                                 clinicId
                         )
                         .CountAsync(
-                            p =>
-                                p.User.IsActive
+                            patient =>
+                                patient.User
+                                    .IsActive
                         ),
 
                 TotalProxies =
                     await _context.ProxyLinks
                         .Where(
-                            pl =>
+                            link =>
                                 clinicPatientIds
                                     .Contains(
-                                        pl.PatientId
+                                        link.PatientId
                                     ) &&
-                                pl.IsActive
+                                link.IsActive
                         )
                         .Select(
-                            pl =>
-                                pl.ProxyId
+                            link =>
+                                link.ProxyId
                         )
                         .Distinct()
                         .CountAsync(),
@@ -658,17 +970,19 @@ namespace PersonalProject.Services.Implementations
                 ActiveProxies =
                     await _context.ProxyLinks
                         .Where(
-                            pl =>
+                            link =>
                                 clinicPatientIds
                                     .Contains(
-                                        pl.PatientId
+                                        link.PatientId
                                     ) &&
-                                pl.IsActive &&
-                                pl.Proxy.User.IsActive
+                                link.IsActive &&
+                                link.Proxy
+                                    .User
+                                    .IsActive
                         )
                         .Select(
-                            pl =>
-                                pl.ProxyId
+                            link =>
+                                link.ProxyId
                         )
                         .Distinct()
                         .CountAsync(),
@@ -676,12 +990,12 @@ namespace PersonalProject.Services.Implementations
                 TotalProxyLinks =
                     await _context.ProxyLinks
                         .CountAsync(
-                            pl =>
+                            link =>
                                 clinicPatientIds
                                     .Contains(
-                                        pl.PatientId
+                                        link.PatientId
                                     ) &&
-                                pl.IsActive
+                                link.IsActive
                         )
             };
         }
@@ -690,10 +1004,11 @@ namespace PersonalProject.Services.Implementations
         // DEACTIVATE / ACTIVATE
         // =====================================================
 
-        public async Task DeactivateAccountAsync(
-            Guid userId,
-            Guid performedByUserId
-        )
+        public async Task
+            DeactivateAccountAsync(
+                Guid userId,
+                Guid performedByUserId
+            )
         {
             await SetActiveAsync(
                 userId,
@@ -702,10 +1017,11 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task ActivateAccountAsync(
-            Guid userId,
-            Guid performedByUserId
-        )
+        public async Task
+            ActivateAccountAsync(
+                Guid userId,
+                Guid performedByUserId
+            )
         {
             await SetActiveAsync(
                 userId,
@@ -743,12 +1059,17 @@ namespace PersonalProject.Services.Implementations
             var clinic =
                 await _context.Clinics
                     .FirstOrDefaultAsync(
-                        c =>
-                            c.Id ==
-                            actor.Admin.ClinicId.Value
+                        item =>
+                            item.Id ==
+                            actor.Admin
+                                .ClinicId
+                                .Value
                     );
 
-            if (clinic == null)
+            if (
+                clinic ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Assigned clinic not found."
@@ -807,17 +1128,22 @@ namespace PersonalProject.Services.Implementations
             }
 
             var clinicId =
-                actor.Admin.ClinicId.Value;
+                actor.Admin
+                    .ClinicId
+                    .Value;
 
             var clinic =
                 await _context.Clinics
                     .FirstOrDefaultAsync(
-                        c =>
-                            c.Id ==
+                        item =>
+                            item.Id ==
                             clinicId
                     );
 
-            if (clinic == null)
+            if (
+                clinic ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Assigned clinic not found."
@@ -825,40 +1151,45 @@ namespace PersonalProject.Services.Implementations
             }
 
             var today =
-                DateTime.UtcNow.Date;
+                DateTime.UtcNow
+                    .Date;
 
             var tomorrow =
-                today.AddDays(1);
+                today.AddDays(
+                    1
+                );
 
             var activePatients =
                 await _context.Patients
                     .CountAsync(
-                        p =>
-                            p.ClinicId ==
+                        patient =>
+                            patient.ClinicId ==
                                 clinicId &&
-                            p.User.IsActive
+                            patient.User
+                                .IsActive
                     );
 
             var activeNurses =
                 await _context.Nurses
                     .CountAsync(
-                        n =>
-                            n.ClinicId ==
+                        nurse =>
+                            nurse.ClinicId ==
                                 clinicId &&
-                            n.User.IsActive
+                            nurse.User
+                                .IsActive
                     );
 
             var appointmentsToday =
                 await _context.Appointments
                     .CountAsync(
-                        a =>
-                            a.ClinicId ==
+                        appointment =>
+                            appointment.ClinicId ==
                                 clinicId &&
-                            a.ScheduledAt >=
+                            appointment.ScheduledAt >=
                                 today &&
-                            a.ScheduledAt <
+                            appointment.ScheduledAt <
                                 tomorrow &&
-                            a.Status !=
+                            appointment.Status !=
                                 AppointmentStatuses.Cancelled
                     );
 
@@ -866,16 +1197,16 @@ namespace PersonalProject.Services.Implementations
                 await _context
                     .MedicationCollections
                     .CountAsync(
-                        c =>
-                            c.ClinicId ==
+                        collection =>
+                            collection.ClinicId ==
                                 clinicId &&
-                            c.ScheduledCollectionDate >=
+                            collection.ScheduledCollectionDate >=
                                 today &&
-                            c.ScheduledCollectionDate <
+                            collection.ScheduledCollectionDate <
                                 tomorrow &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Collected &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Cancelled
                     );
 
@@ -883,26 +1214,26 @@ namespace PersonalProject.Services.Implementations
                 await _context
                     .MedicationCollections
                     .CountAsync(
-                        c =>
-                            c.ClinicId ==
+                        collection =>
+                            collection.ClinicId ==
                                 clinicId &&
-                            c.ScheduledCollectionDate <
+                            collection.ScheduledCollectionDate <
                                 today &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Collected &&
-                            c.Status !=
+                            collection.Status !=
                                 MedicationCollectionStatuses.Cancelled
                     );
 
             var lowStockItems =
                 await _context.ClinicStocks
                     .CountAsync(
-                        s =>
-                            s.ClinicId ==
+                        stock =>
+                            stock.ClinicId ==
                                 clinicId &&
-                            s.IsActive &&
-                            s.QuantityOnHand <=
-                                s.ReorderLevel
+                            stock.IsActive &&
+                            stock.QuantityOnHand <=
+                                stock.ReorderLevel
                     );
 
             return new ClinicAdminOverviewDto
@@ -934,7 +1265,7 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // CENTRAL ACCOUNT STATUS
+        // ACCOUNT STATUS
         // =====================================================
 
         private async Task SetActiveAsync(
@@ -960,15 +1291,24 @@ namespace PersonalProject.Services.Implementations
 
             var target =
                 await _context.Users
-                    .Include(u => u.Nurse)
-                    .Include(u => u.Patient)
+                    .Include(
+                        user =>
+                            user.Nurse
+                    )
+                    .Include(
+                        user =>
+                            user.Patient
+                    )
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
+                        user =>
+                            user.Id ==
                             targetUserId
                     );
 
-            if (target == null)
+            if (
+                target ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Account not found."
@@ -991,24 +1331,30 @@ namespace PersonalProject.Services.Implementations
                 }
 
                 var clinicId =
-                    actor.Admin.ClinicId.Value;
+                    actor.Admin
+                        .ClinicId
+                        .Value;
 
                 var allowed =
                     (
                         target.Role ==
                             RoleNames.Nurse &&
-                        target.Nurse?.ClinicId ==
+                        target.Nurse
+                            ?.ClinicId ==
                             clinicId
                     )
                     ||
                     (
                         target.Role ==
                             RoleNames.Patient &&
-                        target.Patient?.ClinicId ==
+                        target.Patient
+                            ?.ClinicId ==
                             clinicId
                     );
 
-                if (!allowed)
+                if (
+                    !allowed
+                )
                 {
                     throw new UnauthorizedAccessException(
                         "ClinicAdmin can only manage accounts belonging to their clinic."
@@ -1028,24 +1374,24 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * User.IsActive is the single authoritative
-             * account-state flag.
-             */
             target.IsActive =
                 isActive;
 
             target.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
         }
 
         // =====================================================
         // CREATE USER
         // =====================================================
 
-        private async Task<(User user, string tempPassword)>
+        private async Task<(
+            User User,
+            string TemporaryPassword
+        )>
             CreateUserAsync(
                 string fullName,
                 string idNumber,
@@ -1054,7 +1400,11 @@ namespace PersonalProject.Services.Implementations
                 string role
             )
         {
-            if (!RoleNames.IsValid(role))
+            if (
+                !RoleNames.IsValid(
+                    role
+                )
+            )
             {
                 throw new InvalidOperationException(
                     $"Unsupported role '{role}'."
@@ -1078,24 +1428,26 @@ namespace PersonalProject.Services.Implementations
             var exists =
                 await _context.Users
                     .AnyAsync(
-                        u =>
-                            u.IdNumber ==
+                        user =>
+                            user.IdNumber ==
                                 normalizedIdNumber ||
-                            u.PhoneNumber ==
+                            user.PhoneNumber ==
                                 normalizedPhoneNumber ||
-                            u.Email
+                            user.Email
                                 .ToLower() ==
                                 normalizedEmail
                     );
 
-            if (exists)
+            if (
+                exists
+            )
             {
                 throw new InvalidOperationException(
                     "An account with that ID number, phone number, or email address already exists."
                 );
             }
 
-            var tempPassword =
+            var temporaryPassword =
                 GenerateTempPassword();
 
             var now =
@@ -1122,7 +1474,7 @@ namespace PersonalProject.Services.Implementations
                     PasswordHash =
                         BCrypt.Net.BCrypt
                             .HashPassword(
-                                tempPassword
+                                temporaryPassword
                             ),
 
                     Role =
@@ -1131,10 +1483,6 @@ namespace PersonalProject.Services.Implementations
                     IsActive =
                         true,
 
-                    /*
-                     * Staff accounts are created through an
-                     * authenticated administrator workflow.
-                     */
                     IsVerified =
                         true,
 
@@ -1149,15 +1497,10 @@ namespace PersonalProject.Services.Implementations
                 };
 
             /*
-             * Do not call SaveChanges here.
+             * Do not save here.
              *
-             * The caller first attaches the corresponding
-             * Admin, Nurse or Proxy profile. Both entities are
-             * then persisted together by one SaveChanges call.
-             *
-             * That SaveChanges call is automatically
-             * transactional and remains compatible with
-             * EnableRetryOnFailure.
+             * The caller adds the corresponding Admin, Nurse or
+             * Proxy profile before the single SaveChanges call.
              */
             _context.Users.Add(
                 user
@@ -1165,7 +1508,7 @@ namespace PersonalProject.Services.Implementations
 
             return (
                 user,
-                tempPassword
+                temporaryPassword
             );
         }
 
@@ -1173,7 +1516,10 @@ namespace PersonalProject.Services.Implementations
         // ADMIN ACTOR
         // =====================================================
 
-        private async Task<(User User, Admin Admin)>
+        private async Task<(
+            User User,
+            Admin Admin
+        )>
             GetAdminActorAsync(
                 Guid userId
             )
@@ -1181,18 +1527,20 @@ namespace PersonalProject.Services.Implementations
             var user =
                 await _context.Users
                     .Include(
-                        u =>
-                            u.Admin
+                        item =>
+                            item.Admin
                     )
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
+                        item =>
+                            item.Id ==
                             userId
                     );
 
             if (
-                user == null ||
-                user.Admin == null
+                user ==
+                    null ||
+                user.Admin ==
+                    null
             )
             {
                 throw new UnauthorizedAccessException(
@@ -1200,7 +1548,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (!user.IsActive)
+            if (
+                !user.IsActive
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Administrator account is inactive."
@@ -1226,20 +1576,27 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // CLINIC ACCESS
+        // CLINIC ADMIN ACCESS
         // =====================================================
 
-        private static Task EnsureClinicAccessAsync(
-            (User User, Admin Admin) actor,
-            Guid clinicId
-        )
+        private static void
+            EnsureClinicAdminAccess(
+                (
+                    User User,
+                    Admin Admin
+                )
+                actor,
+                Guid clinicId
+            )
         {
             if (
-                actor.User.Role ==
-                RoleNames.SuperAdmin
+                actor.User.Role !=
+                RoleNames.ClinicAdmin
             )
             {
-                return Task.CompletedTask;
+                throw new UnauthorizedAccessException(
+                    "Only a Clinic Administrator can create or manage clinic workforce accounts."
+                );
             }
 
             if (
@@ -1253,15 +1610,61 @@ namespace PersonalProject.Services.Implementations
                     "ClinicAdmin can only manage their assigned clinic."
                 );
             }
-
-            return Task.CompletedTask;
         }
 
         // =====================================================
-        // TEMP PASSWORD
+        // SEND INVITATION
         // =====================================================
 
-        private static string GenerateTempPassword()
+        private async Task<bool>
+            TrySendInvitationAsync(
+                User user,
+                string temporaryPassword,
+                string? clinicName
+            )
+        {
+            try
+            {
+                await AccountEmailSender
+                    .SendAccountInvitationAsync(
+                        _configuration,
+                        _logger,
+                        user.Email,
+                        user.FullName,
+                        user.Role,
+                        clinicName,
+                        temporaryPassword
+                    );
+
+                return true;
+            }
+            catch (
+                Exception ex
+            )
+            {
+                /*
+                 * The account remains valid but the administrator
+                 * never receives the password.
+                 *
+                 * A resend regenerates a completely new temporary
+                 * password and invalidates the undelivered one.
+                 */
+                _logger.LogWarning(
+                    ex,
+                    "Account {UserId} was created/updated but its invitation email could not be delivered.",
+                    user.Id
+                );
+
+                return false;
+            }
+        }
+
+        // =====================================================
+        // TEMPORARY PASSWORD
+        // =====================================================
+
+        private static string
+            GenerateTempPassword()
         {
             const string uppercase =
                 "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -1321,12 +1724,13 @@ namespace PersonalProject.Services.Implementations
                 ];
 
             for (
-                var i = 4;
-                i < password.Length;
-                i++
+                var index = 4;
+                index <
+                password.Length;
+                index++
             )
             {
-                password[i] =
+                password[index] =
                     all[
                         System.Security.Cryptography
                             .RandomNumberGenerator
@@ -1352,7 +1756,9 @@ namespace PersonalProject.Services.Implementations
         private static NewStaffAccountDto
             CreateNewAccountResponse(
                 User user,
-                string temporaryPassword
+                Guid? clinicId,
+                string? clinicName,
+                bool emailSent
             )
         {
             return new NewStaffAccountDto
@@ -1366,11 +1772,25 @@ namespace PersonalProject.Services.Implementations
                 IdNumber =
                     user.IdNumber,
 
+                Email =
+                    user.Email,
+
                 Role =
                     user.Role,
 
-                TemporaryPassword =
-                    temporaryPassword
+                ClinicId =
+                    clinicId,
+
+                ClinicName =
+                    clinicName,
+
+                EmailSent =
+                    emailSent,
+
+                Message =
+                    emailSent
+                        ? $"The account was created and login credentials were sent to {user.Email}."
+                        : $"The account was created, but the credential email could not be delivered to {user.Email}. Use Resend invitation to generate and send a new temporary password."
             };
         }
     }
