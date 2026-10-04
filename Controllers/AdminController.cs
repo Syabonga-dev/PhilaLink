@@ -38,6 +38,10 @@ namespace PersonalProject.Controllers
                 audit;
         }
 
+        // =====================================================
+        // CLINIC ADMIN CREATION — SUPERADMIN ONLY
+        // =====================================================
+
         [HttpPost("clinic-admins")]
         [Authorize(Policy = "SuperAdminOnly")]
         public async Task<IActionResult>
@@ -62,8 +66,13 @@ namespace PersonalProject.Controllers
                         "ClinicAdminCreated",
                         currentUserId,
                         $"Clinic Administrator account {result.UserId} ({result.FullName}) was created.",
-                        dto.ClinicId
+                        result.ClinicId
                     );
+
+                await LogInvitationOutcomeAsync(
+                    currentUserId,
+                    result
+                );
 
                 return Ok(
                     result
@@ -101,7 +110,12 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // NURSE CREATION — CLINICADMIN ONLY
+        // =====================================================
+
         [HttpPost("nurses")]
+        [Authorize(Roles = RoleNames.ClinicAdmin)]
         public async Task<IActionResult>
             RegisterNurse(
                 RegisterNurseDto dto
@@ -124,8 +138,13 @@ namespace PersonalProject.Controllers
                         "NurseAccountCreated",
                         currentUserId,
                         $"Nurse account {result.UserId} ({result.FullName}) was created.",
-                        dto.ClinicId
+                        result.ClinicId
                     );
+
+                await LogInvitationOutcomeAsync(
+                    currentUserId,
+                    result
+                );
 
                 return Ok(
                     result
@@ -163,7 +182,12 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // PROXY CREATION — CLINICADMIN ONLY
+        // =====================================================
+
         [HttpPost("proxies")]
+        [Authorize(Roles = RoleNames.ClinicAdmin)]
         public async Task<IActionResult>
             RegisterProxy(
                 RegisterProxyDto dto
@@ -186,11 +210,28 @@ namespace PersonalProject.Controllers
                         "ProxyAccountCreated",
                         currentUserId,
                         $"Proxy account {result.UserId} ({result.FullName}) was created.",
-                        dto.ClinicId
+                        result.ClinicId
                     );
+
+                await LogInvitationOutcomeAsync(
+                    currentUserId,
+                    result
+                );
 
                 return Ok(
                     result
+                );
+            }
+            catch (
+                KeyNotFoundException ex
+            )
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
                 );
             }
             catch (
@@ -213,6 +254,82 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // RESEND INVITATION
+        // =====================================================
+
+        [HttpPost(
+            "accounts/{userId:guid}/resend-invitation"
+        )]
+        public async Task<IActionResult>
+            ResendInvitation(
+                Guid userId
+            )
+        {
+            try
+            {
+                var currentUserId =
+                    GetCurrentUserId();
+
+                var result =
+                    await _adminService
+                        .ResendAccountInvitationAsync(
+                            userId,
+                            currentUserId
+                        );
+
+                await _audit
+                    .LogAsync(
+                        result.EmailSent
+                            ? "AccountInvitationResent"
+                            : "AccountInvitationDeliveryFailed",
+                        currentUserId,
+                        result.EmailSent
+                            ? $"A new account invitation was sent to {result.Email} for account {result.UserId}."
+                            : $"A new account invitation was generated for account {result.UserId}, but delivery to {result.Email} failed.",
+                        result.ClinicId
+                    );
+
+                return Ok(
+                    result
+                );
+            }
+            catch (
+                KeyNotFoundException ex
+            )
+            {
+                return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
+            {
+                return Forbid();
+            }
+        }
+
+        // =====================================================
+        // DASHBOARD
+        // =====================================================
+
         [HttpGet("dashboard")]
         public async Task<IActionResult>
             GetDashboard()
@@ -233,6 +350,10 @@ namespace PersonalProject.Controllers
                 return Forbid();
             }
         }
+
+        // =====================================================
+        // ACCOUNTS
+        // =====================================================
 
         [HttpGet("accounts")]
         public async Task<IActionResult>
@@ -391,7 +512,12 @@ namespace PersonalProject.Controllers
             }
         }
 
+        // =====================================================
+        // PROXY LINK — CLINICADMIN ONLY
+        // =====================================================
+
         [HttpPost("proxy-links")]
+        [Authorize(Roles = RoleNames.ClinicAdmin)]
         public async Task<IActionResult>
             AssignProxy(
                 Guid patientId,
@@ -447,14 +573,10 @@ namespace PersonalProject.Controllers
             }
         }
 
-        /*
-         * This endpoint now works for BOTH administrative
-         * roles.
-         *
-         * ClinicAdmin still receives its clinic profile.
-         * SuperAdmin receives a system-level profile without
-         * a clinic assignment.
-         */
+        // =====================================================
+        // ADMIN PROFILE
+        // =====================================================
+
         [HttpGet("me")]
         public async Task<IActionResult>
             Me()
@@ -555,6 +677,29 @@ namespace PersonalProject.Controllers
             {
                 return Forbid();
             }
+        }
+
+        // =====================================================
+        // HELPERS
+        // =====================================================
+
+        private async Task
+            LogInvitationOutcomeAsync(
+                Guid performedByUserId,
+                NewStaffAccountDto result
+            )
+        {
+            await _audit
+                .LogAsync(
+                    result.EmailSent
+                        ? "AccountInvitationSent"
+                        : "AccountInvitationDeliveryFailed",
+                    performedByUserId,
+                    result.EmailSent
+                        ? $"Account invitation sent to {result.Email} for account {result.UserId}."
+                        : $"Account {result.UserId} was created, but invitation delivery to {result.Email} failed.",
+                    result.ClinicId
+                );
         }
 
         private Guid GetCurrentUserId()
