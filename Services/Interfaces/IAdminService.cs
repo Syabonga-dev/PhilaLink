@@ -1,4 +1,4 @@
-﻿using PersonalProject.Models.DTOs;
+using PersonalProject.Models.DTOs;
 
 namespace PersonalProject.Services.Interfaces
 {
@@ -8,25 +8,63 @@ namespace PersonalProject.Services.Interfaces
         // ACCOUNT CREATION
         // =====================================================
 
-        Task<NewStaffAccountDto> RegisterClinicAdminAsync(RegisterClinicAdminDto dto, Guid performedByUserId);
+        Task<NewStaffAccountDto>
+            RegisterClinicAdminAsync(
+                RegisterClinicAdminDto dto,
+                Guid performedByUserId
+            );
 
-        Task<NewStaffAccountDto> RegisterNurseAsync(RegisterNurseDto dto, Guid performedByUserId);
+        Task<NewStaffAccountDto>
+            RegisterNurseAsync(
+                RegisterNurseDto dto,
+                Guid performedByUserId
+            );
 
-        Task<NewStaffAccountDto> RegisterProxyAsync(RegisterProxyDto dto, Guid performedByUserId);
+        Task<NewStaffAccountDto>
+            RegisterProxyAsync(
+                RegisterProxyDto dto,
+                Guid performedByUserId
+            );
+
+        Task<NewStaffAccountDto>
+            ResendAccountInvitationAsync(
+                Guid targetUserId,
+                Guid performedByUserId
+            );
 
         // =====================================================
         // ACCOUNT MANAGEMENT
         // =====================================================
 
-        Task<List<AdminAccountDto>> ListAccountsAsync(string? role, Guid performedByUserId);
+        Task<List<AdminAccountDto>>
+            ListAccountsAsync(
+                string? role,
+                Guid performedByUserId
+            );
 
-        Task<AdminDashboardDto> GetDashboardAsync(Guid performedByUserId);
+        Task<AdminDashboardDto>
+            GetDashboardAsync(
+                Guid performedByUserId
+            );
 
-        Task DeactivateAccountAsync(Guid userId, Guid performedByUserId);
+        Task DeactivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        );
 
-        Task ActivateAccountAsync(Guid userId, Guid performedByUserId);
-        Task<ClinicAdminMeDto> GetClinicAdminMeAsync(Guid performedByUserId);
+        Task ActivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        );
 
-        Task<ClinicAdminOverviewDto> GetClinicOverviewAsync(Guid performedByUserId);
+        Task<ClinicAdminMeDto>
+            GetClinicAdminMeAsync(
+                Guid performedByUserId
+            );
+
+        Task<ClinicAdminOverviewDto>
+            GetClinicOverviewAsync(
+                Guid performedByUserId
+            );
     }
 }
