@@ -1,3 +1,7 @@
 <Solution>
   <Project Path="PersonalProject.csproj" />
+
+  <Project
+    Path="Tests/PersonalProject.Tests/PersonalProject.Tests.csproj"
+  />
 </Solution>
