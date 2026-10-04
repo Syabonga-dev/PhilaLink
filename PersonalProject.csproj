@@ -1,30 +1,82 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
-	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<UserSecretsId>d9f67ce0-e99f-4e21-bcd4-ffaf27aeb28c</UserSecretsId>
-	</PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>d9f67ce0-e99f-4e21-bcd4-ffaf27aeb28c</UserSecretsId>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+  <!--
+    The backend repository contains a separate xUnit test
+    project under Tests/.
 
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    ASP.NET SDK projects recursively include *.cs files by
+    default, so explicitly exclude test source files from the
+    production API compilation.
 
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-			<PrivateAssets>all</PrivateAssets>
-		</PackageReference>
+    The test project itself compiles these files separately.
+  -->
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+  </ItemGroup>
 
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10">
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-			<PrivateAssets>all</PrivateAssets>
-		</PackageReference>
+  <ItemGroup>
+    <PackageReference
+      Include="BCrypt.Net-Next"
+      Version="4.2.0"
+    />
 
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageReference
+      Include="Microsoft.AspNetCore.Authentication.JwtBearer"
+      Version="10.0.10"
+    />
 
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
-	</ItemGroup>
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.Design"
+      Version="10.0.10"
+    >
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+
+      <PrivateAssets>
+        all
+      </PrivateAssets>
+    </PackageReference>
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.Tools"
+      Version="10.0.10"
+    >
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+
+      <PrivateAssets>
+        all
+      </PrivateAssets>
+    </PackageReference>
+
+    <PackageReference
+      Include="Npgsql.EntityFrameworkCore.PostgreSQL"
+      Version="10.0.0"
+    />
+
+    <PackageReference
+      Include="Swashbuckle.AspNetCore"
+      Version="10.2.3"
+    />
+  </ItemGroup>
 
 </Project>
