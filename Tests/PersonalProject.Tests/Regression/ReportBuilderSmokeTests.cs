@@ -474,36 +474,69 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DashboardContainsDynamicFilteredPreview()
-        {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var dashboard =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet1.xml"
-                );
-
-            Assert.Contains(
-                "FILTER(Data!A5:",
-                dashboard
+public void
+    DashboardPreviewUsesRepairSafeScalarFormulas()
+{
+    var bytes =
+        ClinicAdminDynamicReportBuilder
+            .BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "Calc!$B$2:$B$",
-                dashboard
-            );
+    var dashboard =
+        ReadEntry(
+            bytes,
+            "xl/worksheets/sheet1.xml"
+        );
 
-            Assert.Contains(
-                "No matching rows",
-                dashboard
-            );
-        }
+    /*
+     * FILTER() is intentionally forbidden here.
+     *
+     * The report builder writes worksheet XML itself,
+     * and dynamic-array formulas require additional
+     * OOXML metadata. Writing FILTER as a normal
+     * formula caused Excel to repair sheet1.xml.
+     */
+    Assert.DoesNotContain(
+        "FILTER(Data!A5:",
+        dashboard
+    );
+
+    Assert.DoesNotContain(
+        "_xlfn",
+        dashboard
+    );
+
+    Assert.DoesNotContain(
+        "t=\"array\"",
+        dashboard
+    );
+
+    /*
+     * The preview instead uses ordinary scalar
+     * formulas which remain live when the dashboard
+     * filter cells change.
+     */
+    Assert.Contains(
+        "INDEX(Data!",
+        dashboard
+    );
+
+    Assert.Contains(
+        "AGGREGATE(15,6",
+        dashboard
+    );
+
+    Assert.Contains(
+        "Calc!$B$2:$B$",
+        dashboard
+    );
+
+    Assert.Contains(
+        "Preview shows up to 20 matching rows.",
+        dashboard
+    );
+}
 
         // =====================================================
         // CHARTS
