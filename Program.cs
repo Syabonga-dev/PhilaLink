@@ -1301,11 +1301,17 @@ app.UseCors(
 );
 
 /*
+ * Resolve CurrentCulture and CurrentUICulture from
+ * Accept-Language before authenticated controllers run.
+ */
+PersonalProject.Localization
+    .PhilaLinkLocalization
+    .UsePhilaLinkLocalization(
+        app
+    );
+
+/*
  * Authentication must run before the rate limiter.
- *
- * This allows protected endpoints to be partitioned using
- * the authenticated user's ID rather than placing everyone
- * behind the same public IP into one shared bucket.
  */
 app.UseAuthentication();
 
