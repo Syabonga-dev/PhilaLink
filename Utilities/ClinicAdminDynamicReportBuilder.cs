@@ -212,447 +212,563 @@ namespace PersonalProject.Utilities
         // =====================================================
 
         private static string DashboardSheetXml(
-            ClinicAdminDynamicReportPreviewDto report,
-            List<DashboardFilter> filters,
-            List<KpiDefinition> kpis
-        )
+    ClinicAdminDynamicReportPreviewDto report,
+    List<DashboardFilter> filters,
+    List<KpiDefinition> kpis
+)
+{
+    var sheet =
+        new WorksheetBuilder();
+
+    sheet.SetWidths(
+        18,
+        20,
+        4,
+        18,
+        20,
+        4,
+        18,
+        20,
+        4,
+        18,
+        20,
+        18
+    );
+
+    sheet.FreezeRows =
+        4;
+
+    sheet.DrawingRelationshipId =
+        "rId1";
+
+    sheet.Merge(
+        1,
+        1,
+        1,
+        12
+    );
+
+    sheet.Cell(
+        1,
+        1,
+        "PHILALINK DYNAMIC REPORT",
+        1
+    );
+
+    sheet.Merge(
+        2,
+        1,
+        2,
+        12
+    );
+
+    sheet.Cell(
+        2,
+        1,
+        report.Title,
+        2
+    );
+
+    sheet.Merge(
+        3,
+        1,
+        3,
+        12
+    );
+
+    sheet.Cell(
+        3,
+        1,
+        $"{report.ClinicName}  |  Requested by {report.RequestedBy}  |  Generated {report.GeneratedAt:yyyy-MM-dd HH:mm}",
+        3
+    );
+
+    sheet.Merge(
+        4,
+        1,
+        4,
+        12
+    );
+
+    sheet.Cell(
+        4,
+        1,
+        $"{RangeText(report)}  |  Dashboard filters recalculate KPIs, charts and the preview.",
+        4
+    );
+
+    // =================================================
+    // FILTER PANEL
+    // =================================================
+
+    sheet.Merge(
+        6,
+        1,
+        6,
+        12
+    );
+
+    sheet.Cell(
+        6,
+        1,
+        "DASHBOARD FILTERS",
+        5
+    );
+
+    for (
+        var index = 0;
+        index < filters.Count;
+        index++
+    )
+    {
+        var filter =
+            filters[index];
+
+        var position =
+            FilterPosition(
+                index
+            );
+
+        sheet.Cell(
+            position.Row,
+            position.LabelColumn,
+            filter.Label,
+            6
+        );
+
+        sheet.Cell(
+            position.Row,
+            position.ValueColumn,
+            "All",
+            7
+        );
+
+        sheet.AddListValidation(
+            filter.ValueCell,
+            filter.ListName
+        );
+    }
+
+    var dateColumn =
+        GetDateColumn(
+            report
+        );
+
+    if (
+        dateColumn !=
+        null
+    )
+    {
+        sheet.Cell(
+            11,
+            1,
+            $"{dateColumn.Label} from",
+            6
+        );
+
+        sheet.Cell(
+            11,
+            2,
+            report.DateFrom ??
+            MinDate(
+                report,
+                dateColumn.Key
+            ),
+            21
+        );
+
+        sheet.Cell(
+            11,
+            4,
+            $"{dateColumn.Label} to",
+            6
+        );
+
+        sheet.Cell(
+            11,
+            5,
+            report.DateTo ??
+            MaxDate(
+                report,
+                dateColumn.Key
+            ),
+            21
+        );
+
+        sheet.Merge(
+            11,
+            7,
+            11,
+            12
+        );
+
+        sheet.Cell(
+            11,
+            7,
+            "Clear either date cell to remove that date boundary.",
+            19
+        );
+    }
+    else
+    {
+        sheet.Merge(
+            11,
+            1,
+            11,
+            12
+        );
+
+        sheet.Cell(
+            11,
+            1,
+            "Current-state report: category filters still recalculate all dashboard visuals.",
+            19
+        );
+    }
+
+    // =================================================
+    // KPI CARDS
+    // =================================================
+
+    sheet.Merge(
+        13,
+        1,
+        13,
+        12
+    );
+
+    sheet.Cell(
+        13,
+        1,
+        "LIVE KPI SUMMARY",
+        5
+    );
+
+    var cardStarts =
+        new[]
         {
-            var sheet =
-                new WorksheetBuilder();
+            1,
+            4,
+            7,
+            10
+        };
 
-            sheet.SetWidths(
-                18,
-                20,
-                4,
-                18,
-                20,
-                4,
-                18,
-                20,
-                4,
-                18,
-                20,
-                18
-            );
+    for (
+        var index = 0;
+        index <
+        Math.Min(
+            4,
+            kpis.Count
+        );
+        index++
+    )
+    {
+        var start =
+            cardStarts[index];
 
-            sheet.FreezeRows =
-                4;
-
-            sheet.DrawingRelationshipId =
-                "rId1";
-
-            sheet.Merge(
-                1,
-                1,
-                1,
-                12
-            );
-
-            sheet.Cell(
-                1,
-                1,
-                "PHILALINK DYNAMIC REPORT",
-                1
-            );
-
-            sheet.Merge(
-                2,
-                1,
-                2,
-                12
-            );
-
-            sheet.Cell(
-                2,
-                1,
-                report.Title,
+        var end =
+            Math.Min(
+                12,
+                start +
                 2
             );
 
-            sheet.Merge(
-                3,
-                1,
-                3,
-                12
-            );
+        sheet.Merge(
+            14,
+            start,
+            14,
+            end
+        );
 
-            sheet.Cell(
-                3,
-                1,
-                $"{report.ClinicName}  |  Requested by {report.RequestedBy}  |  Generated {report.GeneratedAt:yyyy-MM-dd HH:mm}",
-                3
-            );
+        sheet.Cell(
+            14,
+            start,
+            kpis[index].Label,
+            8
+        );
 
-            sheet.Merge(
-                4,
-                1,
-                4,
-                12
-            );
+        sheet.Merge(
+            15,
+            start,
+            16,
+            end
+        );
 
-            sheet.Cell(
-                4,
-                1,
-                $"{RangeText(report)}  |  Dashboard filters recalculate KPIs, charts and the preview.",
-                4
-            );
+        sheet.Formula(
+            15,
+            start,
+            $"Calc!$K${index + 2}",
+            kpis[index]
+                .IsPercentage
+                    ? 20
+                    : 9,
+            kpis[index]
+                .CachedValue
+        );
+    }
 
-            // =================================================
-            // FILTER PANEL
-            // =================================================
+    // =================================================
+    // CHART HEADINGS
+    // =================================================
 
-            sheet.Merge(
-                6,
-                1,
-                6,
-                12
-            );
+    sheet.Merge(
+        18,
+        1,
+        18,
+        6
+    );
 
-            sheet.Cell(
-                6,
-                1,
-                "DASHBOARD FILTERS",
-                5
-            );
+    sheet.Cell(
+        18,
+        1,
+        "DISTRIBUTION",
+        5
+    );
 
-            for (
-                var index = 0;
-                index < filters.Count;
-                index++
-            )
-            {
-                var filter =
-                    filters[index];
+    sheet.Merge(
+        18,
+        7,
+        18,
+        12
+    );
 
-                var position =
-                    FilterPosition(
-                        index
-                    );
+    sheet.Cell(
+        18,
+        7,
+        "COMPARISON",
+        5
+    );
 
-                sheet.Cell(
-                    position.Row,
-                    position.LabelColumn,
-                    filter.Label,
-                    6
-                );
+    // =================================================
+    // FILTERED TABLE PREVIEW
+    //
+    // IMPORTANT:
+    // Do not use FILTER() here.
+    //
+    // FILTER is a dynamic-array formula and requires
+    // additional OOXML dynamic-array metadata.
+    //
+    // The previous implementation wrote FILTER as an
+    // ordinary formula, which caused Microsoft Excel
+    // to repair sheet1.xml and remove the formula.
+    //
+    // A dynamic spill would also collide with the
+    // dashboard footer for larger reports.
+    //
+    // These scalar INDEX + AGGREGATE formulas give us
+    // a live filtered preview without dynamic arrays.
+    // =================================================
 
-                sheet.Cell(
-                    position.Row,
-                    position.ValueColumn,
-                    "All",
-                    7
-                );
+    const int previewTitleRow =
+        37;
 
-                sheet.AddListValidation(
-                    filter.ValueCell,
-                    filter.ListName
-                );
-            }
+    const int previewHeaderRow =
+        38;
 
-            var dateColumn =
-                GetDateColumn(
-                    report
-                );
+    const int previewFirstDataRow =
+        39;
 
-            if (
-                dateColumn !=
-                null
-            )
-            {
-                sheet.Cell(
-                    11,
-                    1,
-                    $"{dateColumn.Label} from",
-                    6
-                );
+    const int previewMaximumRows =
+        20;
 
-                sheet.Cell(
-                    11,
-                    2,
-                    report.DateFrom ??
-                    MinDate(
-                        report,
-                        dateColumn.Key
-                    ),
-                    21
-                );
+    const int previewNoteRow =
+        60;
 
-                sheet.Cell(
-                    11,
-                    4,
-                    $"{dateColumn.Label} to",
-                    6
-                );
+    const int previewFooterRow =
+        61;
 
-                sheet.Cell(
-                    11,
-                    5,
-                    report.DateTo ??
-                    MaxDate(
-                        report,
-                        dateColumn.Key
-                    ),
-                    21
-                );
-
-                sheet.Merge(
-                    11,
-                    7,
-                    11,
-                    12
-                );
-
-                sheet.Cell(
-                    11,
-                    7,
-                    "Clear either date cell to remove that date boundary.",
-                    19
-                );
-            }
-            else
-            {
-                sheet.Merge(
-                    11,
-                    1,
-                    11,
-                    12
-                );
-
-                sheet.Cell(
-                    11,
-                    1,
-                    "Current-state report: category filters still recalculate all dashboard visuals.",
-                    19
-                );
-            }
-
-            // =================================================
-            // KPI CARDS
-            // =================================================
-
-            sheet.Merge(
-                13,
-                1,
-                13,
-                12
-            );
-
-            sheet.Cell(
-                13,
-                1,
-                "LIVE KPI SUMMARY",
-                5
-            );
-
-            var cardStarts =
-                new[]
-                {
-                    1,
-                    4,
-                    7,
-                    10
-                };
-
-            for (
-                var index = 0;
-                index <
+    var previewColumns =
+        report.Columns
+            .Take(
                 Math.Min(
-                    4,
-                    kpis.Count
-                );
-                index++
+                    8,
+                    report.Columns.Count
+                )
             )
-            {
-                var start =
-                    cardStarts[index];
+            .ToList();
 
-                var end =
-                    Math.Min(
-                        12,
-                        start +
-                        2
-                    );
+    sheet.Merge(
+        previewTitleRow,
+        1,
+        previewTitleRow,
+        12
+    );
 
-                sheet.Merge(
-                    14,
-                    start,
-                    14,
-                    end
-                );
+    sheet.Cell(
+        previewTitleRow,
+        1,
+        "FILTERED TABLE PREVIEW",
+        5
+    );
 
-                sheet.Cell(
-                    14,
-                    start,
-                    kpis[index].Label,
-                    8
-                );
+    for (
+        var index = 0;
+        index < previewColumns.Count;
+        index++
+    )
+    {
+        sheet.Cell(
+            previewHeaderRow,
+            index +
+            1,
+            previewColumns[index]
+                .Label,
+            10
+        );
+    }
 
-                sheet.Merge(
-                    15,
-                    start,
-                    16,
-                    end
-                );
+    if (
+        report.Rows.Count >
+        0 &&
+        previewColumns.Count >
+        0
+    )
+    {
+        var lastDataRow =
+            4 +
+            report.Rows.Count;
 
-                sheet.Formula(
-                    15,
-                    start,
-                    $"Calc!$K${index + 2}",
-                    kpis[index]
-                        .IsPercentage
-                            ? 20
-                            : 9,
-                    kpis[index]
-                        .CachedValue
-                );
-            }
+        var lastCalcRow =
+            1 +
+            report.Rows.Count;
 
-            // =================================================
-            // CHART HEADINGS
-            // =================================================
-
-            sheet.Merge(
-                18,
-                1,
-                18,
-                6
+        var previewRows =
+            Math.Min(
+                previewMaximumRows,
+                report.Rows.Count
             );
 
-            sheet.Cell(
-                18,
-                1,
-                "DISTRIBUTION",
-                5
-            );
+        for (
+            var previewIndex = 0;
+            previewIndex < previewRows;
+            previewIndex++
+        )
+        {
+            var dashboardRow =
+                previewFirstDataRow +
+                previewIndex;
 
-            sheet.Merge(
-                18,
-                7,
-                18,
-                12
-            );
-
-            sheet.Cell(
-                18,
-                7,
-                "COMPARISON",
-                5
-            );
-
-            // =================================================
-            // FILTERED TABLE PREVIEW
-            // =================================================
-
-            const int previewTitleRow =
-                37;
-
-            const int previewHeaderRow =
-                38;
-
-            const int previewFormulaRow =
-                39;
-
-            var previewColumns =
-                report.Columns
-                    .Take(
-                        Math.Min(
-                            8,
-                            report.Columns.Count
-                        )
-                    )
-                    .ToList();
-
-            sheet.Merge(
-                previewTitleRow,
-                1,
-                previewTitleRow,
-                12
-            );
-
-            sheet.Cell(
-                previewTitleRow,
-                1,
-                "FILTERED TABLE PREVIEW",
-                5
-            );
+            var matchNumber =
+                previewIndex +
+                1;
 
             for (
-                var index = 0;
-                index < previewColumns.Count;
-                index++
+                var columnIndex = 0;
+                columnIndex < previewColumns.Count;
+                columnIndex++
             )
             {
-                sheet.Cell(
-                    previewHeaderRow,
-                    index + 1,
-                    previewColumns[index]
-                        .Label,
-                    10
-                );
-            }
-
-            if (
-                report.Rows.Count >
-                0 &&
-                previewColumns.Count >
-                0
-            )
-            {
-                var lastDataRow =
-                    4 +
-                    report.Rows.Count;
-
-                var lastCalcRow =
-                    1 +
-                    report.Rows.Count;
-
-                var lastPreviewColumn =
+                var dataColumn =
                     ColumnName(
-                        previewColumns.Count
+                        columnIndex +
+                        1
                     );
 
+                var formula =
+                    $"IFERROR(" +
+                    $"INDEX(" +
+                    $"Data!${dataColumn}$5:${dataColumn}${lastDataRow}," +
+                    $"AGGREGATE(" +
+                    $"15," +
+                    $"6," +
+                    $"(" +
+                    $"ROW(Data!$A$5:$A${lastDataRow})-" +
+                    $"ROW(Data!$A$5)+1" +
+                    $")/" +
+                    $"(" +
+                    $"Calc!$B$2:$B${lastCalcRow}=1" +
+                    $")," +
+                    $"{matchNumber}" +
+                    $")" +
+                    $")," +
+                    $"\"\"" +
+                    $")";
+
+                var column =
+                    previewColumns[
+                        columnIndex
+                    ];
+
+                var style =
+                    column.DataType.Equals(
+                        "date",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                        ? 13
+                        : column.DataType.Equals(
+                            "datetime",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                            ? 14
+                            : column.DataType.Equals(
+                                "number",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                                ? 15
+                                : previewIndex %
+                                  2 ==
+                                  0
+                                    ? 11
+                                    : 12;
+
                 sheet.Formula(
-                    previewFormulaRow,
+                    dashboardRow,
+                    columnIndex +
                     1,
-                    $"FILTER(Data!A5:{lastPreviewColumn}{lastDataRow},Calc!$B$2:$B${lastCalcRow}=1,\"No matching rows\")",
-                    11,
+                    formula,
+                    style,
                     null
                 );
             }
-            else
-            {
-                sheet.Merge(
-                    previewFormulaRow,
-                    1,
-                    previewFormulaRow,
-                    12
-                );
-
-                sheet.Cell(
-                    previewFormulaRow,
-                    1,
-                    "No rows matched the exported report.",
-                    19
-                );
-            }
-
-            sheet.Merge(
-                61,
-                1,
-                61,
-                12
-            );
-
-            sheet.Cell(
-                61,
-                1,
-                "The Data worksheet contains the full exported dataset and standard Excel header filters. Dashboard filters work independently and drive the live dashboard.",
-                19
-            );
-
-            return sheet.Build();
         }
+    }
+    else
+    {
+        sheet.Merge(
+            previewFirstDataRow,
+            1,
+            previewFirstDataRow,
+            12
+        );
 
+        sheet.Cell(
+            previewFirstDataRow,
+            1,
+            "No rows matched the exported report.",
+            19
+        );
+    }
+
+    sheet.Merge(
+        previewNoteRow,
+        1,
+        previewNoteRow,
+        12
+    );
+
+    sheet.Cell(
+        previewNoteRow,
+        1,
+        "Preview shows up to 20 matching rows. Use the Data sheet for the full export.",
+        19
+    );
+
+    sheet.Merge(
+        previewFooterRow,
+        1,
+        previewFooterRow,
+        12
+    );
+
+    sheet.Cell(
+        previewFooterRow,
+        1,
+        "The Data worksheet contains the full exported dataset and standard Excel header filters. Dashboard filters drive the live KPIs, charts and preview.",
+        19
+    );
+
+    return sheet.Build();
+}
         // =====================================================
         // DATA SHEET
         // =====================================================
