@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PersonalProject.Data;
@@ -11,9 +12,11 @@ using PersonalProject.Data;
 namespace PersonalProject.Migrations
 {
     [DbContext(typeof(PhilaLinkDbContext))]
-    partial class PhilaLinkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005173340_AddPatientPreferredLanguage")]
+    partial class AddPatientPreferredLanguage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
