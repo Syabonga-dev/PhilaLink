@@ -51,6 +51,29 @@ namespace PersonalProject.Models.Entities
             set;
         } = "light";
 
+        /*
+         * ISO / application language identifier.
+         *
+         * Supported values:
+         *
+         * en  - English
+         * zu  - isiZulu
+         * xh  - isiXhosa
+         * af  - Afrikaans
+         * nso - Sepedi
+         * tn  - Setswana
+         * st  - Sesotho
+         * ts  - Xitsonga
+         * ss  - siSwati
+         * ve  - Tshivenda
+         * nr  - isiNdebele
+         */
+        public string PreferredLanguage
+        {
+            get;
+            set;
+        } = "en";
+
         public DateTime CreatedAt
         {
             get;
