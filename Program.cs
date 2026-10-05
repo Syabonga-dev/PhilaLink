@@ -106,6 +106,13 @@ builder.Services.AddHttpClient<IWeatherService, WeatherService>(
 // =====================================================
 
 builder.Services.AddControllers();
+
+PersonalProject.Localization
+    .PhilaLinkLocalization
+    .AddPhilaLinkLocalization(
+        builder.Services
+    );
+
 builder.Services.AddEndpointsApiExplorer();
 
 // =====================================================
