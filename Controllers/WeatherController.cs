@@ -20,6 +20,19 @@ namespace PersonalProject.Controllers
             SouthAfricaTimeZone =
                 ResolveSouthAfricaTimeZone();
 
+        /*
+         * Weather updates are generated approximately hourly.
+         *
+         * 55 minutes gives us a small tolerance around the
+         * frontend's one-hour refresh interval while still
+         * preventing accidental repeat notifications.
+         */
+        private static readonly TimeSpan
+            WeatherNotificationCooldown =
+                TimeSpan.FromMinutes(
+                    55
+                );
+
         private readonly IWeatherService
             _weatherService;
 
@@ -160,10 +173,6 @@ namespace PersonalProject.Controllers
             var userId =
                 GetCurrentUserId();
 
-            /*
-             * General health/weather updates now respect the
-             * saved HealthUpdates preference.
-             */
             var patientSettings =
                 await _context.Patients
                     .AsNoTracking()
@@ -213,6 +222,42 @@ namespace PersonalProject.Controllers
                 );
             }
 
+            var duplicateCutoff =
+                DateTime.UtcNow -
+                WeatherNotificationCooldown;
+
+            /*
+             * FAST DUPLICATE CHECK
+             * -------------------------------------------------
+             *
+             * Do this BEFORE making OpenWeather requests.
+             *
+             * WeatherChip can legitimately call this endpoint
+             * more than once because of page mounting,
+             * reconnection or browser lifecycle events.
+             *
+             * If an hourly notification already exists there is
+             * no reason to make another external weather request.
+             */
+            if (
+                await HasRecentWeatherNotificationAsync(
+                    userId,
+                    duplicateCutoff
+                )
+            )
+            {
+                return Ok(
+                    new WeatherTipResultDto
+                    {
+                        NotificationCreated =
+                            false,
+
+                        Message =
+                            null
+                    }
+                );
+            }
+
             var current =
                 await _weatherService
                     .GetCurrentForPatientAsync(
@@ -235,83 +280,214 @@ namespace PersonalProject.Controllers
                     forecast
                 );
 
-            var duplicateCutoff =
-                DateTime.UtcNow
-                    .AddMinutes(-55);
-
             /*
-             * Only one weather update is generated inside a
-             * roughly one-hour window.
+             * DATABASE-SERIALIZED INSERT
+             * -------------------------------------------------
              *
-             * This replaces the generic 12-hour suppression that
-             * previously made weather notifications appear only
-             * once for long periods.
+             * Two requests may still arrive at almost exactly the
+             * same time:
+             *
+             * Request A:
+             *   duplicate check -> false
+             *
+             * Request B:
+             *   duplicate check -> false
+             *
+             * Without serialization they could both insert.
+             *
+             * PostgreSQL advisory locking serializes the final
+             * duplicate-check + insert operation for this patient.
+             *
+             * This works across requests and across multiple
+             * application instances because the lock belongs to
+             * PostgreSQL rather than to process memory.
              */
-            var recentWeatherNotification =
-                await _context
-                    .Notifications
-                    .AsNoTracking()
-                    .AnyAsync(
-                        notification =>
-                            notification.UserId ==
-                                userId &&
-                            notification.Message
-                                .StartsWith(
-                                    "Weather update:"
-                                ) &&
-                            notification.CreatedAt >=
-                                duplicateCutoff
-                    );
-
-            if (
-                recentWeatherNotification
-            )
-            {
-                return Ok(
-                    new WeatherTipResultDto
-                    {
-                        NotificationCreated =
-                            false,
-
-                        Message =
-                            message
-                    }
+            var notificationCreated =
+                await TryCreateWeatherNotificationAsync(
+                    userId,
+                    message,
+                    duplicateCutoff
                 );
-            }
-
-            _context.Notifications.Add(
-                new Notification
-                {
-                    Id =
-                        Guid.NewGuid(),
-
-                    UserId =
-                        userId,
-
-                    Message =
-                        message,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        DateTime.UtcNow
-                }
-            );
-
-            await _context
-                .SaveChangesAsync();
 
             return Ok(
                 new WeatherTipResultDto
                 {
                     NotificationCreated =
-                        true,
+                        notificationCreated,
 
                     Message =
                         message
                 }
             );
+        }
+
+        // =====================================================
+        // DUPLICATE PROTECTION
+        // =====================================================
+
+        private Task<bool>
+            HasRecentWeatherNotificationAsync(
+                Guid userId,
+                DateTime duplicateCutoff
+            )
+        {
+            return _context
+                .Notifications
+                .AsNoTracking()
+                .AnyAsync(
+                    notification =>
+                        notification.UserId ==
+                            userId &&
+                        notification.Message
+                            .StartsWith(
+                                "Weather update:"
+                            ) &&
+                        notification.CreatedAt >=
+                            duplicateCutoff
+                );
+        }
+
+        private async Task<bool>
+            TryCreateWeatherNotificationAsync(
+                Guid userId,
+                string message,
+                DateTime duplicateCutoff
+            )
+        {
+            /*
+             * pg_advisory_lock accepts a signed 64-bit integer.
+             *
+             * Derive a stable patient-specific key from the Guid
+             * so different patients do not block one another.
+             */
+            var lockKey =
+                CreateWeatherNotificationLockKey(
+                    userId
+                );
+
+            /*
+             * Keep the EF connection open while the PostgreSQL
+             * session-level advisory lock is held.
+             *
+             * SaveChangesAsync will therefore use the same
+             * physical PostgreSQL connection.
+             */
+            await _context.Database
+                .OpenConnectionAsync();
+
+            var lockAcquired =
+                false;
+
+            try
+            {
+                await _context.Database
+                    .ExecuteSqlInterpolatedAsync(
+                        $"SELECT pg_advisory_lock({lockKey});"
+                    );
+
+                lockAcquired =
+                    true;
+
+                /*
+                 * IMPORTANT:
+                 * check again AFTER acquiring the lock.
+                 *
+                 * A competing request may have inserted while
+                 * this request was waiting.
+                 */
+                if (
+                    await HasRecentWeatherNotificationAsync(
+                        userId,
+                        duplicateCutoff
+                    )
+                )
+                {
+                    return false;
+                }
+
+                _context
+                    .Notifications
+                    .Add(
+                        new Notification
+                        {
+                            Id =
+                                Guid.NewGuid(),
+
+                            UserId =
+                                userId,
+
+                            Message =
+                                message,
+
+                            IsRead =
+                                false,
+
+                            CreatedAt =
+                                DateTime.UtcNow
+                        }
+                    );
+
+                await _context
+                    .SaveChangesAsync();
+
+                return true;
+            }
+            finally
+            {
+                if (
+                    lockAcquired
+                )
+                {
+                    try
+                    {
+                        await _context.Database
+                            .ExecuteSqlInterpolatedAsync(
+                                $"SELECT pg_advisory_unlock({lockKey});"
+                            );
+                    }
+                    catch
+                    {
+                        /*
+                         * If the connection was lost PostgreSQL
+                         * automatically releases session advisory
+                         * locks when that session terminates.
+                         *
+                         * Do not hide the original request result
+                         * because cleanup itself failed.
+                         */
+                    }
+                }
+
+                await _context.Database
+                    .CloseConnectionAsync();
+            }
+        }
+
+        private static long
+            CreateWeatherNotificationLockKey(
+                Guid userId
+            )
+        {
+            var bytes =
+                userId.ToByteArray();
+
+            /*
+             * Mix both halves of the Guid.
+             *
+             * The constant simply namespaces this advisory key
+             * away from other future uses of PostgreSQL advisory
+             * locking inside PhilaLink.
+             */
+            return
+                BitConverter.ToInt64(
+                    bytes,
+                    0
+                ) ^
+                BitConverter.ToInt64(
+                    bytes,
+                    8
+                ) ^
+                0x57454154484552L;
         }
 
         // =====================================================
