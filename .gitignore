@@ -1,11 +1,6 @@
 # Visual Studio
 .vs/
 
-# Configuration secrets
-appsettings.json
-appsettings.Development.json
-appsettings.Production.json
-
 # Build output
 bin/
 obj/
@@ -16,3 +11,30 @@ obj/
 
 # Logs
 *.log
+
+# Local/runtime environment files
+.env
+.env.*
+secrets.json
+
+# Runtime application configuration
+appsettings*.json
+
+# Safe documentation/example configuration
+!appsettings.example.json
+
+# Certificates / private keys
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Test output
+TestResults/
+coverage/
+coverage.*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
