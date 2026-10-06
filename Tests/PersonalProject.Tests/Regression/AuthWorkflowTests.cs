@@ -59,6 +59,10 @@ namespace PersonalProject.Tests.Regression
                 user.Email
             );
 
+            Assert.True(
+                user.IsActive
+            );
+
             Assert.False(
                 user.IsVerified
             );
@@ -266,6 +270,69 @@ namespace PersonalProject.Tests.Regression
             Assert.Equal(
                 RoleNames.Patient,
                 result.User.Role
+            );
+        }
+
+        [Fact]
+        public async Task
+            InactiveVerifiedPatientCannotLogin()
+        {
+            await using var db =
+                TestDb.Create();
+
+            var service =
+                CreateService(
+                    db
+                );
+
+            var dto =
+                Registration(
+                    "Inactive Patient",
+                    "9203035000000",
+                    "0710000003",
+                    "inactive@philalink.test"
+                );
+
+            await service.RegisterAsync(
+                dto
+            );
+
+            var user =
+                await db.Users
+                    .SingleAsync();
+
+            user.IsVerified =
+                true;
+
+            user.VerifiedAt =
+                DateTime.UtcNow;
+
+            user.IsActive =
+                false;
+
+            await db.SaveChangesAsync();
+
+            var exception =
+                await Assert.ThrowsAsync<
+                    UnauthorizedAccessException
+                >(
+                    () =>
+                        service.LoginAsync(
+                            new LoginDto
+                            {
+                                IdNumber =
+                                    dto.IdNumber,
+
+                                Password =
+                                    Password
+                            }
+                        )
+                );
+
+            Assert.Contains(
+                "inactive",
+                exception.Message
+                    .ToLowerInvariant()
             );
         }
 
