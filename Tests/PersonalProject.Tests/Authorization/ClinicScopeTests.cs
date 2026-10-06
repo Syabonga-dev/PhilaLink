@@ -565,53 +565,58 @@ namespace PersonalProject.Tests.Authorization
         }
 
         [Fact]
-        public async Task
-            UnassignedClinicAdminCannotUseClinicScope()
-        {
-            await using var db =
-                TestDb.Create();
+public async Task
+    UnassignedClinicAdminCannotUseClinicScope()
+{
+    await using var db =
+        TestDb.Create();
 
-            var adminUser =
-                TestDataFactory.User(
-                    RoleNames.ClinicAdmin,
-                    "Unassigned Admin",
-                    "114"
-                );
+    var adminUser =
+        TestDataFactory.User(
+            RoleNames.ClinicAdmin,
+            "Unassigned Admin",
+            "114"
+        );
 
-            var admin =
-                TestDataFactory.ClinicAdmin(
-                    adminUser,
-                    null
-                );
+    var admin =
+        TestDataFactory.ClinicAdmin(
+            adminUser,
+            null
+        );
 
-            db.AddRange(
-                adminUser,
-                admin
-            );
+    db.AddRange(
+        adminUser,
+        admin
+    );
 
-            await db.SaveChangesAsync();
+    await db.SaveChangesAsync();
 
-            var service =
-                new AdminService(
-                    db,
-                    new ConfigurationBuilder()
-                        .Build(),
-                    NullLogger<
-                        AdminService
-                    >.Instance
-                );
+    var service =
+        new AdminService(
+            db,
+            new ConfigurationBuilder()
+                .Build(),
+            NullLogger<
+                AdminService
+            >.Instance
+        );
 
-            await Assert.ThrowsAsync<
-                InvalidOperationException
-            >(
-                () =>
-                    service
-                        .GetClinicOverviewAsync(
-                            adminUser.Id
-                        )
-            );
-        }
+    var exception =
+        await Assert.ThrowsAsync<
+            UnauthorizedAccessException
+        >(
+            () =>
+                service
+                    .GetClinicOverviewAsync(
+                        adminUser.Id
+                    )
+        );
 
+    Assert.Equal(
+        "ClinicAdmin account required.",
+        exception.Message
+    );
+}
         [Fact]
         public async Task
             SuperAdminCannotRegisterNurse()
