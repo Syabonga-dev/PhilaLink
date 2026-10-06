@@ -32,9 +32,13 @@
       Version="10.0.10"
     />
 
+    <!--
+      Keep all EF Core packages on the same 10.0.0 line as
+      Npgsql.EntityFrameworkCore.PostgreSQL.
+    -->
     <PackageReference
       Include="Microsoft.EntityFrameworkCore.Design"
-      Version="10.0.10"
+      Version="10.0.0"
     >
       <IncludeAssets>
         runtime;
@@ -52,7 +56,7 @@
 
     <PackageReference
       Include="Microsoft.EntityFrameworkCore.Tools"
-      Version="10.0.10"
+      Version="10.0.0"
     >
       <IncludeAssets>
         runtime;
