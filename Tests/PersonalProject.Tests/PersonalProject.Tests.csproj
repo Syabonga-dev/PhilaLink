@@ -13,10 +13,13 @@
     <!--
       Fast unit/regression tests continue to use EF Core
       InMemory through TestDb.
+
+      Keep this on the same EF Core version as the PostgreSQL
+      provider used by the production API and integration tests.
     -->
     <PackageReference
       Include="Microsoft.EntityFrameworkCore.InMemory"
-      Version="10.0.10"
+      Version="10.0.0"
     />
 
     <!--
