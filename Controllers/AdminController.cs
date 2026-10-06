@@ -352,10 +352,19 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
-        // ACCOUNTS
+        // SYSTEM ACCOUNT DIRECTORY — SUPERADMIN ONLY
         // =====================================================
 
+        /*
+         * ClinicAdmin account/staff visibility is handled by the
+         * dedicated /api/clinic-admin/staff API.
+         *
+         * The legacy system-wide account directory is therefore
+         * restricted to SuperAdmin so ClinicAdmin cannot query
+         * system account data through this older endpoint.
+         */
         [HttpGet("accounts")]
+        [Authorize(Policy = "SuperAdminOnly")]
         public async Task<IActionResult>
             ListAccounts(
                 [FromQuery]
