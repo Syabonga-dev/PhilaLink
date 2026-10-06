@@ -1,4 +1,4 @@
-﻿FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 WORKDIR /src
 
@@ -18,6 +18,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 
 WORKDIR /app
 
+ENV ASPNETCORE_ENVIRONMENT=Production
+
 COPY --from=build /app/publish .
+
+EXPOSE 10000
+
+# The official .NET runtime image provides APP_UID.
+# Do not run the production API as root.
+USER $APP_UID
 
 CMD ["sh", "-c", "ASPNETCORE_URLS=http://0.0.0.0:${PORT:-10000} dotnet PersonalProject.dll"]
