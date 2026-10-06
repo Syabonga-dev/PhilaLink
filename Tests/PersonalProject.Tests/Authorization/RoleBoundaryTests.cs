@@ -134,6 +134,23 @@ namespace PersonalProject.Tests.Authorization
             );
         }
 
+        [Fact]
+        public void
+            AccountDirectoryRequiresSuperAdminPolicy()
+        {
+            var attribute =
+                GetMethodAuthorize<
+                    AdminController
+                >(
+                    "ListAccounts"
+                );
+
+            Assert.Equal(
+                "SuperAdminOnly",
+                attribute.Policy
+            );
+        }
+
         private static AuthorizeAttribute
             GetControllerAuthorize<
                 TController
