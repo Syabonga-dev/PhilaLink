@@ -21,6 +21,7 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+
   PHILALINK_TEST_POSTGRES: >-
     Host=127.0.0.1;
     Port=5432;
@@ -60,6 +61,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Reject tracked runtime secret files
+        shell: bash
+        run: |
+          tracked_secret_files="$(
+            git ls-files |
+            grep -E '(^|/)(\.env(\..*)?|appsettings(\.[^/]*)?\.json)$|\.(pfx|p12|pem|key)$' |
+            grep -v 'appsettings\.example\.json' || true
+          )"
+
+          if [ -n "$tracked_secret_files" ]; then
+            echo "Runtime secret/configuration files must not be committed:"
+            echo "$tracked_secret_files"
+            exit 1
+          fi
+
+          echo "No tracked runtime secret files detected."
+
       - name: Install .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -68,8 +86,21 @@ jobs:
       - name: Show .NET information
         run: dotnet --info
 
-      - name: Restore solution
-        run: dotnet restore PersonalProject.slnx
+      - name: Restore solution with NuGet security audit
+        run: >
+          dotnet restore
+          PersonalProject.slnx
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:WarningsAsErrors="NU1901;NU1902;NU1903;NU1904"
+
+      - name: Report vulnerable NuGet dependencies
+        run: >
+          dotnet list
+          PersonalProject.slnx
+          package
+          --vulnerable
+          --include-transitive
 
       - name: Build solution
         run: >
