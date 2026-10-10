@@ -9,18 +9,31 @@ namespace PersonalProject.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public class AuthController :
+        ControllerBase
     {
-        private const string GoogleStateCookie =
-            "philalink_google_oauth_state";
+        private const string
+            GoogleStateCookie =
+                "philalink_google_oauth_state";
 
-        private readonly IAuthService _authService;
-        private readonly IOtpVerificationService _otpService;
-        private readonly IConfiguration _config;
-        private readonly ILogger<AuthController> _logger;
+        private readonly IAuthService
+            _authService;
+
+        private readonly ISessionService
+            _sessionService;
+
+        private readonly IOtpVerificationService
+            _otpService;
+
+        private readonly IConfiguration
+            _config;
+
+        private readonly ILogger<AuthController>
+            _logger;
 
         public AuthController(
             IAuthService authService,
+            ISessionService sessionService,
             IOtpVerificationService otpService,
             IConfiguration config,
             ILogger<AuthController> logger
@@ -28,6 +41,9 @@ namespace PersonalProject.Controllers
         {
             _authService =
                 authService;
+
+            _sessionService =
+                sessionService;
 
             _otpService =
                 otpService;
@@ -44,16 +60,18 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(
-            RegisterDto dto
-        )
+        public async Task<IActionResult>
+            Register(
+                RegisterDto dto
+            )
         {
             try
             {
                 var result =
-                    await _authService.RegisterAsync(
-                        dto
-                    );
+                    await _authService
+                        .RegisterAsync(
+                            dto
+                        );
 
                 return Ok(
                     result
@@ -78,16 +96,18 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(
-            LoginDto dto
-        )
+        public async Task<IActionResult>
+            Login(
+                LoginDto dto
+            )
         {
             try
             {
                 var result =
-                    await _authService.LoginAsync(
-                        dto
-                    );
+                    await _authService
+                        .LoginAsync(
+                            dto
+                        );
 
                 return Ok(
                     result
@@ -113,7 +133,8 @@ namespace PersonalProject.Controllers
 
         [HttpGet("google-login")]
         [AllowAnonymous]
-        public IActionResult GoogleLogin()
+        public IActionResult
+            GoogleLogin()
         {
             try
             {
@@ -141,7 +162,9 @@ namespace PersonalProject.Controllers
                             true,
 
                         MaxAge =
-                            TimeSpan.FromMinutes(10),
+                            TimeSpan.FromMinutes(
+                                10
+                            ),
 
                         Path =
                             "/"
@@ -163,9 +186,8 @@ namespace PersonalProject.Controllers
             )
             {
                 /*
-                 * Keep configuration and infrastructure details
-                 * in server-side logs only. They must never be
-                 * returned to the browser.
+                 * Keep configuration/infrastructure details
+                 * in server-side logs only.
                  */
                 _logger.LogError(
                     ex,
@@ -231,10 +253,12 @@ namespace PersonalProject.Controllers
             if (
                 string.IsNullOrWhiteSpace(
                     state
-                ) ||
+                )
+                ||
                 string.IsNullOrWhiteSpace(
                     storedState
-                ) ||
+                )
+                ||
                 !string.Equals(
                     state,
                     storedState,
@@ -286,11 +310,6 @@ namespace PersonalProject.Controllers
                 InvalidOperationException ex
             )
             {
-                /*
-                 * The underlying OAuth/configuration error is
-                 * useful to us in Render logs but should not be
-                 * exposed to the frontend.
-                 */
                 _logger.LogError(
                     ex,
                     "Google OAuth callback failed."
@@ -308,14 +327,15 @@ namespace PersonalProject.Controllers
 
         /*
          * Temporary-password accounts may call /me so the
-         * client can inspect MustChangePassword.
+         * frontend can inspect MustChangePassword.
          */
         [HttpGet("me")]
         [Authorize(
             Policy =
                 "PasswordChangeAllowed"
         )]
-        public async Task<IActionResult> Me()
+        public async Task<IActionResult>
+            Me()
         {
             try
             {
@@ -339,8 +359,8 @@ namespace PersonalProject.Controllers
         // =====================================================
 
         /*
-         * This endpoint intentionally does not require
-         * MustChangePassword = false.
+         * This endpoint intentionally permits users whose
+         * MustChangePassword flag is still true.
          */
         [HttpPost("change-password")]
         [Authorize(
@@ -388,6 +408,47 @@ namespace PersonalProject.Controllers
                             ex.Message
                     }
                 );
+            }
+        }
+
+        // =====================================================
+        // LOGOUT / SESSION REVOCATION
+        // =====================================================
+
+        /*
+         * This is no longer a browser-only logout.
+         *
+         * Incrementing TokenVersion invalidates every currently
+         * issued PhilaLink JWT belonging to this account.
+         */
+        [HttpPost("logout")]
+        [Authorize(
+            Policy =
+                "PasswordChangeAllowed"
+        )]
+        public async Task<IActionResult>
+            Logout()
+        {
+            try
+            {
+                await _sessionService
+                    .RevokeAllSessionsAsync(
+                        GetCurrentUserId()
+                    );
+
+                return Ok(
+                    new
+                    {
+                        message =
+                            "Logged out successfully."
+                    }
+                );
+            }
+            catch (
+                UnauthorizedAccessException
+            )
+            {
+                return Unauthorized();
             }
         }
 
@@ -473,7 +534,8 @@ namespace PersonalProject.Controllers
         // GOOGLE OAUTH HELPERS
         // =====================================================
 
-        private string GetFrontendBaseUrl()
+        private string
+            GetFrontendBaseUrl()
         {
             var frontendBaseUrl =
                 _config[
@@ -539,17 +601,20 @@ namespace PersonalProject.Controllers
         // CURRENT USER ID
         // =====================================================
 
-        private Guid GetCurrentUserId()
+        private Guid
+            GetCurrentUserId()
         {
             var claim =
                 User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
+                    ClaimTypes
+                        .NameIdentifier
                 );
 
             if (
                 string.IsNullOrWhiteSpace(
                     claim
-                ) ||
+                )
+                ||
                 !Guid.TryParse(
                     claim,
                     out var userId
