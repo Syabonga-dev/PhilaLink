@@ -199,6 +199,8 @@ namespace PersonalProject.Controllers
                     dto.NewPassword
                 );
 
+            user.ClearLoginAbuseState();
+
             user.MustChangePassword =
                 false;
 

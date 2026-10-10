@@ -38,6 +38,19 @@ namespace PersonalProject.Models.Entities
          */
         public bool MustChangePassword { get; set; }
 
+        public int FailedLoginAttempts { get; set; }
+
+        public DateTime? LastFailedLoginAtUtc { get; set; }
+
+        public DateTime? LockoutEndUtc { get; set; }
+
+        public void ClearLoginAbuseState()
+        {
+            FailedLoginAttempts = 0;
+            LastFailedLoginAtUtc = null;
+            LockoutEndUtc = null;
+        }
+
         /*
          * Security version embedded into every PhilaLink JWT.
          *

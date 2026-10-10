@@ -5,6 +5,7 @@ namespace PersonalProject.Models.DTOs
     public class ForgotPasswordRequestDto
     {
         [Required]
+        [StringLength(254, MinimumLength = 1)]
         public string Identifier
         {
             get;
@@ -15,6 +16,7 @@ namespace PersonalProject.Models.DTOs
     public class ResetPasswordDto
     {
         [Required]
+        [StringLength(254, MinimumLength = 1)]
         public string Identifier
         {
             get;
@@ -34,11 +36,7 @@ namespace PersonalProject.Models.DTOs
         } = string.Empty;
 
         [Required]
-        [MinLength(
-            12,
-            ErrorMessage =
-                "Password must contain at least 12 characters."
-        )]
+        [StringLength(128, MinimumLength = 12)]
         public string NewPassword
         {
             get;
@@ -46,6 +44,7 @@ namespace PersonalProject.Models.DTOs
         } = string.Empty;
 
         [Required]
+        [StringLength(128, MinimumLength = 12)]
         public string ConfirmNewPassword
         {
             get;

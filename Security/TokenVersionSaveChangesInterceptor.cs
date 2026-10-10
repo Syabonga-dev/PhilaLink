@@ -93,6 +93,22 @@ namespace PersonalProject.Security
                 }
 
                 if (
+                    entry.Property(
+                        nameof(
+                            User.PasswordHash
+                        )
+                    ).IsModified
+                )
+                {
+                    entry.Entity
+                        .ClearLoginAbuseState();
+
+                    MarkLoginAbuseStateModified(
+                        entry
+                    );
+                }
+
+                if (
                     !HasSecuritySensitiveChange(
                         entry
                     )
@@ -111,6 +127,30 @@ namespace PersonalProject.Security
                         )
                     );
             }
+        }
+
+        private static void
+            MarkLoginAbuseStateModified(
+                EntityEntry<User> entry
+            )
+        {
+            entry.Property(
+                nameof(
+                    User.FailedLoginAttempts
+                )
+            ).IsModified = true;
+
+            entry.Property(
+                nameof(
+                    User.LastFailedLoginAtUtc
+                )
+            ).IsModified = true;
+
+            entry.Property(
+                nameof(
+                    User.LockoutEndUtc
+                )
+            ).IsModified = true;
         }
 
         private static bool

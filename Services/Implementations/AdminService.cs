@@ -659,6 +659,8 @@ namespace PersonalProject.Services.Implementations
                         temporaryPassword
                     );
 
+            target.ClearLoginAbuseState();
+
             target.MustChangePassword =
                 true;
 

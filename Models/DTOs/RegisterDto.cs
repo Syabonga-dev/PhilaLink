@@ -5,6 +5,7 @@ namespace PersonalProject.Models.DTOs
     public class RegisterDto
     {
         [Required]
+        [StringLength(120)]
         public string FullName
         {
             get;
@@ -12,6 +13,7 @@ namespace PersonalProject.Models.DTOs
         } = string.Empty;
 
         [Required]
+        [StringLength(32, MinimumLength = 1)]
         public string IdNumber
         {
             get;
@@ -19,6 +21,7 @@ namespace PersonalProject.Models.DTOs
         } = string.Empty;
 
         [Required]
+        [StringLength(32, MinimumLength = 1)]
         public string PhoneNumber
         {
             get;
@@ -27,6 +30,7 @@ namespace PersonalProject.Models.DTOs
 
         [Required]
         [EmailAddress]
+        [StringLength(254)]
         public string Email
         {
             get;
@@ -34,7 +38,7 @@ namespace PersonalProject.Models.DTOs
         } = string.Empty;
 
         [Required]
-        [MinLength(12)]
+        [StringLength(128, MinimumLength = 12)]
         public string Password
         {
             get;

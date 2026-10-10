@@ -904,6 +904,8 @@ namespace PersonalProject.Services.Implementations
                     dto.NewPassword
                 );
 
+            user.ClearLoginAbuseState();
+
             user.MustChangePassword =
                 false;
 
