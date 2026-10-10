@@ -283,6 +283,15 @@ namespace PersonalProject.Data
             modelBuilder.Entity<Medication>()
                 .HasIndex(m => m.PatientId);
 
+            modelBuilder.Entity<Medication>()
+                .HasIndex(
+                    m => new
+                    {
+                        m.PatientId,
+                        m.IsActive
+                    }
+                );
+
             // =================================================
             // MEDICATION -> SCHEDULES
             // =================================================
@@ -354,6 +363,15 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<SymptomAssessment>()
                 .HasIndex(sa => sa.PatientId);
+
+            modelBuilder.Entity<SymptomAssessment>()
+                .HasIndex(
+                    sa => new
+                    {
+                        sa.PatientId,
+                        sa.CreatedAt
+                    }
+                );
 
             // =================================================
             // PATIENT -> PROXY LINKS
@@ -449,6 +467,16 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<MedicationCollection>()
                 .HasIndex(c => c.PatientId);
+
+            modelBuilder.Entity<MedicationCollection>()
+                .HasIndex(
+                    c => new
+                    {
+                        c.PatientId,
+                        c.Status,
+                        c.CollectedAt
+                    }
+                );
 
             // =================================================
             // MEDICATION COLLECTION -> CLINIC
@@ -570,6 +598,25 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<Notification>()
                 .HasIndex(n => n.UserId);
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(
+                    n => new
+                    {
+                        n.UserId,
+                        n.CreatedAt
+                    }
+                );
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(
+                    n => new
+                    {
+                        n.UserId,
+                        n.IsRead,
+                        n.CreatedAt
+                    }
+                );
 
             // =================================================
             // USER -> OTP
