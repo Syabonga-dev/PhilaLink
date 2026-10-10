@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PersonalProject.Data;
+using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Services.Interfaces;
 using System.Security.Claims;
@@ -16,6 +19,10 @@ namespace PersonalProject.Controllers
             GoogleStateCookie =
                 "philalink_google_oauth_state";
 
+        private const string
+            GenericVerificationRequestMessage =
+                "If this verification request is valid, a verification code has been sent.";
+
         private readonly IAuthService
             _authService;
 
@@ -24,6 +31,9 @@ namespace PersonalProject.Controllers
 
         private readonly IOtpVerificationService
             _otpService;
+
+        private readonly PhilaLinkDbContext
+            _context;
 
         private readonly IConfiguration
             _config;
@@ -35,6 +45,7 @@ namespace PersonalProject.Controllers
             IAuthService authService,
             ISessionService sessionService,
             IOtpVerificationService otpService,
+            PhilaLinkDbContext context,
             IConfiguration config,
             ILogger<AuthController> logger
         )
@@ -47,6 +58,9 @@ namespace PersonalProject.Controllers
 
             _otpService =
                 otpService;
+
+            _context =
+                context;
 
             _config =
                 config;
@@ -462,37 +476,46 @@ namespace PersonalProject.Controllers
                 Guid userId
             )
         {
-            try
+            var eligiblePatient =
+                await _context.Users
+                    .AsNoTracking()
+                    .AnyAsync(
+                        user =>
+                            user.Id == userId &&
+                            user.IsActive &&
+                            !user.IsVerified &&
+                            user.Role == RoleNames.Patient
+                    );
+
+            if (eligiblePatient)
             {
-                var expiresAt =
+                try
+                {
                     await _otpService
                         .GenerateAsync(
                             userId,
                             "AccountVerification"
                         );
-
-                return Ok(
-                    new
-                    {
-                        message =
-                            "Verification code sent.",
-
-                        expiresAt
-                    }
-                );
+                }
+                catch (
+                    InvalidOperationException ex
+                )
+                {
+                    _logger.LogInformation(
+                        ex,
+                        "Account verification resend was not completed for user {UserId}.",
+                        userId
+                    );
+                }
             }
-            catch (
-                InvalidOperationException ex
-            )
-            {
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            ex.Message
-                    }
-                );
-            }
+
+            return Ok(
+                new
+                {
+                    message =
+                        GenericVerificationRequestMessage
+                }
+            );
         }
 
         [HttpPost("otp/verify")]

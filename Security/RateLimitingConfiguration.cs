@@ -63,9 +63,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/login"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"login:{clientIp}",
                                         10,
                                         TimeSpan.FromMinutes(
@@ -77,9 +81,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/register"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"register:{clientIp}",
                                         5,
                                         TimeSpan.FromMinutes(
@@ -91,9 +99,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/otp/generate"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"otp-generate:{clientIp}",
                                         5,
                                         TimeSpan.FromMinutes(
@@ -105,9 +117,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/otp/verify"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"otp-verify:{clientIp}",
                                         15,
                                         TimeSpan.FromMinutes(
@@ -119,9 +135,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/password-reset/request"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"password-reset-request:{clientIp}",
                                         5,
                                         TimeSpan.FromMinutes(
@@ -133,9 +153,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/password-reset/reset"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"password-reset:{clientIp}",
                                         10,
                                         TimeSpan.FromMinutes(
@@ -147,9 +171,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/change-password"
+                                    &&
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"change-password:{identity}",
                                         10,
                                         TimeSpan.FromMinutes(
@@ -161,9 +189,13 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/google-login"
+                                    &&
+                                    HttpMethods.IsGet(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"google-login:{clientIp}",
                                         20,
                                         TimeSpan.FromMinutes(
@@ -175,13 +207,68 @@ namespace PersonalProject.Security
                                 if (
                                     path ==
                                     "/api/auth/google-callback"
+                                    &&
+                                    HttpMethods.IsGet(
+                                        httpContext.Request.Method
+                                    )
                                 )
                                 {
-                                    return Fixed(
+                                    return Sliding(
                                         $"google-callback:{clientIp}",
                                         60,
                                         TimeSpan.FromMinutes(
                                             5
+                                        )
+                                    );
+                                }
+
+                                if (
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
+                                    &&
+                                    (
+                                        path ==
+                                            "/api/admin/clinic-admins"
+                                        ||
+                                        path ==
+                                            "/api/admin/nurses"
+                                        ||
+                                        path ==
+                                            "/api/admin/proxies"
+                                    )
+                                )
+                                {
+                                    return Sliding(
+                                        $"staff-create:{identity}",
+                                        20,
+                                        TimeSpan.FromMinutes(
+                                            10
+                                        )
+                                    );
+                                }
+
+                                if (
+                                    HttpMethods.IsPost(
+                                        httpContext.Request.Method
+                                    )
+                                    &&
+                                    path.StartsWith(
+                                        "/api/admin/accounts/",
+                                        StringComparison.Ordinal
+                                    )
+                                    &&
+                                    path.EndsWith(
+                                        "/resend-invitation",
+                                        StringComparison.Ordinal
+                                    )
+                                )
+                                {
+                                    return Sliding(
+                                        $"staff-invitation:{identity}",
+                                        5,
+                                        TimeSpan.FromMinutes(
+                                            10
                                         )
                                     );
                                 }
@@ -316,6 +403,38 @@ namespace PersonalProject.Security
                                 window,
 
                             QueueLimit = 0,
+
+                            AutoReplenishment =
+                                true
+                        }
+                );
+        }
+
+        private static RateLimitPartition<
+            string
+        > Sliding(
+            string partitionKey,
+            int permitLimit,
+            TimeSpan window
+        )
+        {
+            return RateLimitPartition
+                .GetSlidingWindowLimiter(
+                    partitionKey,
+                    _ =>
+                        new SlidingWindowRateLimiterOptions
+                        {
+                            PermitLimit =
+                                permitLimit,
+
+                            Window =
+                                window,
+
+                            SegmentsPerWindow =
+                                6,
+
+                            QueueLimit =
+                                0,
 
                             AutoReplenishment =
                                 true

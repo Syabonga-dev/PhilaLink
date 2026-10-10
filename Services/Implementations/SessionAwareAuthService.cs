@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PersonalProject.Data;
+using PersonalProject.Models.Constants;
 using PersonalProject.Models.DTOs;
 using PersonalProject.Models.Entities;
 using PersonalProject.Services.Interfaces;
@@ -21,6 +22,19 @@ namespace PersonalProject.Services.Implementations
     public class SessionAwareAuthService :
         IAuthService
     {
+        private const int MaxFailedLoginAttempts = 5;
+
+        private static readonly TimeSpan FailedLoginAttemptWindow =
+            TimeSpan.FromMinutes(15);
+
+        private static readonly TimeSpan LoginLockoutDuration =
+            TimeSpan.FromMinutes(15);
+
+        private static readonly string DummyPasswordHash =
+            BCrypt.Net.BCrypt.HashPassword(
+                "PhilaLink-Dummy-Password-Only!2026"
+            );
+
         private readonly AuthService
             _inner;
 
@@ -69,15 +83,112 @@ namespace PersonalProject.Services.Implementations
                 LoginDto dto
             )
         {
-            var response =
-                await _inner.LoginAsync(
-                    dto
+            var idNumber = dto.IdNumber.Trim();
+            var user = await _context.Users.FirstOrDefaultAsync(
+                item => item.IdNumber == idNumber
+            );
+
+            var passwordValid = BCrypt.Net.BCrypt.Verify(
+                dto.Password,
+                user?.PasswordHash ?? DummyPasswordHash
+            );
+
+            var now = DateTime.UtcNow;
+
+            if (user == null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Invalid ID number or password."
                 );
+            }
+
+            if (!passwordValid)
+            {
+                await RecordFailedLoginAsync(user, now);
+
+                throw new UnauthorizedAccessException(
+                    "Invalid ID number or password."
+                );
+            }
+
+            if (user.LockoutEndUtc > now)
+            {
+                throw new UnauthorizedAccessException(
+                    "Too many failed sign-in attempts. Please wait before trying again or reset your password."
+                );
+            }
+
+            if (user.FailedLoginAttempts != 0 ||
+                user.LastFailedLoginAtUtc.HasValue ||
+                user.LockoutEndUtc.HasValue)
+            {
+                user.ClearLoginAbuseState();
+                await _context.SaveChangesAsync();
+            }
+
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException(
+                    "This account is inactive. Contact an administrator."
+                );
+            }
+
+            if (user.Role == RoleNames.Patient && !user.IsVerified)
+            {
+                throw new UnauthorizedAccessException(
+                    "Account verification is required before login."
+                );
+            }
+
+            if (!RoleNames.IsValid(user.Role))
+            {
+                throw new UnauthorizedAccessException(
+                    "This account has an unsupported role. Contact an administrator."
+                );
+            }
 
             return await
                 ReplaceTokenAsync(
-                    response
+                    new LoginResponseDto
+                    {
+                        User = CreateUserResponse(user)
+                    }
                 );
+        }
+
+        private async Task RecordFailedLoginAsync(
+            User user,
+            DateTime now
+        )
+        {
+            if (user.LockoutEndUtc > now)
+            {
+                return;
+            }
+
+            if (user.LockoutEndUtc.HasValue &&
+                user.LockoutEndUtc.Value <= now)
+            {
+                user.ClearLoginAbuseState();
+            }
+
+            if (!user.LastFailedLoginAtUtc.HasValue ||
+                now - user.LastFailedLoginAtUtc.Value >
+                    FailedLoginAttemptWindow)
+            {
+                user.FailedLoginAttempts = 0;
+            }
+
+            user.FailedLoginAttempts =
+                Math.Max(0, user.FailedLoginAttempts) + 1;
+            user.LastFailedLoginAtUtc = now;
+
+            if (user.FailedLoginAttempts >= MaxFailedLoginAttempts)
+            {
+                user.LockoutEndUtc = now.Add(LoginLockoutDuration);
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         // =====================================================
@@ -193,6 +304,22 @@ namespace PersonalProject.Services.Implementations
 
                 User =
                     response.User
+            };
+        }
+
+        private static UserResponseDto CreateUserResponse(User user)
+        {
+            return new UserResponseDto
+            {
+                Id = user.Id,
+                FullName = user.FullName,
+                IdNumber = user.IdNumber,
+                PhoneNumber = user.PhoneNumber,
+                Email = user.Email,
+                Role = user.Role,
+                IsActive = user.IsActive,
+                IsVerified = user.IsVerified,
+                MustChangePassword = user.MustChangePassword
             };
         }
 
