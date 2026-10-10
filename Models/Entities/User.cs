@@ -38,6 +38,14 @@ namespace PersonalProject.Models.Entities
          */
         public bool MustChangePassword { get; set; }
 
+        /*
+         * Security version embedded into every PhilaLink JWT.
+         *
+         * Incrementing this value invalidates every JWT that
+         * was issued with an older TokenVersion.
+         */
+        public int TokenVersion { get; set; } = 1;
+
         // =====================================================
         // AUDIT
         // =====================================================
