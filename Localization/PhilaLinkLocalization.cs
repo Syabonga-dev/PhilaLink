@@ -88,9 +88,7 @@ namespace PersonalProject.Localization
                 : DefaultLanguage;
         }
 
-        public static void AddPhilaLinkLocalization(
-            IServiceCollection services
-        )
+        public static void AddPhilaLinkLocalization(IServiceCollection services)
         {
             services.AddLocalization(
                 options =>
