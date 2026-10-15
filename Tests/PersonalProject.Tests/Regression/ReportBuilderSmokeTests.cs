@@ -10,23 +10,11 @@ namespace PersonalProject.Tests.Regression
     public class ReportBuilderSmokeTests
     {
         [Fact]
-        public void
-            CsvReportContainsClinicIdentity()
+        public void CsvReportContainsClinicIdentity()
         {
-            var report =
-                LegacyReport();
-
-            var bytes =
-                ClinicAdminReportBuilder
-                    .BuildCsv(
-                        report
-                    );
-
-            var text =
-                Encoding.UTF8
-                    .GetString(
-                        bytes
-                    );
+            var report = LegacyReport();
+            var bytes = ClinicAdminReportBuilder.BuildCsv(report);
+            var text = Encoding.UTF8.GetString(bytes);
 
             Assert.Contains(
                 "PhilaLink Clinic Operations Report",
@@ -40,61 +28,33 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            LegacyExcelReportProducesZipContainer()
+        public void LegacyExcelReportProducesZipContainer()
         {
-            var bytes =
-                ClinicAdminReportBuilder
-                    .BuildXlsx(
-                        LegacyReport()
-                    );
-
-            Assert.True(
-                bytes.Length >
-                4
+            var bytes = ClinicAdminReportBuilder.BuildXlsx(
+                LegacyReport()
             );
 
-            Assert.Equal(
-                (byte)'P',
-                bytes[0]
-            );
-
-            Assert.Equal(
-                (byte)'K',
-                bytes[1]
-            );
+            Assert.True(bytes.Length > 4);
+            Assert.Equal((byte)'P', bytes[0]);
+            Assert.Equal((byte)'K', bytes[1]);
         }
 
         [Fact]
-        public void
-            PdfReportProducesPdfDocument()
+        public void PdfReportProducesPdfDocument()
         {
-            var bytes =
-                ClinicAdminReportBuilder
-                    .BuildPdf(
-                        LegacyReport()
-                    );
-
-            Assert.True(
-                bytes.Length >
-                8
+            var bytes = ClinicAdminReportBuilder.BuildPdf(
+                LegacyReport()
             );
 
-            var header =
-                Encoding.ASCII
-                    .GetString(
-                        bytes,
-                        0,
-                        Math.Min(
-                            bytes.Length,
-                            8
-                        )
-                    );
+            Assert.True(bytes.Length > 8);
 
-            Assert.StartsWith(
-                "%PDF-",
-                header
+            var header = Encoding.ASCII.GetString(
+                bytes,
+                0,
+                Math.Min(bytes.Length, 8)
             );
+
+            Assert.StartsWith("%PDF-", header);
         }
 
         // =====================================================
@@ -102,154 +62,67 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DynamicExcelContainsRequiredWorkbookParts()
+        public void DynamicExcelContainsRequiredWorkbookParts()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            using var stream =
-                new MemoryStream(
-                    bytes
-                );
-
-            using var archive =
-                new ZipArchive(
-                    stream,
-                    ZipArchiveMode.Read
-                );
-
-            AssertEntry(
-                archive,
-                "[Content_Types].xml"
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            AssertEntry(
-                archive,
-                "_rels/.rels"
+            using var stream = new MemoryStream(bytes);
+            using var archive = new ZipArchive(
+                stream,
+                ZipArchiveMode.Read
             );
 
-            AssertEntry(
-                archive,
-                "xl/workbook.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/_rels/workbook.xml.rels"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/styles.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/worksheets/sheet1.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/worksheets/sheet2.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/worksheets/sheet3.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/worksheets/sheet4.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/worksheets/_rels/sheet1.xml.rels"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/drawings/drawing1.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/drawings/_rels/drawing1.xml.rels"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/charts/chart1.xml"
-            );
-
-            AssertEntry(
-                archive,
-                "xl/charts/chart2.xml"
-            );
+            AssertEntry(archive, "[Content_Types].xml");
+            AssertEntry(archive, "_rels/.rels");
+            AssertEntry(archive, "xl/workbook.xml");
+            AssertEntry(archive, "xl/_rels/workbook.xml.rels");
+            AssertEntry(archive, "xl/styles.xml");
+            AssertEntry(archive, "xl/worksheets/sheet1.xml");
+            AssertEntry(archive, "xl/worksheets/sheet2.xml");
+            AssertEntry(archive, "xl/worksheets/sheet3.xml");
+            AssertEntry(archive, "xl/worksheets/sheet4.xml");
+            AssertEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+            AssertEntry(archive, "xl/drawings/drawing1.xml");
+            AssertEntry(archive, "xl/drawings/_rels/drawing1.xml.rels");
+            AssertEntry(archive, "xl/charts/chart1.xml");
+            AssertEntry(archive, "xl/charts/chart2.xml");
         }
 
         [Fact]
-        public void
-            EveryGeneratedXmlPartIsWellFormed()
+        public void EveryGeneratedXmlPartIsWellFormed()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            using var stream =
-                new MemoryStream(
-                    bytes
-                );
-
-            using var archive =
-                new ZipArchive(
-                    stream,
-                    ZipArchiveMode.Read
-                );
-
-            var entries =
-                archive.Entries
-                    .Where(
-                        entry =>
-                            entry.FullName
-                                .EndsWith(
-                                    ".xml",
-                                    StringComparison.OrdinalIgnoreCase
-                                ) ||
-                            entry.FullName
-                                .EndsWith(
-                                    ".rels",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                    )
-                    .ToList();
-
-            Assert.NotEmpty(
-                entries
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            foreach (
-                var entry in entries
-            )
+            using var stream = new MemoryStream(bytes);
+            using var archive = new ZipArchive(
+                stream,
+                ZipArchiveMode.Read
+            );
+
+            var entries = archive.Entries
+                .Where(entry =>
+                    entry.FullName.EndsWith(
+                        ".xml",
+                        StringComparison.OrdinalIgnoreCase
+                    ) ||
+                    entry.FullName.EndsWith(
+                        ".rels",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                .ToList();
+
+            Assert.NotEmpty(entries);
+
+            foreach (var entry in entries)
             {
-                using var entryStream =
-                    entry.Open();
-
-                var document =
-                    XDocument.Load(
-                        entryStream
-                    );
-
-                Assert.NotNull(
-                    document.Root
-                );
+                using var entryStream = entry.Open();
+                var document = XDocument.Load(entryStream);
+                Assert.NotNull(document.Root);
             }
         }
 
@@ -258,46 +131,31 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DataSheetWritesAutoFilterBeforeMergeCells()
+        public void DataSheetWritesAutoFilterBeforeMergeCells()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var xml =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet2.xml"
-                );
-
-            var autoFilter =
-                xml.IndexOf(
-                    "<autoFilter",
-                    StringComparison.Ordinal
-                );
-
-            var mergeCells =
-                xml.IndexOf(
-                    "<mergeCells",
-                    StringComparison.Ordinal
-                );
-
-            Assert.True(
-                autoFilter >=
-                0
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.True(
-                mergeCells >=
-                0
+            var xml = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet2.xml"
             );
 
+            var autoFilter = xml.IndexOf(
+                "<autoFilter",
+                StringComparison.Ordinal
+            );
+
+            var mergeCells = xml.IndexOf(
+                "<mergeCells",
+                StringComparison.Ordinal
+            );
+
+            Assert.True(autoFilter >= 0);
+            Assert.True(mergeCells >= 0);
             Assert.True(
-                autoFilter <
-                mergeCells,
+                autoFilter < mergeCells,
                 "autoFilter must appear before mergeCells in worksheet XML."
             );
         }
@@ -307,165 +165,132 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DashboardContainsDropdownFilters()
+        public void DashboardContainsDropdownFilters()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var dashboard =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet1.xml"
-                );
-
-            Assert.Contains(
-                "<dataValidations",
-                dashboard
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
+
+            Assert.Contains("<dataValidations", dashboard);
             Assert.Contains(
                 "<formula1>FilterList1</formula1>",
                 dashboard
             );
-
             Assert.Contains(
                 "<formula1>FilterList2</formula1>",
                 dashboard
             );
 
-            var workbook =
-                ReadEntry(
-                    bytes,
-                    "xl/workbook.xml"
-                );
-
-            Assert.Contains(
-                "<definedNames>",
-                workbook
+            var workbook = ReadEntry(
+                bytes,
+                "xl/workbook.xml"
             );
 
-            Assert.Contains(
-                "FilterList1",
-                workbook
-            );
-
-            Assert.Contains(
-                "FilterList2",
-                workbook
-            );
+            Assert.Contains("<definedNames>", workbook);
+            Assert.Contains("FilterList1", workbook);
+            Assert.Contains("FilterList2", workbook);
         }
 
         [Fact]
-        public void
-            WorkbookUsesAutomaticRecalculation()
+        public void WorkbookUsesAutomaticRecalculation()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var workbook =
-                ReadEntry(
-                    bytes,
-                    "xl/workbook.xml"
-                );
-
-            Assert.Contains(
-                "calcMode=\"auto\"",
-                workbook
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "fullCalcOnLoad=\"1\"",
-                workbook
+            var workbook = ReadEntry(
+                bytes,
+                "xl/workbook.xml"
             );
 
-            Assert.Contains(
-                "forceFullCalc=\"1\"",
-                workbook
-            );
+            Assert.Contains("calcMode=\"auto\"", workbook);
+            Assert.Contains("fullCalcOnLoad=\"1\"", workbook);
+            Assert.Contains("forceFullCalc=\"1\"", workbook);
         }
 
         [Fact]
-        public void
-            CalculationSheetReferencesDashboardFilters()
+        public void CalculationSheetReferencesDashboardFilters()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var calc =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet3.xml"
-                );
-
-            Assert.Contains(
-                "Dashboard!$B$7",
-                calc
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "Dashboard!$E$7",
-                calc
+            var calc = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet3.xml"
             );
 
-            Assert.Contains(
-                "SUMIFS",
-                calc
-            );
-
-            Assert.Contains(
-                "SUMPRODUCT",
-                calc
-            );
+            Assert.Contains("Dashboard!$B$7", calc);
+            Assert.Contains("Dashboard!$E$7", calc);
+            Assert.Contains("SUMIFS", calc);
+            Assert.Contains("SUMPRODUCT", calc);
         }
 
         // =====================================================
-        // KPIs
+        // KPI SUMMARY
         // =====================================================
 
         [Fact]
-        public void
-            DashboardKpisReferenceCalculationSheet()
+        public void DashboardKpisReferenceCalculationSheet()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
 
-            var dashboard =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet1.xml"
-                );
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
 
-            Assert.Contains(
-                "<f>Calc!$K$2</f>",
-                dashboard
+            Assert.Contains("<f>Calc!$K$2</f>", dashboard);
+            Assert.Contains("<f>Calc!$K$3</f>", dashboard);
+            Assert.Contains("<f>Calc!$K$4</f>", dashboard);
+            Assert.Contains("<f>Calc!$K$5</f>", dashboard);
+        }
+
+        [Fact]
+        public void DashboardUsesFourEqualKpiCardRanges()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
+
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
+
+            Assert.Contains("mergeCell ref=\"A14:C14\"", dashboard);
+            Assert.Contains("mergeCell ref=\"D14:F14\"", dashboard);
+            Assert.Contains("mergeCell ref=\"G14:I14\"", dashboard);
+            Assert.Contains("mergeCell ref=\"J14:L14\"", dashboard);
+
+            Assert.Contains("mergeCell ref=\"A15:C16\"", dashboard);
+            Assert.Contains("mergeCell ref=\"D15:F16\"", dashboard);
+            Assert.Contains("mergeCell ref=\"G15:I16\"", dashboard);
+            Assert.Contains("mergeCell ref=\"J15:L16\"", dashboard);
+        }
+
+        [Fact]
+        public void KpiLabelStyleIsCenteredAndWrapped()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
+
+            var styles = ReadEntry(
+                bytes,
+                "xl/styles.xml"
             );
 
             Assert.Contains(
-                "<f>Calc!$K$3</f>",
-                dashboard
-            );
-
-            Assert.Contains(
-                "<f>Calc!$K$4</f>",
-                dashboard
-            );
-
-            Assert.Contains(
-                "<f>Calc!$K$5</f>",
-                dashboard
+                "horizontal=\"center\" wrapText=\"1\"",
+                styles
             );
         }
 
@@ -474,89 +299,87 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-public void
-    DashboardPreviewUsesRepairSafeScalarFormulas()
-{
-    var bytes =
-        ClinicAdminDynamicReportBuilder
-            .BuildExcel(
+        public void DashboardPreviewUsesRepairSafeScalarFormulas()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
                 DynamicInventoryReport()
             );
 
-    var dashboard =
-        ReadEntry(
-            bytes,
-            "xl/worksheets/sheet1.xml"
-        );
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
 
-    /*
-     * FILTER() is intentionally forbidden here.
-     *
-     * The report builder writes worksheet XML itself,
-     * and dynamic-array formulas require additional
-     * OOXML metadata. Writing FILTER as a normal
-     * formula caused Excel to repair sheet1.xml.
-     */
-    Assert.DoesNotContain(
-        "FILTER(Data!A5:",
-        dashboard
-    );
+            // Dynamic-array formulas remain forbidden.
+            Assert.DoesNotContain("FILTER(Data!A5:", dashboard);
+            Assert.DoesNotContain("_xlfn", dashboard);
+            Assert.DoesNotContain("t=\"array\"", dashboard);
 
-    Assert.DoesNotContain(
-        "_xlfn",
-        dashboard
-    );
+            // Preview now uses INDEX + MATCH against Calc's visible-row sequence.
+            Assert.Contains("INDEX(Data!", dashboard);
+            Assert.Contains("MATCH(", dashboard);
+            Assert.Contains("Calc!$C$2:$C$", dashboard);
+            Assert.Contains(
+                "Preview shows up to 20 matching rows.",
+                dashboard
+            );
+        }
 
-    Assert.DoesNotContain(
-        "t=\"array\"",
-        dashboard
-    );
+        [Fact]
+        public void DashboardPreviewContainsCachedInitialTextValues()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
 
-    /*
-     * The preview instead uses ordinary scalar
-     * formulas which remain live when the dashboard
-     * filter cells change.
-     */
-    Assert.Contains(
-        "INDEX(Data!",
-        dashboard
-    );
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
 
-    Assert.Contains(
-        "AGGREGATE(15,6",
-        dashboard
-    );
+            // Text formula results must carry a cached string value so the
+            // workbook does not open with an apparently empty preview.
+            Assert.Contains(
+                "t=\"str\"><f>IFERROR(INDEX(Data!",
+                dashboard
+            );
 
-    Assert.Contains(
-        "Calc!$B$2:$B$",
-        dashboard
-    );
+            Assert.Contains("<v>Metformin</v>", dashboard);
+            Assert.Contains("<v>Amlodipine</v>", dashboard);
+        }
 
-    Assert.Contains(
-        "Preview shows up to 20 matching rows.",
-        dashboard
-    );
-}
+        [Fact]
+        public void CalculationSheetContainsVisibleRowSequence()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
+
+            var calc = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet3.xml"
+            );
+
+            Assert.Contains("Match #", calc);
+            Assert.Contains("IF(B2=1,SUM($B$2:B2)", calc);
+            Assert.Contains("IF(B3=1,SUM($B$2:B3)", calc);
+        }
 
         // =====================================================
         // CHARTS
         // =====================================================
 
         [Fact]
-        public void
-            DashboardContainsDrawingRelationship()
+        public void DashboardContainsDrawingRelationship()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
+            );
 
-            var dashboard =
-                ReadEntry(
-                    bytes,
-                    "xl/worksheets/sheet1.xml"
-                );
+            var dashboard = ReadEntry(
+                bytes,
+                "xl/worksheets/sheet1.xml"
+            );
 
             Assert.Contains(
                 "<drawing r:id=\"rId1\"/>",
@@ -565,67 +388,65 @@ public void
         }
 
         [Fact]
-        public void
-            PieChartReadsDynamicCalculationRange()
+        public void PieChartReadsDynamicCalculationRange()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var chart =
-                ReadEntry(
-                    bytes,
-                    "xl/charts/chart1.xml"
-                );
-
-            Assert.Contains(
-                "Calc!$D$2:$D$",
-                chart
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "Calc!$E$2:$E$",
-                chart
+            var chart = ReadEntry(
+                bytes,
+                "xl/charts/chart1.xml"
             );
 
-            Assert.Contains(
-                "<c:pieChart>",
-                chart
-            );
+            Assert.Contains("Calc!$D$2:$D$", chart);
+            Assert.Contains("Calc!$E$2:$E$", chart);
+            Assert.Contains("<c:pieChart>", chart);
         }
 
         [Fact]
-        public void
-            BarChartReadsDynamicCalculationRange()
+        public void BarChartReadsDynamicCalculationRange()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var chart =
-                ReadEntry(
-                    bytes,
-                    "xl/charts/chart2.xml"
-                );
-
-            Assert.Contains(
-                "Calc!$G$2:$G$",
-                chart
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "Calc!$H$2:$H$",
-                chart
+            var chart = ReadEntry(
+                bytes,
+                "xl/charts/chart2.xml"
             );
 
-            Assert.Contains(
-                "<c:barChart>",
-                chart
+            Assert.Contains("Calc!$G$2:$G$", chart);
+            Assert.Contains("Calc!$H$2:$H$", chart);
+            Assert.Contains("<c:barChart>", chart);
+        }
+
+        [Fact]
+        public void DashboardChartsUseDistinctCategoryColours()
+        {
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
+
+            var pie = ReadEntry(
+                bytes,
+                "xl/charts/chart1.xml"
+            );
+
+            var bar = ReadEntry(
+                bytes,
+                "xl/charts/chart2.xml"
+            );
+
+            Assert.Contains("<c:dPt>", pie);
+            Assert.Contains("0F766E", pie);
+            Assert.Contains("2563EB", pie);
+            Assert.Contains("7C3AED", pie);
+
+            Assert.Contains("<c:dPt>", bar);
+            Assert.Contains("2563EB", bar);
+            Assert.Contains("D97706", bar);
+            Assert.Contains("7C3AED", bar);
         }
 
         // =====================================================
@@ -633,36 +454,23 @@ public void
         // =====================================================
 
         [Fact]
-        public void
-            CalcAndListsSheetsAreHidden()
+        public void CalcAndListsSheetsAreHidden()
         {
-            var bytes =
-                ClinicAdminDynamicReportBuilder
-                    .BuildExcel(
-                        DynamicInventoryReport()
-                    );
-
-            var workbook =
-                ReadEntry(
-                    bytes,
-                    "xl/workbook.xml"
-                );
-
-            Assert.Contains(
-                "name=\"Dashboard\"",
-                workbook
+            var bytes = ClinicAdminDynamicReportBuilder.BuildExcel(
+                DynamicInventoryReport()
             );
 
-            Assert.Contains(
-                "name=\"Data\"",
-                workbook
+            var workbook = ReadEntry(
+                bytes,
+                "xl/workbook.xml"
             );
 
+            Assert.Contains("name=\"Dashboard\"", workbook);
+            Assert.Contains("name=\"Data\"", workbook);
             Assert.Contains(
                 "name=\"Calc\" sheetId=\"3\" state=\"veryHidden\"",
                 workbook
             );
-
             Assert.Contains(
                 "name=\"Lists\" sheetId=\"4\" state=\"veryHidden\"",
                 workbook
@@ -678,11 +486,7 @@ public void
             string path
         )
         {
-            Assert.NotNull(
-                archive.GetEntry(
-                    path
-                )
-            );
+            Assert.NotNull(archive.GetEntry(path));
         }
 
         private static string ReadEntry(
@@ -690,468 +494,214 @@ public void
             string path
         )
         {
-            using var stream =
-                new MemoryStream(
-                    workbook
-                );
-
-            using var archive =
-                new ZipArchive(
-                    stream,
-                    ZipArchiveMode.Read
-                );
-
-            var entry =
-                archive.GetEntry(
-                    path
-                );
-
-            Assert.NotNull(
-                entry
+            using var stream = new MemoryStream(workbook);
+            using var archive = new ZipArchive(
+                stream,
+                ZipArchiveMode.Read
             );
 
-            using var entryStream =
-                entry!.Open();
+            var entry = archive.GetEntry(path);
+            Assert.NotNull(entry);
 
-            using var reader =
-                new StreamReader(
-                    entryStream,
-                    Encoding.UTF8
-                );
+            using var entryStream = entry!.Open();
+            using var reader = new StreamReader(
+                entryStream,
+                Encoding.UTF8
+            );
 
             return reader.ReadToEnd();
         }
 
-        private static ClinicAdminDynamicReportPreviewDto
-            DynamicInventoryReport()
+        private static ClinicAdminDynamicReportPreviewDto DynamicInventoryReport()
         {
-            var now =
-                DateTime.UtcNow;
+            var now = DateTime.UtcNow;
 
             return new ClinicAdminDynamicReportPreviewDto
             {
-                ReportType =
-                    "Inventory",
+                ReportType = "Inventory",
+                Title = "Medication Inventory Report",
+                ClinicName = "Test Clinic",
+                RequestedBy = "Test Administrator",
+                GeneratedAt = now,
 
-                Title =
-                    "Medication Inventory Report",
-
-                ClinicName =
-                    "Test Clinic",
-
-                RequestedBy =
-                    "Test Administrator",
-
-                GeneratedAt =
-                    now,
-
-                Columns =
+                Columns = new()
+                {
                     new()
                     {
-                        new()
-                        {
-                            Key =
-                                "medication",
-
-                            Label =
-                                "Medication",
-
-                            DataType =
-                                "text"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "strength",
-
-                            Label =
-                                "Strength",
-
-                            DataType =
-                                "text"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "form",
-
-                            Label =
-                                "Form",
-
-                            DataType =
-                                "text"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "quantity",
-
-                            Label =
-                                "On Hand",
-
-                            DataType =
-                                "number"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "unit",
-
-                            Label =
-                                "Unit",
-
-                            DataType =
-                                "text"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "reorderLevel",
-
-                            Label =
-                                "Reorder Level",
-
-                            DataType =
-                                "number"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "status",
-
-                            Label =
-                                "Stock Status",
-
-                            DataType =
-                                "status"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "updated",
-
-                            Label =
-                                "Last Updated",
-
-                            DataType =
-                                "datetime"
-                        }
+                        Key = "medication",
+                        Label = "Medication",
+                        DataType = "text"
                     },
-
-                Rows =
                     new()
                     {
-                        Row(
-                            (
-                                "medication",
-                                "Metformin"
-                            ),
-
-                            (
-                                "strength",
-                                "500 mg"
-                            ),
-
-                            (
-                                "form",
-                                "Tablet"
-                            ),
-
-                            (
-                                "quantity",
-                                120
-                            ),
-
-                            (
-                                "unit",
-                                "tablets"
-                            ),
-
-                            (
-                                "reorderLevel",
-                                30
-                            ),
-
-                            (
-                                "status",
-                                "Healthy"
-                            ),
-
-                            (
-                                "updated",
-                                now.AddDays(
-                                    -1
-                                )
-                            )
-                        ),
-
-                        Row(
-                            (
-                                "medication",
-                                "Amlodipine"
-                            ),
-
-                            (
-                                "strength",
-                                "10 mg"
-                            ),
-
-                            (
-                                "form",
-                                "Tablet"
-                            ),
-
-                            (
-                                "quantity",
-                                12
-                            ),
-
-                            (
-                                "unit",
-                                "tablets"
-                            ),
-
-                            (
-                                "reorderLevel",
-                                20
-                            ),
-
-                            (
-                                "status",
-                                "Low stock"
-                            ),
-
-                            (
-                                "updated",
-                                now.AddDays(
-                                    -2
-                                )
-                            )
-                        ),
-
-                        Row(
-                            (
-                                "medication",
-                                "Amoxicillin"
-                            ),
-
-                            (
-                                "strength",
-                                "250 mg"
-                            ),
-
-                            (
-                                "form",
-                                "Capsule"
-                            ),
-
-                            (
-                                "quantity",
-                                0
-                            ),
-
-                            (
-                                "unit",
-                                "capsules"
-                            ),
-
-                            (
-                                "reorderLevel",
-                                10
-                            ),
-
-                            (
-                                "status",
-                                "Inactive"
-                            ),
-
-                            (
-                                "updated",
-                                now.AddDays(
-                                    -3
-                                )
-                            )
-                        )
+                        Key = "strength",
+                        Label = "Strength",
+                        DataType = "text"
                     },
-
-                Summary =
                     new()
                     {
-                        new()
-                        {
-                            Key =
-                                "shown",
-
-                            Label =
-                                "Items shown",
-
-                            Value =
-                                "3"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "units",
-
-                            Label =
-                                "Units on hand",
-
-                            Value =
-                                "132"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "low",
-
-                            Label =
-                                "Low stock",
-
-                            Value =
-                                "1"
-                        },
-
-                        new()
-                        {
-                            Key =
-                                "inactive",
-
-                            Label =
-                                "Inactive",
-
-                            Value =
-                                "1"
-                        }
+                        Key = "form",
+                        Label = "Form",
+                        DataType = "text"
                     },
-
-                FilterOptions =
-                    new(
-                        StringComparer.OrdinalIgnoreCase
-                    )
+                    new()
                     {
-                        [
-                            "status"
-                        ] =
-                            new()
-                            {
-                                "All",
-                                "Healthy",
-                                "Low stock",
-                                "Inactive"
-                            },
-
-                        [
-                            "medication"
-                        ] =
-                            new()
-                            {
-                                "All",
-                                "Amlodipine",
-                                "Amoxicillin",
-                                "Metformin"
-                            }
+                        Key = "quantity",
+                        Label = "On Hand",
+                        DataType = "number"
+                    },
+                    new()
+                    {
+                        Key = "unit",
+                        Label = "Unit",
+                        DataType = "text"
+                    },
+                    new()
+                    {
+                        Key = "reorderLevel",
+                        Label = "Reorder Level",
+                        DataType = "number"
+                    },
+                    new()
+                    {
+                        Key = "status",
+                        Label = "Stock Status",
+                        DataType = "status"
+                    },
+                    new()
+                    {
+                        Key = "updated",
+                        Label = "Last Updated",
+                        DataType = "datetime"
                     }
+                },
+
+                Rows = new()
+                {
+                    Row(
+                        ("medication", "Metformin"),
+                        ("strength", "500 mg"),
+                        ("form", "Tablet"),
+                        ("quantity", 120),
+                        ("unit", "tablets"),
+                        ("reorderLevel", 30),
+                        ("status", "Healthy"),
+                        ("updated", now.AddDays(-1))
+                    ),
+                    Row(
+                        ("medication", "Amlodipine"),
+                        ("strength", "10 mg"),
+                        ("form", "Tablet"),
+                        ("quantity", 12),
+                        ("unit", "tablets"),
+                        ("reorderLevel", 20),
+                        ("status", "Low stock"),
+                        ("updated", now.AddDays(-2))
+                    ),
+                    Row(
+                        ("medication", "Amoxicillin"),
+                        ("strength", "250 mg"),
+                        ("form", "Capsule"),
+                        ("quantity", 0),
+                        ("unit", "capsules"),
+                        ("reorderLevel", 10),
+                        ("status", "Inactive"),
+                        ("updated", now.AddDays(-3))
+                    )
+                },
+
+                Summary = new()
+                {
+                    new()
+                    {
+                        Key = "shown",
+                        Label = "Items shown",
+                        Value = "3"
+                    },
+                    new()
+                    {
+                        Key = "units",
+                        Label = "Units on hand",
+                        Value = "132"
+                    },
+                    new()
+                    {
+                        Key = "low",
+                        Label = "Low stock",
+                        Value = "1"
+                    },
+                    new()
+                    {
+                        Key = "inactive",
+                        Label = "Inactive",
+                        Value = "1"
+                    }
+                },
+
+                FilterOptions = new(
+                    StringComparer.OrdinalIgnoreCase
+                )
+                {
+                    ["status"] = new()
+                    {
+                        "All",
+                        "Healthy",
+                        "Low stock",
+                        "Inactive"
+                    },
+                    ["medication"] = new()
+                    {
+                        "All",
+                        "Amlodipine",
+                        "Amoxicillin",
+                        "Metformin"
+                    }
+                }
             };
         }
 
-        private static Dictionary<string, object?>
-            Row(
-                params (
-                    string Key,
-                    object? Value
-                )[] values
-            )
+        private static Dictionary<string, object?> Row(
+            params (string Key, object? Value)[] values
+        )
         {
-            var result =
-                new Dictionary<
-                    string,
-                    object?
-                >(
-                    StringComparer.OrdinalIgnoreCase
-                );
+            var result = new Dictionary<string, object?>(
+                StringComparer.OrdinalIgnoreCase
+            );
 
-            foreach (
-                var (
-                    key,
-                    value
-                ) in values
-            )
+            foreach (var (key, value) in values)
             {
-                result[key] =
-                    value;
+                result[key] = value;
             }
 
             return result;
         }
 
-        private static ClinicAdminReportDataDto
-            LegacyReport()
+        private static ClinicAdminReportDataDto LegacyReport()
         {
-            var now =
-                DateTime.UtcNow;
+            var now = DateTime.UtcNow;
 
             return new ClinicAdminReportDataDto
             {
-                ClinicName =
-                    "Test Clinic",
-
-                AdminName =
-                    "Test Administrator",
-
-                GeneratedAtUtc =
-                    now,
-
-                RangeStartUtc =
-                    now.AddDays(
-                        -30
-                    ),
-
-                RangeEndUtc =
-                    now,
-
-                Analytics =
-                    new ClinicAdminAnalyticsDto
+                ClinicName = "Test Clinic",
+                AdminName = "Test Administrator",
+                GeneratedAtUtc = now,
+                RangeStartUtc = now.AddDays(-30),
+                RangeEndUtc = now,
+                Analytics = new ClinicAdminAnalyticsDto
+                {
+                    ClinicName = "Test Clinic",
+                    AdminName = "Test Administrator",
+                    GeneratedAtUtc = now,
+                    Kpis = new ClinicAdminKpisDto
                     {
-                        ClinicName =
-                            "Test Clinic",
-
-                        AdminName =
-                            "Test Administrator",
-
-                        GeneratedAtUtc =
-                            now,
-
-                        Kpis =
-                            new ClinicAdminKpisDto
-                            {
-                                ActivePatients =
-                                    10,
-
-                                ActiveNurses =
-                                    2,
-
-                                ActiveProxies =
-                                    3,
-
-                                AppointmentsToday =
-                                    4,
-
-                                CollectionsDueToday =
-                                    5,
-
-                                LowStockItems =
-                                    1
-                            }
+                        ActivePatients = 10,
+                        ActiveNurses = 2,
+                        ActiveProxies = 3,
+                        AppointmentsToday = 4,
+                        CollectionsDueToday = 5,
+                        LowStockItems = 1
                     }
+                }
             };
         }
     }
