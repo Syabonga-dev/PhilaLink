@@ -22,24 +22,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference
-      Include="BCrypt.Net-Next"
-      Version="4.2.0"
-    />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
 
-    <PackageReference
-      Include="Microsoft.AspNetCore.Authentication.JwtBearer"
-      Version="10.0.10"
-    />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
 
     <!--
       Keep all EF Core packages on the same 10.0.0 line as
       Npgsql.EntityFrameworkCore.PostgreSQL.
     -->
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore.Design"
-      Version="10.0.0"
-    >
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <IncludeAssets>
         runtime;
         build;
@@ -54,10 +45,7 @@
       </PrivateAssets>
     </PackageReference>
 
-    <PackageReference
-      Include="Microsoft.EntityFrameworkCore.Tools"
-      Version="10.0.0"
-    >
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0">
       <IncludeAssets>
         runtime;
         build;
@@ -72,15 +60,11 @@
       </PrivateAssets>
     </PackageReference>
 
-    <PackageReference
-      Include="Npgsql.EntityFrameworkCore.PostgreSQL"
-      Version="10.0.0"
-    />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
 
-    <PackageReference
-      Include="Swashbuckle.AspNetCore"
-      Version="10.2.3"
-    />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
 </Project>

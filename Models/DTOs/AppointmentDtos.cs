@@ -1,4 +1,6 @@
-﻿namespace PersonalProject.Models.DTOs
+﻿using PersonalProject.Models.Validation;
+
+namespace PersonalProject.Models.DTOs
 {
     public class CreateAppointmentDto
     {
@@ -8,6 +10,15 @@
 
         public Guid? NurseId { get; set; }
 
+        /*
+         * Staff-created appointments follow the same booking
+         * rule as patient-created appointments:
+         *
+         * - today is allowed
+         * - the selected time must still be in the future
+         * - appointments can be created up to 14 days ahead
+         */
+        [AppointmentBookingWindow]
         public DateTime ScheduledAt { get; set; }
 
         public int DurationMinutes { get; set; } = 30;
@@ -25,6 +36,29 @@
 
     public class UpdateAppointmentDto
     {
+        /*
+         * This DTO is used for several appointment actions,
+         * including:
+         *
+         * - Pending -> Confirmed
+         * - rescheduling
+         * - completion
+         * - cancellation
+         * - missed appointments
+         *
+         * Active appointments must remain inside the 14-day
+         * booking window.
+         *
+         * Historical Completed, Cancelled and Missed records
+         * are excluded from the date-window check so nurses can
+         * still update their status/details after the scheduled
+         * appointment time.
+         */
+        [
+            AppointmentBookingWindow(
+                SkipTerminalStatuses = true
+            )
+        ]
         public DateTime ScheduledAt { get; set; }
 
         public Guid? NurseId { get; set; }
