@@ -21,6 +21,24 @@ namespace PersonalProject.Utilities
         private const string Red = "FEE2E2";
         private const string BlueLight = "DBEAFE";
 
+        private const string ChartBlue = "2563EB";
+        private const string ChartPurple = "7C3AED";
+        private const string ChartOrange = "D97706";
+        private const string ChartCyan = "0891B2";
+        private const string ChartLime = "65A30D";
+        private const string ChartPink = "DB2777";
+        
+        private static readonly string[] ChartPalette =
+        {
+            Teal,
+            ChartBlue,
+            ChartPurple,
+            ChartOrange,
+            "DC2626",
+            ChartCyan,
+            ChartLime,
+            ChartPink
+        };
         // =====================================================
         // PUBLIC EXPORTS
         // =====================================================
