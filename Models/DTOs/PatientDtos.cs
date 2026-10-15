@@ -1,3 +1,5 @@
+using PersonalProject.Models.Validation;
+
 namespace PersonalProject.Models.DTOs
 {
     public class PatientMeDto
@@ -246,6 +248,17 @@ namespace PersonalProject.Models.DTOs
 
     public class PatientBookAppointmentDto
     {
+        /*
+         * A patient may book:
+         *
+         * - later today
+         * - tomorrow
+         * - any date up to 14 calendar days from today
+         *
+         * Anything outside that window is rejected by ASP.NET
+         * before PatientService.BookAppointmentAsync executes.
+         */
+        [AppointmentBookingWindow]
         public DateTime ScheduledAt { get; set; }
 
         public int DurationMinutes { get; set; } = 30;
@@ -261,6 +274,11 @@ namespace PersonalProject.Models.DTOs
 
     public class PatientRescheduleAppointmentDto
     {
+        /*
+         * Rescheduling uses exactly the same rolling booking
+         * window as creating a new appointment.
+         */
+        [AppointmentBookingWindow]
         public DateTime ScheduledAt { get; set; }
     }
 
