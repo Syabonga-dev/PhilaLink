@@ -2948,12 +2948,15 @@ namespace PersonalProject.Utilities
             var value = status.ToLowerInvariant();
 
             return
-                value.Contains("active") ||
                 value.Contains("healthy") ||
                 value.Contains("collected") ||
                 value.Contains("completed") ||
                 value.Contains("confirmed") ||
-                value.Contains("taken");
+                value.Contains("taken") ||
+                (
+                    value.Contains("active") &&
+                    !value.Contains("inactive")
+                );
         }
 
         private static bool IsWarningStatus(
@@ -2967,8 +2970,7 @@ namespace PersonalProject.Utilities
                 value.Contains("scheduled") ||
                 value.Contains("low stock");
         }
-
-        private static bool IsNegativeStatus(
+                private static bool IsNegativeStatus(
             string status
         )
         {
