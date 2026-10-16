@@ -10,11 +10,9 @@ namespace PersonalProject.Tests.Regression
     public class ReportBuilderSmokeTests
     {
         [Fact]
-        public void
-            CsvReportContainsClinicIdentity()
+        public void CsvReportContainsClinicIdentity()
         {
-            var report =
-                LegacyReport();
+            var report = LegacyReport();
 
             var bytes =
                 ClinicAdminReportBuilder
@@ -40,8 +38,7 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            LegacyExcelReportProducesZipContainer()
+        public void LegacyExcelReportProducesZipContainer()
         {
             var bytes =
                 ClinicAdminReportBuilder
@@ -66,8 +63,7 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            PdfReportProducesPdfDocument()
+        public void PdfReportProducesPdfDocument()
         {
             var bytes =
                 ClinicAdminReportBuilder
@@ -102,8 +98,7 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DynamicExcelContainsRequiredWorkbookParts()
+        public void DynamicExcelContainsRequiredWorkbookParts()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -194,8 +189,7 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            EveryGeneratedXmlPartIsWellFormed()
+        public void EveryGeneratedXmlPartIsWellFormed()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -258,8 +252,7 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DataSheetWritesAutoFilterBeforeMergeCells()
+        public void DataSheetWritesAutoFilterBeforeMergeCells()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -307,8 +300,7 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DashboardContainsDropdownFilters()
+        public void DashboardContainsDropdownFilters()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -360,8 +352,7 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            WorkbookUsesAutomaticRecalculation()
+        public void WorkbookUsesAutomaticRecalculation()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -392,8 +383,7 @@ namespace PersonalProject.Tests.Regression
         }
 
         [Fact]
-        public void
-            CalculationSheetReferencesDashboardFilters()
+        public void CalculationSheetReferencesDashboardFilters()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -433,8 +423,7 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-        public void
-            DashboardKpisReferenceCalculationSheet()
+        public void DashboardKpisReferenceCalculationSheet()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -474,77 +463,74 @@ namespace PersonalProject.Tests.Regression
         // =====================================================
 
         [Fact]
-public void
-    DashboardPreviewUsesRepairSafeScalarFormulas()
-{
-    var bytes =
-        ClinicAdminDynamicReportBuilder
-            .BuildExcel(
-                DynamicInventoryReport()
+        public void DashboardPreviewUsesRepairSafeScalarFormulas()
+        {
+            var bytes =
+                ClinicAdminDynamicReportBuilder
+                    .BuildExcel(
+                        DynamicInventoryReport()
+                    );
+
+            var dashboard =
+                ReadEntry(
+                    bytes,
+                    "xl/worksheets/sheet1.xml"
+                );
+
+            /*
+             * FILTER() remains forbidden.
+             *
+             * Dynamic-array formulas require additional
+             * OOXML metadata and previously caused Excel
+             * to repair the generated worksheet.
+             */
+            Assert.DoesNotContain(
+                "FILTER(Data!A5:",
+                dashboard
             );
 
-    var dashboard =
-        ReadEntry(
-            bytes,
-            "xl/worksheets/sheet1.xml"
-        );
+            Assert.DoesNotContain(
+                "_xlfn",
+                dashboard
+            );
 
-    /*
-     * FILTER() is intentionally forbidden here.
-     *
-     * The report builder writes worksheet XML itself,
-     * and dynamic-array formulas require additional
-     * OOXML metadata. Writing FILTER as a normal
-     * formula caused Excel to repair sheet1.xml.
-     */
-    Assert.DoesNotContain(
-        "FILTER(Data!A5:",
-        dashboard
-    );
+            Assert.DoesNotContain(
+                "t=\"array\"",
+                dashboard
+            );
 
-    Assert.DoesNotContain(
-        "_xlfn",
-        dashboard
-    );
+            /*
+             * The live preview now uses ordinary scalar
+             * INDEX + MATCH formulas against the Calc
+             * worksheet visible-row sequence.
+             */
+            Assert.Contains(
+                "INDEX(Data!",
+                dashboard
+            );
 
-    Assert.DoesNotContain(
-        "t=\"array\"",
-        dashboard
-    );
+            Assert.Contains(
+                "MATCH(",
+                dashboard
+            );
 
-    /*
-     * The preview instead uses ordinary scalar
-     * formulas which remain live when the dashboard
-     * filter cells change.
-     */
-    Assert.Contains(
-        "INDEX(Data!",
-        dashboard
-    );
+            Assert.Contains(
+                "Calc!$C$2:$C$",
+                dashboard
+            );
 
-    Assert.Contains(
-        "AGGREGATE(15,6",
-        dashboard
-    );
-
-    Assert.Contains(
-        "Calc!$B$2:$B$",
-        dashboard
-    );
-
-    Assert.Contains(
-        "Preview shows up to 20 matching rows.",
-        dashboard
-    );
-}
+            Assert.Contains(
+                "Preview shows up to 20 matching rows.",
+                dashboard
+            );
+        }
 
         // =====================================================
         // CHARTS
         // =====================================================
 
         [Fact]
-        public void
-            DashboardContainsDrawingRelationship()
+        public void DashboardContainsDrawingRelationship()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -565,8 +551,7 @@ public void
         }
 
         [Fact]
-        public void
-            PieChartReadsDynamicCalculationRange()
+        public void PieChartReadsDynamicCalculationRange()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -597,8 +582,7 @@ public void
         }
 
         [Fact]
-        public void
-            BarChartReadsDynamicCalculationRange()
+        public void BarChartReadsDynamicCalculationRange()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
@@ -633,8 +617,7 @@ public void
         // =====================================================
 
         [Fact]
-        public void
-            CalcAndListsSheetsAreHidden()
+        public void CalcAndListsSheetsAreHidden()
         {
             var bytes =
                 ClinicAdminDynamicReportBuilder
