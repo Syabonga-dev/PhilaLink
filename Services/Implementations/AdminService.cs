@@ -64,14 +64,27 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Only Id and Name are required below.
+             */
             var clinic =
                 await _context.Clinics
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         item =>
                             item.Id ==
                                 dto.ClinicId &&
                             item.IsActive
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.Name
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 clinic ==
@@ -118,12 +131,6 @@ namespace PersonalProject.Services.Implementations
                 admin
             );
 
-            /*
-             * User + Admin are persisted by one SaveChanges.
-             * EF Core automatically treats the operation
-             * transactionally and it remains compatible with
-             * Npgsql EnableRetryOnFailure.
-             */
             await _context
                 .SaveChangesAsync();
 
@@ -164,12 +171,22 @@ namespace PersonalProject.Services.Implementations
 
             var clinic =
                 await _context.Clinics
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         item =>
                             item.Id ==
                                 dto.ClinicId &&
                             item.IsActive
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.Name
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 clinic ==
@@ -343,12 +360,22 @@ namespace PersonalProject.Services.Implementations
 
             var clinic =
                 await _context.Clinics
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         item =>
                             item.Id ==
                                 dto.ClinicId &&
                             item.IsActive
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.Name
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 clinic ==
@@ -478,6 +505,14 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
+            /*
+             * Tracking is required because the target password
+             * and account state may be updated.
+             *
+             * These are reference navigations, not collection
+             * navigations, so the query does not create the same
+             * cartesian explosion risk as multiple collections.
+             */
             var target =
                 await _context.Users
                     .Include(
@@ -546,88 +581,88 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 case RoleNames.ClinicAdmin:
-                {
-                    if (
-                        actor.User.Role !=
-                        RoleNames.SuperAdmin
-                    )
                     {
-                        throw new UnauthorizedAccessException(
-                            "Only a SuperAdmin can resend a Clinic Administrator invitation."
-                        );
+                        if (
+                            actor.User.Role !=
+                            RoleNames.SuperAdmin
+                        )
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Only a SuperAdmin can resend a Clinic Administrator invitation."
+                            );
+                        }
+
+                        clinicId =
+                            target.Admin
+                                ?.ClinicId;
+
+                        clinicName =
+                            target.Admin
+                                ?.Clinic
+                                ?.Name;
+
+                        break;
                     }
-
-                    clinicId =
-                        target.Admin
-                            ?.ClinicId;
-
-                    clinicName =
-                        target.Admin
-                            ?.Clinic
-                            ?.Name;
-
-                    break;
-                }
 
                 case RoleNames.Nurse:
-                {
-                    if (
-                        actor.User.Role !=
-                        RoleNames.ClinicAdmin
-                    )
                     {
-                        throw new UnauthorizedAccessException(
-                            "Only a Clinic Administrator can resend a Nurse invitation."
+                        if (
+                            actor.User.Role !=
+                            RoleNames.ClinicAdmin
+                        )
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Only a Clinic Administrator can resend a Nurse invitation."
+                            );
+                        }
+
+                        clinicId =
+                            target.Nurse
+                                ?.ClinicId;
+
+                        clinicName =
+                            target.Nurse
+                                ?.Clinic
+                                ?.Name;
+
+                        EnsureClinicAdminAccess(
+                            actor,
+                            clinicId ??
+                                Guid.Empty
                         );
+
+                        break;
                     }
-
-                    clinicId =
-                        target.Nurse
-                            ?.ClinicId;
-
-                    clinicName =
-                        target.Nurse
-                            ?.Clinic
-                            ?.Name;
-
-                    EnsureClinicAdminAccess(
-                        actor,
-                        clinicId ??
-                            Guid.Empty
-                    );
-
-                    break;
-                }
 
                 case RoleNames.Proxy:
-                {
-                    if (
-                        actor.User.Role !=
-                        RoleNames.ClinicAdmin
-                    )
                     {
-                        throw new UnauthorizedAccessException(
-                            "Only a Clinic Administrator can resend a Proxy invitation."
+                        if (
+                            actor.User.Role !=
+                            RoleNames.ClinicAdmin
+                        )
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Only a Clinic Administrator can resend a Proxy invitation."
+                            );
+                        }
+
+                        clinicId =
+                            target.Proxy
+                                ?.ClinicId;
+
+                        clinicName =
+                            target.Proxy
+                                ?.Clinic
+                                ?.Name;
+
+                        EnsureClinicAdminAccess(
+                            actor,
+                            clinicId ??
+                                Guid.Empty
                         );
+
+                        break;
                     }
-
-                    clinicId =
-                        target.Proxy
-                            ?.ClinicId;
-
-                    clinicName =
-                        target.Proxy
-                            ?.Clinic
-                            ?.Name;
-
-                    EnsureClinicAdminAccess(
-                        actor,
-                        clinicId ??
-                            Guid.Empty
-                    );
-
-                    break;
-                }
 
                 default:
                     throw new InvalidOperationException(
@@ -649,10 +684,6 @@ namespace PersonalProject.Services.Implementations
             var temporaryPassword =
                 GenerateTempPassword();
 
-            /*
-             * Resending an invitation invalidates the previous
-             * temporary credential.
-             */
             target.PasswordHash =
                 BCrypt.Net.BCrypt
                     .HashPassword(
@@ -700,25 +731,16 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
-            var query =
+            /*
+             * Do not Include Nurse, Proxy, Patient and Admin.
+             *
+             * EF can translate the navigation predicates into
+             * joins and then project only the five columns the
+             * response actually requires.
+             */
+            IQueryable<User> query =
                 _context.Users
-                    .Include(
-                        user =>
-                            user.Nurse
-                    )
-                    .Include(
-                        user =>
-                            user.Proxy
-                    )
-                    .Include(
-                        user =>
-                            user.Patient
-                    )
-                    .Include(
-                        user =>
-                            user.Admin
-                    )
-                    .AsQueryable();
+                    .AsNoTracking();
 
             if (
                 !string.IsNullOrWhiteSpace(
@@ -780,15 +802,11 @@ namespace PersonalProject.Services.Implementations
                     );
             }
 
-            var users =
-                await query
-                    .OrderBy(
-                        user =>
-                            user.FullName
-                    )
-                    .ToListAsync();
-
-            return users
+            return await query
+                .OrderBy(
+                    user =>
+                        user.FullName
+                )
                 .Select(
                     user =>
                         new AdminAccountDto
@@ -809,7 +827,7 @@ namespace PersonalProject.Services.Implementations
                                 user.IsActive
                         }
                 )
-                .ToList();
+                .ToListAsync();
         }
 
         // =====================================================
@@ -898,6 +916,7 @@ namespace PersonalProject.Services.Implementations
 
             var clinicPatientIds =
                 _context.Patients
+                    .AsNoTracking()
                     .Where(
                         patient =>
                             patient.ClinicId ==
@@ -920,13 +939,10 @@ namespace PersonalProject.Services.Implementations
 
                 ActiveNurses =
                     await _context.Nurses
-                        .Where(
-                            nurse =>
-                                nurse.ClinicId ==
-                                clinicId
-                        )
                         .CountAsync(
                             nurse =>
+                                nurse.ClinicId ==
+                                    clinicId &&
                                 nurse.User
                                     .IsActive
                         ),
@@ -941,13 +957,10 @@ namespace PersonalProject.Services.Implementations
 
                 ActivePatients =
                     await _context.Patients
-                        .Where(
-                            patient =>
-                                patient.ClinicId ==
-                                clinicId
-                        )
                         .CountAsync(
                             patient =>
+                                patient.ClinicId ==
+                                    clinicId &&
                                 patient.User
                                     .IsActive
                         ),
@@ -1006,11 +1019,10 @@ namespace PersonalProject.Services.Implementations
         // DEACTIVATE / ACTIVATE
         // =====================================================
 
-        public async Task
-            DeactivateAccountAsync(
-                Guid userId,
-                Guid performedByUserId
-            )
+        public async Task DeactivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        )
         {
             await SetActiveAsync(
                 userId,
@@ -1019,11 +1031,10 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task
-            ActivateAccountAsync(
-                Guid userId,
-                Guid performedByUserId
-            )
+        public async Task ActivateAccountAsync(
+            Guid userId,
+            Guid performedByUserId
+        )
         {
             await SetActiveAsync(
                 userId,
@@ -1060,13 +1071,23 @@ namespace PersonalProject.Services.Implementations
 
             var clinic =
                 await _context.Clinics
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         item =>
                             item.Id ==
                             actor.Admin
                                 .ClinicId
                                 .Value
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.Name
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 clinic ==
@@ -1136,11 +1157,21 @@ namespace PersonalProject.Services.Implementations
 
             var clinic =
                 await _context.Clinics
-                    .FirstOrDefaultAsync(
+                    .AsNoTracking()
+                    .Where(
                         item =>
                             item.Id ==
                             clinicId
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.Name
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 clinic ==
@@ -1153,8 +1184,7 @@ namespace PersonalProject.Services.Implementations
             }
 
             var today =
-                DateTime.UtcNow
-                    .Date;
+                DateTime.UtcNow.Date;
 
             var tomorrow =
                 today.AddDays(
@@ -1291,6 +1321,10 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Tracking is required because User.IsActive and
+             * UpdatedAt are modified.
+             */
             var target =
                 await _context.Users
                     .Include(
@@ -1427,16 +1461,20 @@ namespace PersonalProject.Services.Implementations
                     .Trim()
                     .ToLowerInvariant();
 
+            /*
+             * Direct equality against canonical lowercase Email
+             * allows PostgreSQL to use the standard Email index.
+             */
             var exists =
                 await _context.Users
+                    .AsNoTracking()
                     .AnyAsync(
                         user =>
                             user.IdNumber ==
                                 normalizedIdNumber ||
                             user.PhoneNumber ==
                                 normalizedPhoneNumber ||
-                            user.Email
-                                .ToLower() ==
+                            user.Email ==
                                 normalizedEmail
                     );
 
@@ -1501,8 +1539,8 @@ namespace PersonalProject.Services.Implementations
             /*
              * Do not save here.
              *
-             * The caller adds the corresponding Admin, Nurse or
-             * Proxy profile before the single SaveChanges call.
+             * The calling method adds the role-specific profile
+             * and commits both records together.
              */
             _context.Users.Add(
                 user
@@ -1526,8 +1564,12 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
+            /*
+             * Administrative actor resolution is read-only.
+             */
             var user =
                 await _context.Users
+                    .AsNoTracking()
                     .Include(
                         item =>
                             item.Admin
@@ -1640,17 +1682,8 @@ namespace PersonalProject.Services.Implementations
 
                 return true;
             }
-            catch (
-                Exception ex
-            )
+            catch (Exception ex)
             {
-                /*
-                 * The account remains valid but the administrator
-                 * never receives the password.
-                 *
-                 * A resend regenerates a completely new temporary
-                 * password and invalidates the undelivered one.
-                 */
                 _logger.LogWarning(
                     ex,
                     "Account {UserId} was created/updated but its invitation email could not be delivered.",
@@ -1726,9 +1759,10 @@ namespace PersonalProject.Services.Implementations
                 ];
 
             for (
-                var index = 4;
+                var index =
+                    4;
                 index <
-                password.Length;
+                    password.Length;
                 index++
             )
             {

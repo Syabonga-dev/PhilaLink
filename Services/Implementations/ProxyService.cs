@@ -55,10 +55,6 @@ namespace PersonalProject.Services.Implementations
                     asTracking: true
                 );
 
-            // -------------------------------------------------
-            // REQUIRED ACCOUNT FIELDS
-            // -------------------------------------------------
-
             if (
                 string.IsNullOrWhiteSpace(
                     dto.FullName
@@ -92,10 +88,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            // -------------------------------------------------
-            // NORMALIZE UNIQUE ACCOUNT DATA
-            // -------------------------------------------------
-
             var normalizedPhoneNumber =
                 dto.PhoneNumber
                     .Trim();
@@ -104,10 +96,6 @@ namespace PersonalProject.Services.Implementations
                 dto.Email
                     .Trim()
                     .ToLowerInvariant();
-
-            // -------------------------------------------------
-            // DUPLICATE PHONE
-            // -------------------------------------------------
 
             var duplicatePhone =
                 await _context.Users
@@ -120,17 +108,19 @@ namespace PersonalProject.Services.Implementations
                                 normalizedPhoneNumber
                     );
 
-            if (duplicatePhone)
+            if (
+                duplicatePhone
+            )
             {
                 throw new InvalidOperationException(
                     "That phone number is already in use."
                 );
             }
 
-            // -------------------------------------------------
-            // DUPLICATE EMAIL
-            // -------------------------------------------------
-
+            /*
+             * Email values are canonical lowercase values.
+             * Direct equality keeps the Email index usable.
+             */
             var duplicateEmail =
                 await _context.Users
                     .AsNoTracking()
@@ -138,12 +128,13 @@ namespace PersonalProject.Services.Implementations
                         user =>
                             user.Id !=
                                 proxyUserId &&
-                            user.Email
-                                .ToLower() ==
+                            user.Email ==
                                 normalizedEmail
                     );
 
-            if (duplicateEmail)
+            if (
+                duplicateEmail
+            )
             {
                 throw new InvalidOperationException(
                     "That email address is already in use."
@@ -152,10 +143,6 @@ namespace PersonalProject.Services.Implementations
 
             var now =
                 DateTime.UtcNow;
-
-            // -------------------------------------------------
-            // USER ACCOUNT
-            // -------------------------------------------------
 
             proxy.User.FullName =
                 dto.FullName
@@ -170,23 +157,12 @@ namespace PersonalProject.Services.Implementations
             proxy.User.UpdatedAt =
                 now;
 
-            // -------------------------------------------------
-            // PROXY PROFILE
-            // -------------------------------------------------
-
-            /*
-             * Keep the profile email synchronized with the
-             * canonical Users record, matching the existing
-             * Patient profile behaviour.
-             */
             proxy.Email =
                 normalizedEmail;
-
 
             proxy.Gender =
                 dto.Gender
                     .Trim();
-
 
             proxy.AddressLine1 =
                 dto.AddressLine1
@@ -231,19 +207,11 @@ namespace PersonalProject.Services.Implementations
             proxy.UpdatedAt =
                 now;
 
-            // -------------------------------------------------
-            // IMPORTANT SECURITY BOUNDARY
-            // -------------------------------------------------
-            //
-            // The update DTO deliberately does not contain
-            // ClinicId.
-            //
-            // A Proxy must not be able to move themselves to
-            // another clinic because Proxy.ClinicId is used by
-            // the patient and collection authorization logic.
-            // -------------------------------------------------
-
-            await _context.SaveChangesAsync();
+            /*
+             * ClinicId intentionally remains immutable here.
+             */
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "ProxyProfileUpdated",
@@ -272,17 +240,27 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
+            /*
+             * Only Patient.Id and ClinicId are required for
+             * assignment authorization.
+             */
             var patient =
                 await _context.Patients
-                    .Include(
-                        p =>
-                            p.User
-                    )
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
                             patientId
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 patient ==
@@ -294,13 +272,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * Clinic staff may only manage patients belonging
-             * to their own clinic.
-             *
-             * SuperAdmin has actor.ClinicId == null and may
-             * therefore work across clinics.
-             */
             if (
                 actor.ClinicId !=
                     null &&
@@ -323,27 +294,39 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Only the fields required for authorization are
+             * projected rather than loading Proxy, User and Clinic.
+             */
             var proxy =
                 await _context.Proxies
-                    .Include(
-                        p =>
-                            p.User
-                    )
-                    .Include(
-                        p =>
-                            p.Clinic
-                    )
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
                             proxyId
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId,
+
+                                UserIsActive =
+                                    item.User.IsActive,
+
+                                UserRole =
+                                    item.User.Role
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 proxy ==
                     null ||
-                !proxy.User.IsActive ||
-                proxy.User.Role !=
+                !proxy.UserIsActive ||
+                proxy.UserRole !=
                     RoleNames.Proxy
             )
             {
@@ -352,12 +335,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * CRITICAL CLINIC BOUNDARY
-             *
-             * A Proxy may only be linked to patients belonging
-             * to the clinic where the Proxy is registered.
-             */
             if (
                 proxy.ClinicId !=
                 patient.ClinicId.Value
@@ -368,10 +345,6 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * A ClinicAdmin/Nurse must also be operating inside
-             * the same clinic as the Proxy.
-             */
             if (
                 actor.ClinicId !=
                     null &&
@@ -386,16 +359,19 @@ namespace PersonalProject.Services.Implementations
 
             var exists =
                 await _context.ProxyLinks
+                    .AsNoTracking()
                     .AnyAsync(
-                        p =>
-                            p.PatientId ==
+                        link =>
+                            link.PatientId ==
                                 patientId &&
-                            p.ProxyId ==
+                            link.ProxyId ==
                                 proxyId &&
-                            p.IsActive
+                            link.IsActive
                     );
 
-            if (exists)
+            if (
+                exists
+            )
             {
                 throw new InvalidOperationException(
                     "Proxy is already assigned to this patient."
@@ -448,7 +424,8 @@ namespace PersonalProject.Services.Implementations
                 link
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "ProxyAssigned",
@@ -471,19 +448,24 @@ namespace PersonalProject.Services.Implementations
                     performedByUserId
                 );
 
+            /*
+             * Tracking is required because this link is mutated.
+             * Patient and Proxy are reference navigations needed
+             * for clinic-boundary authorization.
+             */
             var link =
                 await _context.ProxyLinks
                     .Include(
-                        p =>
-                            p.Patient
+                        item =>
+                            item.Patient
                     )
                     .Include(
-                        p =>
-                            p.Proxy
+                        item =>
+                            item.Proxy
                     )
                     .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
+                        item =>
+                            item.Id ==
                             proxyLinkId
                     );
 
@@ -539,7 +521,8 @@ namespace PersonalProject.Services.Implementations
             link.EndedByUserId =
                 performedByUserId;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "ProxyRemoved",
@@ -565,11 +548,21 @@ namespace PersonalProject.Services.Implementations
 
             var patient =
                 await _context.Patients
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.Id ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.Id ==
                             patientId
-                    );
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 patient ==
@@ -594,57 +587,47 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * Only return Proxy assignments that are valid
-             * for the patient's current clinic.
-             *
-             * This also prevents legacy cross-clinic links
-             * from being exposed.
+             * Includes are unnecessary when navigation values are
+             * projected directly into the result DTO.
              */
             return await _context.ProxyLinks
-                .Include(
-                    pl =>
-                        pl.Proxy
-                )
-                    .ThenInclude(
-                        p =>
-                            p.User
-                    )
+                .AsNoTracking()
                 .Where(
-                    pl =>
-                        pl.PatientId ==
+                    link =>
+                        link.PatientId ==
                             patientId &&
-                        pl.IsActive &&
+                        link.IsActive &&
                         patient.ClinicId !=
                             null &&
-                        pl.Proxy.ClinicId ==
+                        link.Proxy.ClinicId ==
                             patient.ClinicId.Value
                 )
                 .OrderByDescending(
-                    pl =>
-                        pl.AssignedAt
+                    link =>
+                        link.AssignedAt
                 )
                 .Select(
-                    pl =>
+                    link =>
                         new PatientProxyResponseDto
                         {
                             ProxyLinkId =
-                                pl.Id,
+                                link.Id,
 
                             ProxyId =
-                                pl.ProxyId,
+                                link.ProxyId,
 
                             ProxyName =
-                                pl.Proxy
+                                link.Proxy
                                     .User
                                     .FullName,
 
                             PhoneNumber =
-                                pl.Proxy
+                                link.Proxy
                                     .User
                                     .PhoneNumber,
 
                             AssignedAt =
-                                pl.AssignedAt
+                                link.AssignedAt
                         }
                 )
                 .ToListAsync();
@@ -659,24 +642,30 @@ namespace PersonalProject.Services.Implementations
                 Guid proxyUserId
             )
         {
+            /*
+             * Only Proxy.Id and ClinicId are needed to run the
+             * patient query.
+             */
             var proxy =
                 await _context.Proxies
-                    .Include(
-                        p =>
-                            p.User
-                    )
-                    .Include(
-                        p =>
-                            p.Clinic
-                    )
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
                                 proxyUserId &&
-                            p.User.Role ==
+                            item.User.Role ==
                                 RoleNames.Proxy &&
-                            p.User.IsActive
-                    );
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 proxy ==
@@ -688,81 +677,56 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            /*
-             * CRITICAL CLINIC FILTER
-             *
-             * A Proxy can only retrieve linked patients whose
-             * ClinicId matches the Proxy's own ClinicId.
-             *
-             * This protects the API even if an old or manually
-             * inserted ProxyLink exists across clinics.
-             */
             return await _context.ProxyLinks
                 .AsNoTracking()
-                .Include(
-                    pl =>
-                        pl.Patient
-                )
-                    .ThenInclude(
-                        p =>
-                            p.User
-                    )
-                .Include(
-                    pl =>
-                        pl.Patient
-                )
-                    .ThenInclude(
-                        p =>
-                            p.Clinic
-                    )
                 .Where(
-                    pl =>
-                        pl.ProxyId ==
+                    link =>
+                        link.ProxyId ==
                             proxy.Id &&
-                        pl.IsActive &&
-                        pl.Patient.ClinicId ==
+                        link.IsActive &&
+                        link.Patient.ClinicId ==
                             proxy.ClinicId
                 )
                 .OrderBy(
-                    pl =>
-                        pl.Patient
+                    link =>
+                        link.Patient
                             .User
                             .FullName
                 )
                 .Select(
-                    pl =>
+                    link =>
                         new ProxyPatientResponseDto
                         {
                             ProxyLinkId =
-                                pl.Id,
+                                link.Id,
 
                             PatientId =
-                                pl.PatientId,
+                                link.PatientId,
 
                             PatientName =
-                                pl.Patient
+                                link.Patient
                                     .User
                                     .FullName,
 
                             PatientNumber =
-                                pl.Patient
+                                link.Patient
                                     .PatientNumber,
 
                             ClinicId =
-                                pl.Patient
+                                link.Patient
                                     .ClinicId,
 
                             ClinicName =
-                                pl.Patient
+                                link.Patient
                                     .Clinic ==
                                     null
                                     ? null
-                                    : pl.Patient
+                                    : link.Patient
                                         .Clinic
                                         .Name,
 
                             AssignedAt =
-                                pl.AssignedAt
+                                link.AssignedAt
                         }
                 )
                 .ToListAsync();
@@ -779,18 +743,24 @@ namespace PersonalProject.Services.Implementations
         {
             var patient =
                 await _context.Patients
-                    .Include(
-                        p =>
-                            p.User
-                    )
-                    .FirstOrDefaultAsync(
-                        p =>
-                            p.UserId ==
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            item.UserId ==
                                 patientUserId &&
-                            p.User.Role ==
+                            item.User.Role ==
                                 RoleNames.Patient &&
-                            p.User.IsActive
-                    );
+                            item.User.IsActive
+                    )
+                    .Select(
+                        item =>
+                            new
+                            {
+                                item.Id,
+                                item.ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
                 patient ==
@@ -810,67 +780,56 @@ namespace PersonalProject.Services.Implementations
                 return null;
             }
 
-            /*
-             * Do not expose a legacy Proxy assignment where
-             * the Proxy belongs to another clinic.
-             */
             return await _context.ProxyLinks
-                .Include(
-                    pl =>
-                        pl.Proxy
-                )
-                    .ThenInclude(
-                        p =>
-                            p.User
-                    )
+                .AsNoTracking()
                 .Where(
-                    pl =>
-                        pl.PatientId ==
+                    link =>
+                        link.PatientId ==
                             patient.Id &&
-                        pl.IsActive &&
-                        pl.Proxy
+                        link.IsActive &&
+                        link.Proxy
                             .User
                             .IsActive &&
-                        pl.Proxy
+                        link.Proxy
                             .User
                             .Role ==
                             RoleNames.Proxy &&
-                        pl.Proxy.ClinicId ==
+                        link.Proxy.ClinicId ==
                             patient.ClinicId.Value
                 )
                 .OrderByDescending(
-                    pl =>
-                        pl.AssignedAt
+                    link =>
+                        link.AssignedAt
                 )
                 .Select(
-                    pl =>
+                    link =>
                         new PatientAssignedWorkerDto
                         {
                             ProxyLinkId =
-                                pl.Id,
+                                link.Id,
 
                             ProxyId =
-                                pl.ProxyId,
+                                link.ProxyId,
 
                             FullName =
-                                pl.Proxy
+                                link.Proxy
                                     .User
                                     .FullName,
 
                             PhoneNumber =
-                                pl.Proxy
+                                link.Proxy
                                     .User
                                     .PhoneNumber,
 
                             Email =
-                                pl.Proxy
+                                link.Proxy
                                     .Email,
 
                             AssignedAt =
-                                pl.AssignedAt,
+                                link.AssignedAt,
 
                             IsActive =
-                                pl.IsActive
+                                link.IsActive
                         }
                 )
                 .FirstOrDefaultAsync();
@@ -967,7 +926,6 @@ namespace PersonalProject.Services.Implementations
                 Gender =
                     proxy.Gender,
 
-
                 AddressLine1 =
                     proxy.AddressLine1,
 
@@ -987,13 +945,16 @@ namespace PersonalProject.Services.Implementations
                     proxy.PostalCode,
 
                 EmergencyContactName =
-                    proxy.EmergencyContactName,
+                    proxy
+                        .EmergencyContactName,
 
                 EmergencyContactPhone =
-                    proxy.EmergencyContactPhone,
+                    proxy
+                        .EmergencyContactPhone,
 
                 EmergencyContactRelationship =
-                    proxy.EmergencyContactRelationship,
+                    proxy
+                        .EmergencyContactRelationship,
 
                 ClinicId =
                     proxy.ClinicId,
@@ -1031,73 +992,105 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
-            var user =
+            /*
+             * Actor resolution is read-only and very frequent.
+             *
+             * Project only the security fields needed instead of
+             * loading complete User/Nurse/Admin entities.
+             */
+            var actor =
                 await _context.Users
-                    .Include(
-                        u =>
-                            u.Nurse
-                    )
-                    .Include(
-                        u =>
-                            u.Admin
-                    )
-                    .FirstOrDefaultAsync(
-                        u =>
-                            u.Id ==
+                    .AsNoTracking()
+                    .Where(
+                        user =>
+                            user.Id ==
                             userId
-                    );
+                    )
+                    .Select(
+                        user =>
+                            new
+                            {
+                                user.IsActive,
+                                user.Role,
+
+                                NurseId =
+                                    user.Nurse ==
+                                    null
+                                        ? (Guid?)null
+                                        : user.Nurse.Id,
+
+                                NurseClinicId =
+                                    user.Nurse ==
+                                    null
+                                        ? (Guid?)null
+                                        : user.Nurse
+                                            .ClinicId,
+
+                                AdminId =
+                                    user.Admin ==
+                                    null
+                                        ? (int?)null
+                                        : user.Admin.Id,
+
+                                AdminClinicId =
+                                    user.Admin ==
+                                    null
+                                        ? (Guid?)null
+                                        : user.Admin
+                                            .ClinicId
+                            }
+                    )
+                    .FirstOrDefaultAsync();
 
             if (
-                user ==
+                actor ==
                     null ||
-                !user.IsActive
+                !actor.IsActive
             )
             {
                 throw new UnauthorizedAccessException();
             }
 
             if (
-                user.Role ==
+                actor.Role ==
                     RoleNames.Nurse &&
-                user.Nurse !=
+                actor.NurseId !=
                     null
             )
             {
                 return new StaffActor
                 {
                     ClinicId =
-                        user.Nurse
-                            .ClinicId,
+                        actor.NurseClinicId,
 
                     NurseId =
-                        user.Nurse
-                            .Id
+                        actor.NurseId
                 };
             }
 
             if (
-                user.Role ==
+                actor.Role ==
                     RoleNames.ClinicAdmin &&
-                user.Admin?.ClinicId !=
+                actor.AdminId !=
+                    null &&
+                actor.AdminClinicId !=
                     null
             )
             {
                 return new StaffActor
                 {
                     ClinicId =
-                        user.Admin
-                            .ClinicId,
+                        actor.AdminClinicId,
 
                     AdminId =
-                        user.Admin
-                            .Id
+                        actor.AdminId
                 };
             }
 
             if (
-                user.Role ==
+                actor.Role ==
                     RoleNames.SuperAdmin &&
-                user.Admin !=
+                actor.AdminId !=
                     null
             )
             {
@@ -1107,8 +1100,7 @@ namespace PersonalProject.Services.Implementations
                         null,
 
                     AdminId =
-                        user.Admin
-                            .Id
+                        actor.AdminId
                 };
             }
 
@@ -1121,11 +1113,23 @@ namespace PersonalProject.Services.Implementations
 
         private class StaffActor
         {
-            public Guid? ClinicId { get; set; }
+            public Guid? ClinicId
+            {
+                get;
+                set;
+            }
 
-            public Guid? NurseId { get; set; }
+            public Guid? NurseId
+            {
+                get;
+                set;
+            }
 
-            public int? AdminId { get; set; }
+            public int? AdminId
+            {
+                get;
+                set;
+            }
         }
     }
 }
