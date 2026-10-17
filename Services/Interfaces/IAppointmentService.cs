@@ -33,8 +33,21 @@ namespace PersonalProject.Services.Interfaces
                 Guid performedByUserId
             );
 
-        Task<List<AppointmentResponseDto>>
+        Task<
+            PagedResultDto<
+                AppointmentResponseDto
+            >
+        >
             GetPatientAppointmentsAsync(
+                Guid patientUserId,
+                string? view,
+                int page,
+                int pageSize
+            );
+
+        Task<AppointmentResponseDto?>
+            GetPatientAppointmentByIdAsync(
+                Guid appointmentId,
                 Guid patientUserId
             );
     }
