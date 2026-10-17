@@ -118,13 +118,10 @@ namespace PersonalProject.Utilities
         {
             var sheet = new WorksheetBuilder();
 
-            // Four visually equal KPI/chart blocks: A:C, D:F, G:I, J:L.
-            sheet.SetWidths(
-                18, 20, 4,
-                18, 20, 4,
-                18, 20, 4,
-                18, 20, 4
-            );
+            // Column widths are calculated from the preview data so text-heavy
+            // fields such as patient names and collector names do not collapse
+            // into narrow wrapped columns.
+            sheet.SetWidths(BuildDashboardColumnWidths(report));
 
             sheet.FreezeRows = 4;
             sheet.DrawingRelationshipId = "rId1";
@@ -1713,7 +1710,7 @@ namespace PersonalProject.Utilities
                         <c:scaling><c:orientation val="minMax"/></c:scaling>
                         <c:delete val="0"/>
                         <c:axPos val="l"/>
-                        <c:majorGridlines/>
+                        {SoftMajorGridlinesXml()}
                         <c:numFmt formatCode="0.##" sourceLinked="0"/>
                         <c:tickLblPos val="nextTo"/>
                         <c:crossAx val="47822112"/>
@@ -2258,6 +2255,108 @@ namespace PersonalProject.Utilities
         )
         {
             return Math.Max(13, Math.Min(30, label.Length + 8));
+        }
+
+        private static double[] BuildDashboardColumnWidths(
+            ClinicAdminDynamicReportPreviewDto report
+        )
+        {
+            var widths = Enumerable
+                .Repeat(13d, 12)
+                .ToArray();
+
+            var previewColumns = report.Columns
+                .Take(Math.Min(8, report.Columns.Count))
+                .ToList();
+
+            for (var index = 0; index < previewColumns.Count; index++)
+            {
+                widths[index] = PreviewColumnWidth(report, previewColumns[index]);
+            }
+
+            return widths;
+        }
+
+        private static double PreviewColumnWidth(
+            ClinicAdminDynamicReportPreviewDto report,
+            ClinicAdminDynamicReportColumnDto column
+        )
+        {
+            var longest = column.Label.Length;
+
+            foreach (var row in report.Rows.Take(20))
+            {
+                if (!TryGetRowValue(row, column.Key, out var value))
+                {
+                    continue;
+                }
+
+                var previewText = PreviewValueText(value, column.DataType);
+
+                if (!string.IsNullOrWhiteSpace(previewText))
+                {
+                    longest = Math.Max(longest, previewText.Length);
+                }
+            }
+
+            var width = longest switch
+            {
+                <= 8 => 12d,
+                <= 12 => 16d,
+                <= 18 => 20d,
+                <= 26 => 24d,
+                _ => 28d
+            };
+
+            if (column.DataType.Equals("number", StringComparison.OrdinalIgnoreCase))
+            {
+                width = Math.Min(16d, Math.Max(12d, width - 2d));
+            }
+            else if (
+                column.DataType.Equals("date", StringComparison.OrdinalIgnoreCase) ||
+                column.DataType.Equals("datetime", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                width = Math.Max(14d, Math.Min(18d, width));
+            }
+
+            return width;
+        }
+
+        private static string PreviewValueText(
+            object? value,
+            string dataType
+        )
+        {
+            var normalized = NormalizeExcelValue(value, dataType);
+
+            return normalized switch
+            {
+                null => string.Empty,
+                DateTime dateTime => dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                double number => number.ToString("0.##", CultureInfo.InvariantCulture),
+                decimal number => number.ToString("0.##", CultureInfo.InvariantCulture),
+                float number => number.ToString("0.##", CultureInfo.InvariantCulture),
+                _ => Convert.ToString(normalized, CultureInfo.InvariantCulture) ?? string.Empty
+            };
+        }
+
+        private static string SoftMajorGridlinesXml()
+        {
+            return $"""
+                <c:majorGridlines>
+                  <c:spPr>
+                    <a:ln w="9525">
+                      <a:solidFill>
+                        <a:srgbClr val="{Border}">
+                          <a:alpha val="35000"/>
+                        </a:srgbClr>
+                      </a:solidFill>
+                    </a:ln>
+                  </c:spPr>
+                </c:majorGridlines>
+                """;
         }
 
         private static string FormulaText(
