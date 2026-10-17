@@ -149,6 +149,14 @@ namespace PersonalProject.Migrations
 
                     b.HasIndex("PatientId");
 
+                    b.HasIndex("ScheduledAt");
+
+                    b.HasIndex("ClinicId", "ScheduledAt");
+
+                    b.HasIndex("ClinicId", "Status");
+
+                    b.HasIndex("PatientId", "ScheduledAt");
+
                     b.ToTable("Appointments");
                 });
 
@@ -182,6 +190,8 @@ namespace PersonalProject.Migrations
                     b.HasIndex("PerformedByUserId");
 
                     b.HasIndex("Timestamp");
+
+                    b.HasIndex("ClinicId", "Timestamp");
 
                     b.ToTable("AuditLogs");
                 });
@@ -636,6 +646,14 @@ namespace PersonalProject.Migrations
 
                     b.HasIndex("ProxyId");
 
+                    b.HasIndex("ScheduledCollectionDate");
+
+                    b.HasIndex("ClinicId", "ScheduledCollectionDate");
+
+                    b.HasIndex("PatientId", "ScheduledCollectionDate");
+
+                    b.HasIndex("ClinicId", "Status", "CollectedAt");
+
                     b.HasIndex("PatientId", "Status", "CollectedAt");
 
                     b.ToTable("MedicationCollections");
@@ -697,7 +715,9 @@ namespace PersonalProject.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MedicationId");
+                    b.HasIndex("TakenAt");
+
+                    b.HasIndex("MedicationId", "TakenAt");
 
                     b.ToTable("MedicationLogs");
                 });
@@ -883,6 +903,8 @@ namespace PersonalProject.Migrations
                     b.HasIndex("ExpiryTime");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Purpose", "CreatedAt");
 
                     b.ToTable("OtpVerifications");
                 });
@@ -1143,6 +1165,10 @@ namespace PersonalProject.Migrations
                     b.HasIndex("PatientId");
 
                     b.HasIndex("ProxyId");
+
+                    b.HasIndex("ProxyId", "IsActive");
+
+                    b.HasIndex("PatientId", "IsActive", "AssignedAt");
 
                     b.HasIndex("PatientId", "ProxyId", "IsActive");
 

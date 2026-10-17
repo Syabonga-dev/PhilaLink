@@ -6,7 +6,9 @@ namespace PersonalProject.Data
 {
     public class PhilaLinkDbContext : DbContext
     {
-        public PhilaLinkDbContext(DbContextOptions<PhilaLinkDbContext> options) : base(options)
+        public PhilaLinkDbContext(
+            DbContextOptions<PhilaLinkDbContext> options
+        ) : base(options)
         {
         }
 
@@ -105,7 +107,6 @@ namespace PersonalProject.Data
             ModelBuilder modelBuilder
         )
         {
-
             base.OnModelCreating(modelBuilder);
 
             // =================================================
@@ -129,6 +130,7 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.IsActive);
+
             // =================================================
             // USER -> PATIENT
             // =================================================
@@ -312,6 +314,26 @@ namespace PersonalProject.Data
                 .HasForeignKey(l => l.MedicationId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            /*
+             * Patient medication history and supply calculations
+             * filter logs by medication and time.
+             */
+            modelBuilder.Entity<MedicationLog>()
+                .HasIndex(
+                    l => new
+                    {
+                        l.MedicationId,
+                        l.TakenAt
+                    }
+                );
+
+            /*
+             * Admin reporting can query medication logs across
+             * all patients for a reporting period.
+             */
+            modelBuilder.Entity<MedicationLog>()
+                .HasIndex(l => l.TakenAt);
+
             // =================================================
             // APPOINTMENT -> PATIENT
             // =================================================
@@ -325,6 +347,19 @@ namespace PersonalProject.Data
             modelBuilder.Entity<Appointment>()
                 .HasIndex(a => a.PatientId);
 
+            /*
+             * Patient dashboards and patient-care views retrieve
+             * appointments chronologically for one patient.
+             */
+            modelBuilder.Entity<Appointment>()
+                .HasIndex(
+                    a => new
+                    {
+                        a.PatientId,
+                        a.ScheduledAt
+                    }
+                );
+
             // =================================================
             // APPOINTMENT -> CLINIC
             // =================================================
@@ -337,6 +372,39 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<Appointment>()
                 .HasIndex(a => a.ClinicId);
+
+            /*
+             * Clinic dashboards and appointment lists commonly
+             * filter by clinic and appointment date.
+             */
+            modelBuilder.Entity<Appointment>()
+                .HasIndex(
+                    a => new
+                    {
+                        a.ClinicId,
+                        a.ScheduledAt
+                    }
+                );
+
+            /*
+             * Nurse and administrator dashboards count pending
+             * and other appointment states within a clinic.
+             */
+            modelBuilder.Entity<Appointment>()
+                .HasIndex(
+                    a => new
+                    {
+                        a.ClinicId,
+                        a.Status
+                    }
+                );
+
+            /*
+             * SuperAdmin reports can span all clinics and filter
+             * directly by appointment date.
+             */
+            modelBuilder.Entity<Appointment>()
+                .HasIndex(a => a.ScheduledAt);
 
             // =================================================
             // APPOINTMENT -> NURSE
@@ -399,6 +467,20 @@ namespace PersonalProject.Data
             modelBuilder.Entity<ProxyLink>()
                 .HasIndex(pl => pl.PatientId);
 
+            /*
+             * Nurse patient-care views filter active proxy links
+             * for one patient and display newest assignments.
+             */
+            modelBuilder.Entity<ProxyLink>()
+                .HasIndex(
+                    pl => new
+                    {
+                        pl.PatientId,
+                        pl.IsActive,
+                        pl.AssignedAt
+                    }
+                );
+
             // =================================================
             // PROXY -> PROXY LINKS
             // =================================================
@@ -411,6 +493,19 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<ProxyLink>()
                 .HasIndex(pl => pl.ProxyId);
+
+            /*
+             * Proxy dashboards resolve active patient links by
+             * ProxyId and IsActive.
+             */
+            modelBuilder.Entity<ProxyLink>()
+                .HasIndex(
+                    pl => new
+                    {
+                        pl.ProxyId,
+                        pl.IsActive
+                    }
+                );
 
             modelBuilder.Entity<ProxyLink>()
                 .HasIndex(pl => pl.IsActive);
@@ -478,6 +573,19 @@ namespace PersonalProject.Data
                     }
                 );
 
+            /*
+             * Patient and nurse views repeatedly retrieve the next
+             * or latest collection for one patient.
+             */
+            modelBuilder.Entity<MedicationCollection>()
+                .HasIndex(
+                    c => new
+                    {
+                        c.PatientId,
+                        c.ScheduledCollectionDate
+                    }
+                );
+
             // =================================================
             // MEDICATION COLLECTION -> CLINIC
             // =================================================
@@ -490,6 +598,40 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<MedicationCollection>()
                 .HasIndex(c => c.ClinicId);
+
+            /*
+             * Due-today, overdue and collection-list queries are
+             * clinic-scoped and date-driven.
+             */
+            modelBuilder.Entity<MedicationCollection>()
+                .HasIndex(
+                    c => new
+                    {
+                        c.ClinicId,
+                        c.ScheduledCollectionDate
+                    }
+                );
+
+            /*
+             * Completed collection statistics commonly filter by
+             * clinic, status and completion timestamp.
+             */
+            modelBuilder.Entity<MedicationCollection>()
+                .HasIndex(
+                    c => new
+                    {
+                        c.ClinicId,
+                        c.Status,
+                        c.CollectedAt
+                    }
+                );
+
+            /*
+             * SuperAdmin reporting can span every clinic and use
+             * ScheduledCollectionDate as the date-range filter.
+             */
+            modelBuilder.Entity<MedicationCollection>()
+                .HasIndex(c => c.ScheduledCollectionDate);
 
             // =================================================
             // MEDICATION COLLECTION -> PROXY
@@ -634,6 +776,20 @@ namespace PersonalProject.Data
             modelBuilder.Entity<OtpVerification>()
                 .HasIndex(o => o.ExpiryTime);
 
+            /*
+             * OTP generation and verification resolve codes by
+             * user, purpose and newest creation timestamp.
+             */
+            modelBuilder.Entity<OtpVerification>()
+                .HasIndex(
+                    o => new
+                    {
+                        o.UserId,
+                        o.Purpose,
+                        o.CreatedAt
+                    }
+                );
+
             // =================================================
             // PATIENT -> CHAT CONVERSATIONS
             // =================================================
@@ -706,6 +862,19 @@ namespace PersonalProject.Data
 
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(a => a.Timestamp);
+
+            /*
+             * Clinic administrators filter audit history by clinic
+             * and display newest entries first.
+             */
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(
+                    a => new
+                    {
+                        a.ClinicId,
+                        a.Timestamp
+                    }
+                );
 
             // =================================================
             // PATIENT -> HEALTH METRICS
