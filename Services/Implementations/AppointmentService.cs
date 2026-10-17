@@ -11,6 +11,12 @@ namespace PersonalProject.Services.Implementations
     public class AppointmentService :
         IAppointmentService
     {
+        private const int
+            DefaultPageSize = 20;
+
+        private const int
+            MaximumPageSize = 100;
+
         private static readonly TimeZoneInfo
             SouthAfricaTimeZone =
                 ResolveSouthAfricaTimeZone();
@@ -219,8 +225,6 @@ namespace PersonalProject.Services.Implementations
 
         // =====================================================
         // UPDATE
-        // Includes confirmation / approval, rescheduling,
-        // cancellation, completion and other status changes.
         // =====================================================
 
         public async Task<
@@ -416,7 +420,7 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // GET ONE
+        // GET ONE - STAFF
         // =====================================================
 
         public async Task<
@@ -482,32 +486,234 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // PATIENT APPOINTMENTS
+        // PATIENT APPOINTMENTS - PAGINATED
         // =====================================================
 
         public async Task<
-            List<AppointmentResponseDto>
-        > GetPatientAppointmentsAsync(
-            Guid patientUserId
-        )
+            PagedResultDto<
+                AppointmentResponseDto
+            >
+        >
+            GetPatientAppointmentsAsync(
+                Guid patientUserId,
+                string? view,
+                int page,
+                int pageSize
+            )
         {
-            var patient =
-                await _context.Patients
-                    .Include(
-                        item =>
-                            item.User
-                    )
-                    .FirstOrDefaultAsync(
-                        item =>
-                            item.UserId ==
-                                patientUserId &&
-                            item.User.Role ==
-                                RoleNames.Patient &&
-                            item.User.IsActive
-                    );
+            var patientId =
+                await GetActivePatientIdAsync(
+                    patientUserId
+                );
+
+            var normalizedView =
+                NormalizePatientView(
+                    view
+                );
+
+            var normalizedPage =
+                page < 1
+                    ? 1
+                    : page;
+
+            var normalizedPageSize =
+                NormalizePageSize(
+                    pageSize
+                );
+
+            var now =
+                DateTime.UtcNow;
+
+            IQueryable<Appointment>
+                query =
+                    _context.Appointments
+                        .AsNoTracking()
+                        .Where(
+                            appointment =>
+                                appointment.PatientId ==
+                                    patientId
+                        );
 
             if (
-                patient ==
+                normalizedView ==
+                    "upcoming"
+            )
+            {
+                query =
+                    query.Where(
+                        appointment =>
+                            appointment.ScheduledAt >=
+                                now &&
+                            appointment.Status !=
+                                AppointmentStatuses
+                                    .Completed &&
+                            appointment.Status !=
+                                AppointmentStatuses
+                                    .Cancelled &&
+                            appointment.Status !=
+                                AppointmentStatuses
+                                    .Missed
+                    );
+            }
+            else if (
+                normalizedView ==
+                    "past"
+            )
+            {
+                query =
+                    query.Where(
+                        appointment =>
+                            appointment.ScheduledAt <
+                                now ||
+                            appointment.Status ==
+                                AppointmentStatuses
+                                    .Completed ||
+                            appointment.Status ==
+                                AppointmentStatuses
+                                    .Cancelled ||
+                            appointment.Status ==
+                                AppointmentStatuses
+                                    .Missed
+                    );
+            }
+
+            var totalItems =
+                await query
+                    .CountAsync();
+
+            IOrderedQueryable<Appointment>
+                orderedQuery;
+
+            if (
+                normalizedView ==
+                    "upcoming"
+            )
+            {
+                orderedQuery =
+                    query
+                        .OrderBy(
+                            appointment =>
+                                appointment
+                                    .ScheduledAt
+                        )
+                        .ThenBy(
+                            appointment =>
+                                appointment.Id
+                        );
+            }
+            else
+            {
+                orderedQuery =
+                    query
+                        .OrderByDescending(
+                            appointment =>
+                                appointment
+                                    .ScheduledAt
+                        )
+                        .ThenByDescending(
+                            appointment =>
+                                appointment.Id
+                        );
+            }
+
+            var skip =
+                (
+                    normalizedPage -
+                    1
+                ) *
+                normalizedPageSize;
+
+            var items =
+                await ProjectAppointmentQuery(
+                    orderedQuery
+                        .Skip(
+                            skip
+                        )
+                        .Take(
+                            normalizedPageSize
+                        )
+                )
+                .ToListAsync();
+
+            return new
+                PagedResultDto<
+                    AppointmentResponseDto
+                >
+            {
+                Items =
+                        items,
+
+                Page =
+                        normalizedPage,
+
+                PageSize =
+                        normalizedPageSize,
+
+                TotalItems =
+                        totalItems
+            };
+        }
+
+        // =====================================================
+        // PATIENT APPOINTMENT - ONE
+        // =====================================================
+
+        public async Task<
+            AppointmentResponseDto?
+        >
+            GetPatientAppointmentByIdAsync(
+                Guid appointmentId,
+                Guid patientUserId
+            )
+        {
+            var patientId =
+                await GetActivePatientIdAsync(
+                    patientUserId
+                );
+
+            return await
+                ProjectAppointmentQuery(
+                    _context.Appointments
+                        .AsNoTracking()
+                        .Where(
+                            appointment =>
+                                appointment.Id ==
+                                    appointmentId &&
+                                appointment.PatientId ==
+                                    patientId
+                        )
+                )
+                .FirstOrDefaultAsync();
+        }
+
+        // =====================================================
+        // PATIENT RESOLUTION
+        // =====================================================
+
+        private async Task<Guid>
+            GetActivePatientIdAsync(
+                Guid patientUserId
+            )
+        {
+            var patientId =
+                await _context.Patients
+                    .AsNoTracking()
+                    .Where(
+                        patient =>
+                            patient.UserId ==
+                                patientUserId &&
+                            patient.User.Role ==
+                                RoleNames.Patient &&
+                            patient.User.IsActive
+                    )
+                    .Select(
+                        patient =>
+                            (Guid?)patient.Id
+                    )
+                    .FirstOrDefaultAsync();
+
+            if (
+                patientId ==
                     null
             )
             {
@@ -516,25 +722,67 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            var appointments =
-                await GetAppointmentQuery()
-                    .Where(
-                        item =>
-                            item.PatientId ==
-                                patient.Id
-                    )
-                    .OrderBy(
-                        item =>
-                            item.ScheduledAt
-                    )
-                    .ToListAsync();
+            return patientId.Value;
+        }
 
-            return appointments
-                .Select(
-                    item =>
-                        item.ToDto()
+        // =====================================================
+        // PAGINATION
+        // =====================================================
+
+        private static int
+            NormalizePageSize(
+                int pageSize
+            )
+        {
+            if (
+                pageSize <=
+                    0
+            )
+            {
+                return
+                    DefaultPageSize;
+            }
+
+            return Math.Min(
+                pageSize,
+                MaximumPageSize
+            );
+        }
+
+        private static string
+            NormalizePatientView(
+                string? view
+            )
+        {
+            if (
+                string.IsNullOrWhiteSpace(
+                    view
                 )
-                .ToList();
+            )
+            {
+                return "all";
+            }
+
+            var normalized =
+                view
+                    .Trim()
+                    .ToLowerInvariant();
+
+            if (
+                normalized ==
+                    "all" ||
+                normalized ==
+                    "upcoming" ||
+                normalized ==
+                    "past"
+            )
+            {
+                return normalized;
+            }
+
+            throw new InvalidOperationException(
+                "Appointment view must be 'all', 'upcoming', or 'past'."
+            );
         }
 
         // =====================================================
@@ -572,12 +820,6 @@ namespace PersonalProject.Services.Implementations
                         ? appointment.Status
                         : statusOverride;
 
-                /*
-                 * This deliberately matches the message created
-                 * by MyNotificationsController. That prevents
-                 * the later polling pass from creating a
-                 * duplicate notification.
-                 */
                 var message =
                     "Appointment update: " +
                     $"Your {type} at " +
@@ -595,11 +837,6 @@ namespace PersonalProject.Services.Implementations
                 Exception ex
             )
             {
-                /*
-                 * Appointment changes must not be rolled back
-                 * solely because a secondary notification could
-                 * not be created.
-                 */
                 _logger.LogWarning(
                     ex,
                     "Appointment {AppointmentId} was saved, but its patient notification could not be created.",
@@ -609,7 +846,8 @@ namespace PersonalProject.Services.Implementations
         }
 
         // =====================================================
-        // QUERY
+        // TRACKED QUERY
+        // Used by write operations.
         // =====================================================
 
         private IQueryable<Appointment>
@@ -635,6 +873,83 @@ namespace PersonalProject.Services.Implementations
                 .ThenInclude(
                     nurse =>
                         nurse!.User
+                );
+        }
+
+        // =====================================================
+        // READ PROJECTION
+        // =====================================================
+
+        private static IQueryable<
+            AppointmentResponseDto
+        >
+            ProjectAppointmentQuery(
+                IQueryable<Appointment>
+                    query
+            )
+        {
+            return query
+                .Select(
+                    appointment =>
+                        new AppointmentResponseDto
+                        {
+                            Id =
+                                appointment.Id,
+
+                            PatientId =
+                                appointment.PatientId,
+
+                            PatientName =
+                                appointment
+                                    .Patient
+                                    .User
+                                    .FullName,
+
+                            ClinicId =
+                                appointment.ClinicId,
+
+                            ClinicName =
+                                appointment
+                                    .Clinic
+                                    .Name,
+
+                            NurseId =
+                                appointment.NurseId,
+
+                            NurseName =
+                                appointment.Nurse ==
+                                null
+                                    ? null
+                                    : appointment
+                                        .Nurse
+                                        .User
+                                        .FullName,
+
+                            ScheduledAt =
+                                appointment.ScheduledAt,
+
+                            DurationMinutes =
+                                appointment
+                                    .DurationMinutes,
+
+                            Type =
+                                appointment.Type,
+
+                            Reason =
+                                appointment.Reason,
+
+                            ProviderName =
+                                appointment.ProviderName,
+
+                            Mode =
+                                appointment.Mode,
+
+                            Status =
+                                appointment.Status,
+
+                            Notes =
+                                appointment.Notes
+                        }
                 );
         }
 

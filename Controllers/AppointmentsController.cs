@@ -53,7 +53,7 @@ namespace PersonalProject.Controllers
         }
 
         // =====================================================
-        // PATIENT: OWN
+        // PATIENT: OWN - PAGINATED
         // =====================================================
 
         [HttpGet("me")]
@@ -61,14 +61,29 @@ namespace PersonalProject.Controllers
             Roles = RoleNames.Patient
         )]
         public async Task<IActionResult>
-            GetMyAppointments()
+            GetMyAppointments(
+                [FromQuery]
+                string? view =
+                    "all",
+
+                [FromQuery]
+                int page =
+                    1,
+
+                [FromQuery]
+                int pageSize =
+                    20
+            )
         {
             try
             {
                 return Ok(
                     await _appointmentService
                         .GetPatientAppointmentsAsync(
-                            GetCurrentUserId()
+                            GetCurrentUserId(),
+                            view,
+                            page,
+                            pageSize
                         )
                 );
             }
@@ -77,6 +92,18 @@ namespace PersonalProject.Controllers
             )
             {
                 return NotFound(
+                    new
+                    {
+                        message =
+                            ex.Message
+                    }
+                );
+            }
+            catch (
+                InvalidOperationException ex
+            )
+            {
+                return BadRequest(
                     new
                     {
                         message =

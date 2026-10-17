@@ -22,6 +22,9 @@ namespace PersonalProject.Controllers
         private readonly IPatientService
             _patientService;
 
+        private readonly IAppointmentService
+            _appointmentService;
+
         private readonly INotificationService
             _notificationService;
 
@@ -31,12 +34,16 @@ namespace PersonalProject.Controllers
 
         public PatientController(
             IPatientService patientService,
+            IAppointmentService appointmentService,
             INotificationService notificationService,
             ILogger<PatientController> logger
         )
         {
             _patientService =
                 patientService;
+
+            _appointmentService =
+                appointmentService;
 
             _notificationService =
                 notificationService;
@@ -377,22 +384,21 @@ namespace PersonalProject.Controllers
                     );
 
                 /*
-                 * The appointment remains in the database with
-                 * Cancelled status, so retrieve its final state
-                 * for the notification.
+                 * Fetch only the cancelled appointment.
+                 *
+                 * Previously this endpoint downloaded the
+                 * patient's entire appointment history and then
+                 * searched it in memory for one ID.
+                 *
+                 * This direct lookup remains correct once
+                 * appointment history is paginated and avoids
+                 * unnecessary database/network work.
                  */
-                var appointments =
-                    await _patientService
-                        .GetAppointmentsAsync(
-                            userId
-                        );
-
                 var appointment =
-                    appointments
-                        .FirstOrDefault(
-                            item =>
-                                item.Id ==
-                                    id
+                    await _appointmentService
+                        .GetPatientAppointmentByIdAsync(
+                            id,
+                            userId
                         );
 
                 if (
