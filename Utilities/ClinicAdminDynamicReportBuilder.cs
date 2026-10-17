@@ -66,7 +66,7 @@ namespace PersonalProject.Utilities
             var filters = BuildDashboardFilters(report);
             var visual = BuildVisualConfig(report);
             var pieData = BuildChartData(report, visual.PieCategoryKey, null, 8);
-            var barData = BuildChartData(report, visual.BarCategoryKey, visual.BarValueKey, 10);
+            var barData = BuildChartData(report, visual.BarCategoryKey, visual.BarValueKey, 8);
             var kpis = BuildKpis(report, visual, pieData);
 
             using var output = new MemoryStream();
@@ -1647,6 +1647,15 @@ namespace PersonalProject.Utilities
         {
             var lastRow = points.Count + 1;
 
+            /*
+             * Use a horizontal comparison chart instead of vertical columns.
+             *
+             * Long labels such as medication names are much easier to read on
+             * the left-hand category axis, while values sit cleanly at the end
+             * of each bar.  The value axis is intentionally whole-number based
+             * because these comparison charts represent counts / units rather
+             * than fractional collection records.
+             */
             return $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <c:chartSpace
@@ -1658,7 +1667,7 @@ namespace PersonalProject.Utilities
                     <c:plotArea>
                       <c:layout/>
                       <c:barChart>
-                        <c:barDir val="col"/>
+                        <c:barDir val="bar"/>
                         <c:grouping val="clustered"/>
                         <c:varyColors val="0"/>
                         <c:ser>
@@ -1666,11 +1675,10 @@ namespace PersonalProject.Utilities
                           <c:order val="0"/>
                           <c:spPr>
                             <a:solidFill>
-                              <a:srgbClr val="{ChartBlue}"/>
+                              <a:srgbClr val="{Teal}"/>
                             </a:solidFill>
                             <a:ln><a:noFill/></a:ln>
                           </c:spPr>
-                          {PointFormattingXml(points.Count, BarPalette)}
                           <c:cat>
                             <c:strRef>
                               <c:f>Calc!$G$2:$G${lastRow}</c:f>
@@ -1684,35 +1692,63 @@ namespace PersonalProject.Utilities
                             </c:numRef>
                           </c:val>
                         </c:ser>
+
                         <c:dLbls>
+                          <c:dLblPos val="outEnd"/>
+                          <c:numFmt formatCode="0;-0;;" sourceLinked="0"/>
+                          <c:showLegendKey val="0"/>
                           <c:showVal val="1"/>
+                          <c:showCatName val="0"/>
+                          <c:showSerName val="0"/>
+                          <c:showPercent val="0"/>
+                          <c:showLeaderLines val="0"/>
+                          <c:txPr>
+                            <a:bodyPr/>
+                            <a:lstStyle/>
+                            <a:p>
+                              <a:pPr/>
+                              <a:endParaRPr lang="en-ZA" sz="900"/>
+                            </a:p>
+                          </c:txPr>
                         </c:dLbls>
-                        <c:gapWidth val="70"/>
+
+                        <c:gapWidth val="45"/>
                         <c:axId val="47822112"/>
                         <c:axId val="47823232"/>
                       </c:barChart>
 
                       <c:catAx>
                         <c:axId val="47822112"/>
-                        <c:scaling><c:orientation val="minMax"/></c:scaling>
+                        <c:scaling>
+                          <c:orientation val="maxMin"/>
+                        </c:scaling>
                         <c:delete val="0"/>
-                        <c:axPos val="b"/>
+                        <c:axPos val="l"/>
+                        <c:majorTickMark val="none"/>
+                        <c:minorTickMark val="none"/>
                         <c:tickLblPos val="nextTo"/>
                         <c:crossAx val="47823232"/>
                         <c:crosses val="autoZero"/>
                         <c:auto val="1"/>
-                        <c:lblAlgn val="ctr"/>
+                        <c:lblAlgn val="r"/>
                         <c:lblOffset val="100"/>
+                        <c:noMultiLvlLbl val="1"/>
                       </c:catAx>
 
                       <c:valAx>
                         <c:axId val="47823232"/>
-                        <c:scaling><c:orientation val="minMax"/></c:scaling>
+                        <c:scaling>
+                          <c:orientation val="minMax"/>
+                          <c:min val="0"/>
+                        </c:scaling>
                         <c:delete val="0"/>
-                        <c:axPos val="l"/>
+                        <c:axPos val="b"/>
                         {SoftMajorGridlinesXml()}
-                        <c:numFmt formatCode="0.##" sourceLinked="0"/>
+                        <c:numFmt formatCode="0" sourceLinked="0"/>
+                        <c:majorTickMark val="none"/>
+                        <c:minorTickMark val="none"/>
                         <c:tickLblPos val="nextTo"/>
+                        <c:majorUnit val="1"/>
                         <c:crossAx val="47822112"/>
                         <c:crosses val="autoZero"/>
                         <c:crossBetween val="between"/>
@@ -2347,10 +2383,10 @@ namespace PersonalProject.Utilities
             return $"""
                 <c:majorGridlines>
                   <c:spPr>
-                    <a:ln w="9525">
+                    <a:ln w="6350">
                       <a:solidFill>
                         <a:srgbClr val="{Border}">
-                          <a:alpha val="35000"/>
+                          <a:alpha val="18000"/>
                         </a:srgbClr>
                       </a:solidFill>
                     </a:ln>
