@@ -23,7 +23,8 @@ namespace PersonalProject.Controllers
             IOtpVerificationService otpService
         )
         {
-            _context = context;
+            _context =
+                context;
 
             _otpService =
                 otpService;
@@ -42,26 +43,42 @@ namespace PersonalProject.Controllers
                 dto.Identifier.Trim();
 
             var normalizedIdentifier =
-                identifier.ToLower();
-
-            var user =
-                await _context.Users
-                    .FirstOrDefaultAsync(
-                        u =>
-                            u.IsActive &&
-                            (
-                                u.IdNumber ==
-                                    identifier ||
-                                u.Email.ToLower() ==
-                                    normalizedIdentifier
-                            )
-                    );
+                identifier
+                    .ToLowerInvariant();
 
             /*
-             * Never reveal whether the supplied email or
-             * ID number belongs to a PhilaLink account.
+             * Only User.Id is required to generate the OTP.
+             *
+             * Do not materialize and track the entire User row.
+             * Email is already canonicalized to lowercase.
              */
-            if (user == null)
+            var userId =
+                await _context.Users
+                    .AsNoTracking()
+                    .Where(
+                        user =>
+                            user.IsActive &&
+                            (
+                                user.IdNumber ==
+                                    identifier ||
+                                user.Email ==
+                                    normalizedIdentifier
+                            )
+                    )
+                    .Select(
+                        user =>
+                            (Guid?)user.Id
+                    )
+                    .FirstOrDefaultAsync();
+
+            /*
+             * Never disclose whether the supplied identifier
+             * belongs to an account.
+             */
+            if (
+                userId ==
+                null
+            )
             {
                 return Ok(
                     new
@@ -76,16 +93,15 @@ namespace PersonalProject.Controllers
             {
                 await _otpService
                     .GenerateAsync(
-                        user.Id,
+                        userId.Value,
                         "PasswordReset"
                     );
             }
             catch (InvalidOperationException)
             {
                 /*
-                 * Keep the public response identical even
-                 * when delivery fails or resend cooldown
-                 * is active.
+                 * Deliberately keep the public response identical
+                 * for resend cooldowns and delivery failures.
                  */
             }
 
@@ -127,9 +143,7 @@ namespace PersonalProject.Controllers
                 );
 
             /*
-             * Validate the password before consuming the OTP.
-             * A valid OTP should not be wasted because the
-             * chosen password failed the password policy.
+             * Validate before consuming a valid OTP.
              */
             if (
                 passwordError !=
@@ -149,22 +163,32 @@ namespace PersonalProject.Controllers
                 dto.Identifier.Trim();
 
             var normalizedIdentifier =
-                identifier.ToLower();
+                identifier
+                    .ToLowerInvariant();
 
+            /*
+             * Tracking is required for this query because the
+             * password/security fields are updated below.
+             *
+             * Direct Email equality keeps the lookup indexable.
+             */
             var user =
                 await _context.Users
                     .FirstOrDefaultAsync(
-                        u =>
-                            u.IsActive &&
+                        item =>
+                            item.IsActive &&
                             (
-                                u.IdNumber ==
+                                item.IdNumber ==
                                     identifier ||
-                                u.Email.ToLower() ==
+                                item.Email ==
                                     normalizedIdentifier
                             )
                     );
 
-            if (user == null)
+            if (
+                user ==
+                null
+            )
             {
                 return BadRequest(
                     new
@@ -195,9 +219,10 @@ namespace PersonalProject.Controllers
             }
 
             user.PasswordHash =
-                BCrypt.Net.BCrypt.HashPassword(
-                    dto.NewPassword
-                );
+                BCrypt.Net.BCrypt
+                    .HashPassword(
+                        dto.NewPassword
+                    );
 
             user.ClearLoginAbuseState();
 
@@ -232,7 +257,8 @@ namespace PersonalProject.Controllers
                 string.IsNullOrWhiteSpace(
                     password
                 ) ||
-                password.Length < 12
+                password.Length <
+                    12
             )
             {
                 return

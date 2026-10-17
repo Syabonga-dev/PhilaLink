@@ -37,8 +37,8 @@ namespace PersonalProject.Services.Implementations
         // =====================================================
 
         public async Task<RegisterResponseDto> RegisterAsync(
-    RegisterDto dto
-)
+            RegisterDto dto
+        )
         {
             ValidatePasswordStrength(
                 dto.Password
@@ -66,6 +66,13 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Emails are normalized to lowercase before storage.
+             *
+             * Compare the normalized value directly instead of
+             * applying LOWER() to the database column. This lets
+             * PostgreSQL use a normal Email B-tree index.
+             */
             var duplicate =
                 await _context.Users
                     .AsNoTracking()
@@ -75,8 +82,7 @@ namespace PersonalProject.Services.Implementations
                                 idNumber ||
                             user.PhoneNumber ==
                                 phoneNumber ||
-                            user.Email
-                                .ToLower() ==
+                            user.Email ==
                                 email
                     )
                     .Select(
@@ -92,8 +98,7 @@ namespace PersonalProject.Services.Implementations
                                         phoneNumber,
 
                                 DuplicateEmail =
-                                    user.Email
-                                        .ToLower() ==
+                                    user.Email ==
                                         email
                             }
                     )
@@ -128,6 +133,9 @@ namespace PersonalProject.Services.Implementations
                     "An account with that email address already exists."
                 );
             }
+
+            var now =
+                DateTime.UtcNow;
 
             var user =
                 new User
@@ -169,7 +177,7 @@ namespace PersonalProject.Services.Implementations
                         false,
 
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 };
 
             _context.Users.Add(
@@ -200,7 +208,7 @@ namespace PersonalProject.Services.Implementations
                         false,
 
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 };
 
             _context.Patients.Add(
@@ -235,13 +243,18 @@ namespace PersonalProject.Services.Implementations
                         true,
 
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 };
 
             _context.PatientPreferences.Add(
                 preference
             );
 
+            /*
+             * User, Patient and PatientPreference are written
+             * together. SaveChanges is transactional for this
+             * unit of work.
+             */
             await _context
                 .SaveChangesAsync();
 
@@ -273,8 +286,10 @@ namespace PersonalProject.Services.Implementations
                 dto.IdNumber.Trim();
 
             /*
-             * Login is read-only until authentication succeeds;
-             * the user entity does not need EF change tracking.
+             * Login does not modify the User entity.
+             *
+             * Avoid EF change tracking for this high-frequency
+             * authentication lookup.
              */
             var user =
                 await _context.Users
@@ -316,7 +331,11 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (!RoleNames.IsValid(user.Role))
+            if (
+                !RoleNames.IsValid(
+                    user.Role
+                )
+            )
             {
                 throw new UnauthorizedAccessException(
                     "This account has an unsupported role. Contact an administrator."
@@ -357,7 +376,7 @@ namespace PersonalProject.Services.Implementations
                     "RedirectUri"
                 );
 
-            var scope =
+            const string scope =
                 "openid email profile";
 
             return
@@ -457,9 +476,7 @@ namespace PersonalProject.Services.Implementations
                         tokenRequest
                     );
             }
-            catch (
-                HttpRequestException
-            )
+            catch (HttpRequestException)
             {
                 throw new InvalidOperationException(
                     "Google authentication service could not be reached."
@@ -468,7 +485,10 @@ namespace PersonalProject.Services.Implementations
 
             using (tokenResponse)
             {
-                if (!tokenResponse.IsSuccessStatusCode)
+                if (
+                    !tokenResponse
+                        .IsSuccessStatusCode
+                )
                 {
                     throw new UnauthorizedAccessException(
                         "Google authorization could not be completed."
@@ -476,7 +496,8 @@ namespace PersonalProject.Services.Implementations
                 }
 
                 var responseJson =
-                    await tokenResponse.Content
+                    await tokenResponse
+                        .Content
                         .ReadAsStringAsync();
 
                 var googleTokens =
@@ -486,7 +507,8 @@ namespace PersonalProject.Services.Implementations
                         );
 
                 if (
-                    googleTokens == null ||
+                    googleTokens ==
+                        null ||
                     string.IsNullOrWhiteSpace(
                         googleTokens.IdToken
                     )
@@ -505,7 +527,9 @@ namespace PersonalProject.Services.Implementations
 
                 var email =
                     googlePrincipal
-                        .FindFirst("email")
+                        .FindFirst(
+                            "email"
+                        )
                         ?.Value
                     ??
                     googlePrincipal
@@ -551,21 +575,17 @@ namespace PersonalProject.Services.Implementations
                         .ToLowerInvariant();
 
                 /*
-                 * Google OAuth does not create a new PhilaLink
-                 * account here because a PhilaLink user requires
-                 * information Google cannot provide, such as
-                 * ID number and phone number.
+                 * PhilaLink stores canonical lowercase emails.
                  *
-                 * Instead, Google authenticates an existing
-                 * PhilaLink account with the same verified email.
+                 * Do not call ToLower() on the Email column.
+                 * Direct equality can use the Email index.
                  */
                 var user =
                     await _context.Users
                         .AsNoTracking()
                         .FirstOrDefaultAsync(
                             item =>
-                                item.Email
-                                    .ToLower() ==
+                                item.Email ==
                                 normalizedEmail
                         );
 
@@ -631,9 +651,7 @@ namespace PersonalProject.Services.Implementations
                             "https://www.googleapis.com/oauth2/v3/certs"
                         );
             }
-            catch (
-                HttpRequestException
-            )
+            catch (HttpRequestException)
             {
                 throw new InvalidOperationException(
                     "Google signing keys could not be retrieved."
@@ -652,7 +670,8 @@ namespace PersonalProject.Services.Implementations
                         true,
 
                     IssuerSigningKeys =
-                        googleKeys.GetSigningKeys(),
+                        googleKeys
+                            .GetSigningKeys(),
 
                     ValidateIssuer =
                         true,
@@ -677,7 +696,9 @@ namespace PersonalProject.Services.Implementations
                         true,
 
                     ClockSkew =
-                        TimeSpan.FromMinutes(2)
+                        TimeSpan.FromMinutes(
+                            2
+                        )
                 };
 
             var tokenHandler =
@@ -694,7 +715,7 @@ namespace PersonalProject.Services.Implementations
 
                 if (
                     validatedToken
-                        is not JwtSecurityToken jwtToken
+                    is not JwtSecurityToken jwtToken
                 )
                 {
                     throw new UnauthorizedAccessException(
@@ -717,9 +738,7 @@ namespace PersonalProject.Services.Implementations
 
                 return principal;
             }
-            catch (
-                SecurityTokenException
-            )
+            catch (SecurityTokenException)
             {
                 throw new UnauthorizedAccessException(
                     "Google identity token validation failed."
@@ -763,9 +782,8 @@ namespace PersonalProject.Services.Implementations
         )
         {
             /*
-             * /api/auth/me is called during frontend bootstrap.
-             * Project only the fields the API returns and avoid
-             * change tracking for this read-only request.
+             * Project only the fields returned by /auth/me.
+             * No full User entity or change tracking is needed.
              */
             var user =
                 await _context.Users
@@ -810,7 +828,8 @@ namespace PersonalProject.Services.Implementations
                     .FirstOrDefaultAsync();
 
             if (
-                user == null ||
+                user ==
+                    null ||
                 !user.IsActive
             )
             {
@@ -819,7 +838,11 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (!RoleNames.IsValid(user.Role))
+            if (
+                !RoleNames.IsValid(
+                    user.Role
+                )
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Account role is invalid."
@@ -852,7 +875,8 @@ namespace PersonalProject.Services.Implementations
                     );
 
             if (
-                user == null ||
+                user ==
+                    null ||
                 !user.IsActive
             )
             {
@@ -912,7 +936,8 @@ namespace PersonalProject.Services.Implementations
             user.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return CreateLoginResponse(
                 user
@@ -939,11 +964,12 @@ namespace PersonalProject.Services.Implementations
                     $"PHL-{DateTime.UtcNow.Year}-{suffix}";
             }
             while (
-                await _context.Patients.AnyAsync(
-                    patient =>
-                        patient.PatientNumber ==
-                            patientNumber
-                )
+                await _context.Patients
+                    .AnyAsync(
+                        patient =>
+                            patient.PatientNumber ==
+                                patientNumber
+                    )
             );
 
             return patientNumber;
@@ -953,15 +979,17 @@ namespace PersonalProject.Services.Implementations
         // PASSWORD POLICY
         // =====================================================
 
-        private static void ValidatePasswordStrength(
-            string password
-        )
+        private static void
+            ValidatePasswordStrength(
+                string password
+            )
         {
             if (
                 string.IsNullOrWhiteSpace(
                     password
                 ) ||
-                password.Length < 12
+                password.Length <
+                    12
             )
             {
                 throw new InvalidOperationException(
@@ -969,21 +997,33 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
-            if (!password.Any(char.IsUpper))
+            if (
+                !password.Any(
+                    char.IsUpper
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Password must contain at least one uppercase letter."
                 );
             }
 
-            if (!password.Any(char.IsLower))
+            if (
+                !password.Any(
+                    char.IsLower
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Password must contain at least one lowercase letter."
                 );
             }
 
-            if (!password.Any(char.IsDigit))
+            if (
+                !password.Any(
+                    char.IsDigit
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Password must contain at least one number."
@@ -1009,17 +1049,22 @@ namespace PersonalProject.Services.Implementations
         // RESPONSES
         // =====================================================
 
-        private LoginResponseDto CreateLoginResponse(
-            User user
-        )
+        private LoginResponseDto
+            CreateLoginResponse(
+                User user
+            )
         {
             return new LoginResponseDto
             {
                 Token =
-                    GenerateToken(user),
+                    GenerateToken(
+                        user
+                    ),
 
                 User =
-                    CreateUserResponse(user)
+                    CreateUserResponse(
+                        user
+                    )
             };
         }
 
@@ -1070,7 +1115,11 @@ namespace PersonalProject.Services.Implementations
             var jwtKey =
                 _config["Jwt:Key"];
 
-            if (string.IsNullOrWhiteSpace(jwtKey))
+            if (
+                string.IsNullOrWhiteSpace(
+                    jwtKey
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "JWT Key is missing in configuration (Jwt:Key)."
@@ -1078,9 +1127,10 @@ namespace PersonalProject.Services.Implementations
             }
 
             var key =
-                Encoding.UTF8.GetBytes(
-                    jwtKey
-                );
+                Encoding.UTF8
+                    .GetBytes(
+                        jwtKey
+                    );
 
             var claims =
                 new[]
@@ -1126,7 +1176,9 @@ namespace PersonalProject.Services.Implementations
 
                     expires:
                         DateTime.UtcNow
-                            .AddHours(1),
+                            .AddHours(
+                                1
+                            ),
 
                     signingCredentials:
                         new SigningCredentials(

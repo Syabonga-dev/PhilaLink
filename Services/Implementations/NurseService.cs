@@ -129,8 +129,7 @@ namespace PersonalProject.Services.Implementations
                         user =>
                             user.Id !=
                                 userId &&
-                            user.Email
-                                .ToLower() ==
+                            user.Email ==
                                 normalizedEmail
                     );
 
@@ -368,6 +367,12 @@ namespace PersonalProject.Services.Implementations
             var now =
                 DateTime.UtcNow;
 
+            /*
+             * This is one SQL query. The scalar medication,
+             * collection and appointment expressions are
+             * translated into correlated subqueries rather than
+             * executing an N+1 loop in application code.
+             */
             return await _context.Patients
                 .AsNoTracking()
                 .Where(
@@ -417,11 +422,9 @@ namespace PersonalProject.Services.Implementations
                                     .Medications
                                     .Count(
                                         medication =>
-                                            medication
-                                                .PatientId ==
+                                            medication.PatientId ==
                                                 patient.Id &&
-                                            medication
-                                                .IsActive
+                                            medication.IsActive
                                     ),
 
                             OverdueCollectionCount =
@@ -429,11 +432,9 @@ namespace PersonalProject.Services.Implementations
                                     .MedicationCollections
                                     .Count(
                                         collection =>
-                                            collection
-                                                .PatientId ==
+                                            collection.PatientId ==
                                                 patient.Id &&
-                                            collection
-                                                .ScheduledCollectionDate <
+                                            collection.ScheduledCollectionDate <
                                                 today &&
                                             collection.Status !=
                                                 MedicationCollectionStatuses
@@ -448,11 +449,9 @@ namespace PersonalProject.Services.Implementations
                                     .MedicationCollections
                                     .Where(
                                         collection =>
-                                            collection
-                                                .PatientId ==
+                                            collection.PatientId ==
                                                 patient.Id &&
-                                            collection
-                                                .ScheduledCollectionDate >=
+                                            collection.ScheduledCollectionDate >=
                                                 today &&
                                             collection.Status !=
                                                 MedicationCollectionStatuses
@@ -469,8 +468,8 @@ namespace PersonalProject.Services.Implementations
                                     .Select(
                                         collection =>
                                             (DateTime?)
-                                                collection
-                                                    .ScheduledCollectionDate
+                                            collection
+                                                .ScheduledCollectionDate
                                     )
                                     .FirstOrDefault(),
 
@@ -479,14 +478,11 @@ namespace PersonalProject.Services.Implementations
                                     .Appointments
                                     .Where(
                                         appointment =>
-                                            appointment
-                                                .PatientId ==
+                                            appointment.PatientId ==
                                                 patient.Id &&
-                                            appointment
-                                                .ScheduledAt >=
+                                            appointment.ScheduledAt >=
                                                 now &&
-                                            appointment
-                                                .Status !=
+                                            appointment.Status !=
                                                 AppointmentStatuses
                                                     .Cancelled
                                     )
@@ -498,8 +494,8 @@ namespace PersonalProject.Services.Implementations
                                     .Select(
                                         appointment =>
                                             (DateTime?)
-                                                appointment
-                                                    .ScheduledAt
+                                            appointment
+                                                .ScheduledAt
                                     )
                                     .FirstOrDefault()
                         }
@@ -736,28 +732,24 @@ namespace PersonalProject.Services.Implementations
                                     condition.Id,
 
                                 Name =
-                                    condition
-                                        .ConditionName,
+                                    condition.ConditionName,
 
                                 DiagnosisDate =
-                                    condition
-                                        .DiagnosisDate,
+                                    condition.DiagnosisDate,
 
                                 IsChronic =
-                                    condition
-                                        .IsChronic,
+                                    condition.IsChronic,
 
                                 Notes =
                                     condition.Notes,
 
                                 IsActive =
-                                    condition
-                                        .IsActive
+                                    condition.IsActive
                             }
                     )
                     .ToListAsync();
 
-                                var healthMetrics =
+            var healthMetrics =
                 await _context.HealthMetrics
                     .AsNoTracking()
                     .Where(
@@ -822,6 +814,11 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
+            /*
+             * Multiple reference/collection graphs are required
+             * here. SplitQuery prevents a single giant cartesian
+             * result set from multiplying collection rows.
+             */
             var collections =
                 await _context
                     .MedicationCollections
@@ -869,17 +866,13 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
+            /*
+             * Project appointment response fields directly rather
+             * than loading Appointment + Nurse + User entities.
+             */
             var appointments =
                 await _context.Appointments
                     .AsNoTracking()
-                    .Include(
-                        appointment =>
-                            appointment.Nurse
-                    )
-                    .ThenInclude(
-                        appointmentNurse =>
-                            appointmentNurse!.User
-                    )
                     .Where(
                         appointment =>
                             appointment.PatientId ==
@@ -893,6 +886,50 @@ namespace PersonalProject.Services.Implementations
                     )
                     .Take(
                         20
+                    )
+                    .Select(
+                        appointment =>
+                            new NurseAppointmentDto
+                            {
+                                Id =
+                                    appointment.Id,
+
+                                ScheduledAt =
+                                    appointment.ScheduledAt,
+
+                                DurationMinutes =
+                                    appointment.DurationMinutes,
+
+                                Type =
+                                    appointment.Type,
+
+                                Reason =
+                                    appointment.Reason,
+
+                                ProviderName =
+                                    appointment.ProviderName,
+
+                                Mode =
+                                    appointment.Mode,
+
+                                Status =
+                                    appointment.Status,
+
+                                Notes =
+                                    appointment.Notes,
+
+                                NurseId =
+                                    appointment.NurseId,
+
+                                NurseName =
+                                    appointment.Nurse ==
+                                    null
+                                        ? null
+                                        : appointment
+                                            .Nurse
+                                            .User
+                                            .FullName
+                            }
                     )
                     .ToListAsync();
 
@@ -1000,7 +1037,9 @@ namespace PersonalProject.Services.Implementations
 
                 Conditions =
                     conditions,
-                    HealthMetrics = healthMetrics,
+
+                HealthMetrics =
+                    healthMetrics,
 
                 Medications =
                     medications
@@ -1041,10 +1080,12 @@ namespace PersonalProject.Services.Implementations
                                             .StartDate,
 
                                     EndDate =
-                                        medication.EndDate,
+                                        medication
+                                            .EndDate,
 
                                     IsActive =
-                                        medication.IsActive,
+                                        medication
+                                            .IsActive,
 
                                     Schedules =
                                         medication
@@ -1086,59 +1127,14 @@ namespace PersonalProject.Services.Implementations
                         .ToList(),
 
                 Appointments =
-                    appointments
-                        .Select(
-                            appointment =>
-                                new NurseAppointmentDto
-                                {
-                                    Id =
-                                        appointment.Id,
-
-                                    ScheduledAt =
-                                        appointment
-                                            .ScheduledAt,
-
-                                    DurationMinutes =
-                                        appointment
-                                            .DurationMinutes,
-
-                                    Type =
-                                        appointment.Type,
-
-                                    Reason =
-                                        appointment.Reason,
-
-                                    ProviderName =
-                                        appointment
-                                            .ProviderName,
-
-                                    Mode =
-                                        appointment.Mode,
-
-                                    Status =
-                                        appointment.Status,
-
-                                    Notes =
-                                        appointment.Notes,
-
-                                    NurseId =
-                                        appointment.NurseId,
-
-                                    NurseName =
-                                        appointment
-                                            .Nurse?
-                                            .User
-                                            .FullName
-                                }
-                        )
-                        .ToList(),
+                    appointments,
 
                 Proxies =
                     proxies
             };
         }
 
-                // =====================================================
+        // =====================================================
         // CLINIC INVENTORY FOR PRESCRIBING
         // =====================================================
 
@@ -1264,7 +1260,7 @@ namespace PersonalProject.Services.Implementations
                 .ToListAsync();
         }
 
-                // =====================================================
+        // =====================================================
         // HEALTH METRICS
         // =====================================================
 
@@ -1413,6 +1409,15 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Case-insensitive comparison intentionally preserved.
+             *
+             * Allergy names are not currently stored in a
+             * guaranteed normalized representation.
+             */
+            var normalizedName =
+                name.ToLowerInvariant();
+
             var duplicate =
                 await _context.Allergies
                     .AsNoTracking()
@@ -1422,7 +1427,7 @@ namespace PersonalProject.Services.Implementations
                                 patient.Id &&
                             allergy.AllergyName
                                 .ToLower() ==
-                                name.ToLower()
+                                normalizedName
                     );
 
             if (
@@ -1536,6 +1541,9 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            var normalizedName =
+                name.ToLowerInvariant();
+
             var duplicate =
                 await _context.Allergies
                     .AsNoTracking()
@@ -1547,7 +1555,7 @@ namespace PersonalProject.Services.Implementations
                                 patient.Id &&
                             item.AllergyName
                                 .ToLower() ==
-                                name.ToLower()
+                                normalizedName
                     );
 
             if (
@@ -1592,12 +1600,11 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task
-            DeleteAllergyAsync(
-                Guid userId,
-                Guid patientId,
-                Guid allergyId
-            )
+        public async Task DeleteAllergyAsync(
+            Guid userId,
+            Guid patientId,
+            Guid allergyId
+        )
         {
             var (
                 nurse,
@@ -1811,12 +1818,11 @@ namespace PersonalProject.Services.Implementations
             );
         }
 
-        public async Task
-            ArchiveConditionAsync(
-                Guid userId,
-                Guid patientId,
-                Guid conditionId
-            )
+        public async Task ArchiveConditionAsync(
+            Guid userId,
+            Guid patientId,
+            Guid conditionId
+        )
         {
             var (
                 nurse,
@@ -1926,6 +1932,23 @@ namespace PersonalProject.Services.Implementations
                 );
             }
 
+            /*
+             * Use a half-open date range rather than
+             * ScheduledCollectionDate.Date.
+             *
+             * Applying Date to the database column can prevent
+             * PostgreSQL from using the date index efficiently.
+             */
+            var collectionDayStart =
+                dto.ScheduledCollectionDate
+                    .Date;
+
+            var collectionDayEnd =
+                collectionDayStart
+                    .AddDays(
+                        1
+                    );
+
             var duplicate =
                 await _context
                     .MedicationCollections
@@ -1937,11 +1960,11 @@ namespace PersonalProject.Services.Implementations
                             collection.ClinicId ==
                                 nurse.ClinicId &&
                             collection
-                                .ScheduledCollectionDate
-                                .Date ==
-                                dto
-                                    .ScheduledCollectionDate
-                                    .Date &&
+                                .ScheduledCollectionDate >=
+                                collectionDayStart &&
+                            collection
+                                .ScheduledCollectionDate <
+                                collectionDayEnd &&
                             collection.Status !=
                                 MedicationCollectionStatuses
                                     .Collected &&
@@ -1966,12 +1989,16 @@ namespace PersonalProject.Services.Implementations
             }
 
             /*
-             * The Nurse does not manage stock.
+             * Preserve current case-insensitive stock matching.
              *
-             * This lookup only connects the collection item to
-             * the ClinicStock row already configured by the
-             * Clinic Admin.
+             * Stock data is not yet guaranteed to use normalized
+             * medication names, strengths and forms.
              */
+            var normalizedMedicationName =
+                medication.Name
+                    .Trim()
+                    .ToLowerInvariant();
+
             var stockCandidates =
                 await _context.ClinicStocks
                     .AsNoTracking()
@@ -1982,9 +2009,7 @@ namespace PersonalProject.Services.Implementations
                             stock.IsActive &&
                             stock.MedicationName
                                 .ToLower() ==
-                                medication.Name
-                                    .Trim()
-                                    .ToLower()
+                                normalizedMedicationName
                     )
                     .ToListAsync();
 
@@ -2080,6 +2105,9 @@ namespace PersonalProject.Services.Implementations
                 }
             }
 
+            var now =
+                DateTime.UtcNow;
+
             var collection =
                 new MedicationCollection
                 {
@@ -2109,7 +2137,7 @@ namespace PersonalProject.Services.Implementations
                         ),
 
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 };
 
             collection.Items.Add(
@@ -2131,7 +2159,7 @@ namespace PersonalProject.Services.Implementations
                         null,
 
                     CreatedAt =
-                        DateTime.UtcNow
+                        now
                 }
             );
 
@@ -2155,6 +2183,7 @@ namespace PersonalProject.Services.Implementations
                 await _context
                     .MedicationCollections
                     .AsNoTrackingWithIdentityResolution()
+                    .AsSplitQuery()
                     .Include(
                         item =>
                             item.Items
@@ -2314,10 +2343,9 @@ namespace PersonalProject.Services.Implementations
         // MAPPING
         // =====================================================
 
-        private static NurseMeDto
-            ToMeDto(
-                Nurse nurse
-            )
+        private static NurseMeDto ToMeDto(
+            Nurse nurse
+        )
         {
             return new NurseMeDto
             {

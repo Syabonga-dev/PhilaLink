@@ -19,10 +19,19 @@ namespace PersonalProject.Services.Implementations
             IMedicationService medicationService
         )
         {
-            _context = context;
-            _audit = audit;
-            _medicationService = medicationService;
+            _context =
+                context;
+
+            _audit =
+                audit;
+
+            _medicationService =
+                medicationService;
         }
+
+        // =====================================================
+        // MEDICATION LOGGING
+        // =====================================================
 
         public async Task LogMedicationAsync(
             Guid userId,
@@ -31,12 +40,13 @@ namespace PersonalProject.Services.Implementations
             string? notes
         )
         {
-            await _medicationService.LogPatientMedicationAsync(
-                userId,
-                medicationId,
-                taken,
-                notes
-            );
+            await _medicationService
+                .LogPatientMedicationAsync(
+                    userId,
+                    medicationId,
+                    taken,
+                    notes
+                );
         }
 
         // =====================================================
@@ -53,13 +63,15 @@ namespace PersonalProject.Services.Implementations
                     asTracking: false
                 );
 
-            return ToMeDto(patient);
+            return ToMeDto(
+                patient
+            );
         }
 
         public async Task<PatientMeDto> UpdateMeAsync(
-    Guid userId,
-    UpdatePatientProfileDto dto
-)
+            Guid userId,
+            UpdatePatientProfileDto dto
+        )
         {
             var patient =
                 await GetPatientByUserIdAsync(
@@ -101,7 +113,8 @@ namespace PersonalProject.Services.Implementations
             }
 
             var normalizedPhoneNumber =
-                dto.PhoneNumber.Trim();
+                dto.PhoneNumber
+                    .Trim();
 
             var normalizedEmail =
                 dto.Email
@@ -119,13 +132,19 @@ namespace PersonalProject.Services.Implementations
                                 normalizedPhoneNumber
                     );
 
-            if (duplicatePhone)
+            if (
+                duplicatePhone
+            )
             {
                 throw new InvalidOperationException(
                     "That phone number is already in use."
                 );
             }
 
+            /*
+             * Users.Email is stored in canonical lowercase form,
+             * so do not wrap the indexed column in LOWER().
+             */
             var duplicateEmail =
                 await _context.Users
                     .AsNoTracking()
@@ -133,20 +152,25 @@ namespace PersonalProject.Services.Implementations
                         user =>
                             user.Id !=
                                 userId &&
-                            user.Email
-                                .ToLower() ==
+                            user.Email ==
                                 normalizedEmail
                     );
 
-            if (duplicateEmail)
+            if (
+                duplicateEmail
+            )
             {
                 throw new InvalidOperationException(
                     "That email address is already in use."
                 );
             }
 
+            var now =
+                DateTime.UtcNow;
+
             patient.User.FullName =
-                dto.FullName.Trim();
+                dto.FullName
+                    .Trim();
 
             patient.User.PhoneNumber =
                 normalizedPhoneNumber;
@@ -155,21 +179,18 @@ namespace PersonalProject.Services.Implementations
                 normalizedEmail;
 
             patient.User.UpdatedAt =
-                DateTime.UtcNow;
-
+                now;
 
             patient.Gender =
-                dto.Gender.Trim();
+                dto.Gender
+                    .Trim();
 
-            /*
-             * Keep the patient profile email synchronized with
-             * the main Users record.
-             */
             patient.Email =
                 normalizedEmail;
 
             patient.AddressLine1 =
-                dto.AddressLine1.Trim();
+                dto.AddressLine1
+                    .Trim();
 
             patient.AddressLine2 =
                 string.IsNullOrWhiteSpace(
@@ -180,16 +201,20 @@ namespace PersonalProject.Services.Implementations
                         .Trim();
 
             patient.Suburb =
-                dto.Suburb.Trim();
+                dto.Suburb
+                    .Trim();
 
             patient.City =
-                dto.City.Trim();
+                dto.City
+                    .Trim();
 
             patient.Province =
-                dto.Province.Trim();
+                dto.Province
+                    .Trim();
 
             patient.PostalCode =
-                dto.PostalCode.Trim();
+                dto.PostalCode
+                    .Trim();
 
             patient.EmergencyContactName =
                 dto.EmergencyContactName
@@ -215,11 +240,11 @@ namespace PersonalProject.Services.Implementations
             )
             {
                 patient.ProfileCompletedAt =
-                    DateTime.UtcNow;
+                    now;
             }
 
             patient.UpdatedAt =
-                DateTime.UtcNow;
+                now;
 
             await _context
                 .SaveChangesAsync();
@@ -247,55 +272,64 @@ namespace PersonalProject.Services.Implementations
             var now =
                 DateTime.UtcNow;
 
+            /*
+             * Project only dashboard identity/clinic fields.
+             */
             var patient =
                 await _context.Patients
                     .AsNoTracking()
                     .Where(
-                        patient =>
-                            patient.UserId == userId &&
-                            patient.User.Role ==
+                        item =>
+                            item.UserId ==
+                                userId &&
+                            item.User.Role ==
                                 RoleNames.Patient &&
-                            patient.User.IsActive
+                            item.User.IsActive
                     )
                     .Select(
-                        patient =>
+                        item =>
                             new
                             {
-                                patient.Id,
-                                patient.PatientNumber,
-                                patient.IsProfileComplete,
+                                item.Id,
+                                item.PatientNumber,
+                                item.IsProfileComplete,
 
                                 FullName =
-                                    patient.User.FullName,
+                                    item.User
+                                        .FullName,
 
                                 Clinic =
-                                    patient.Clinic == null
+                                    item.Clinic ==
+                                    null
                                         ? null
                                         : new PatientClinicSummaryDto
                                         {
                                             Id =
-                                                patient.Clinic.Id,
+                                                item.Clinic.Id,
 
                                             Name =
-                                                patient.Clinic.Name,
+                                                item.Clinic.Name,
 
                                             Address =
-                                                patient.Clinic.Address,
+                                                item.Clinic.Address,
 
                                             ContactNumber =
-                                                patient.Clinic.ContactNumber,
+                                                item.Clinic.ContactNumber,
 
                                             OpeningTime =
-                                                patient.Clinic.OpeningTime,
+                                                item.Clinic.OpeningTime,
 
                                             ClosingTime =
-                                                patient.Clinic.ClosingTime
+                                                item.Clinic.ClosingTime
                                         }
                             }
                     )
                     .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (
+                patient ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active Patient profile not found."
@@ -323,7 +357,9 @@ namespace PersonalProject.Services.Implementations
                         medication =>
                             medication.Name
                     )
-                    .Take(3)
+                    .Take(
+                        3
+                    )
                     .ToListAsync();
 
             var medications =
@@ -347,15 +383,17 @@ namespace PersonalProject.Services.Implementations
                             appointment.ScheduledAt >=
                                 now &&
                             appointment.Status !=
-                                "Cancelled" &&
+                                AppointmentStatuses.Cancelled &&
                             appointment.Status !=
-                                "Completed"
+                                AppointmentStatuses.Completed
                     )
                     .OrderBy(
                         appointment =>
                             appointment.ScheduledAt
                     )
-                    .Take(3)
+                    .Take(
+                        3
+                    )
                     .Select(
                         appointment =>
                             new AppointmentResponseDto
@@ -384,7 +422,8 @@ namespace PersonalProject.Services.Implementations
                                     appointment.NurseId,
 
                                 NurseName =
-                                    appointment.Nurse == null
+                                    appointment.Nurse ==
+                                    null
                                         ? null
                                         : appointment
                                             .Nurse
@@ -418,7 +457,12 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToListAsync();
 
-            var metricRows =
+            /*
+             * Latest health metric per metric type is resolved
+             * inside SQL rather than downloading the patient's
+             * complete metric history and grouping in memory.
+             */
+            var metrics =
                 await _context.HealthMetrics
                     .AsNoTracking()
                     .Where(
@@ -426,52 +470,54 @@ namespace PersonalProject.Services.Implementations
                             metric.PatientId ==
                                 patient.Id
                     )
-                    .OrderByDescending(
-                        metric =>
-                            metric.RecordedAt
-                    )
-                    .Select(
-                        metric =>
-                            new HealthMetricResponseDto
-                            {
-                                Id =
-                                    metric.Id,
-
-                                MetricType =
-                                    metric.MetricType,
-
-                                Value =
-                                    metric.Value,
-
-                                Unit =
-                                    metric.Unit,
-
-                                Status =
-                                    metric.Status,
-
-                                Note =
-                                    metric.Note,
-
-                                RecordedAt =
-                                    metric.RecordedAt
-                            }
-                    )
-                    .ToListAsync();
-
-            var metrics =
-                metricRows
                     .GroupBy(
                         metric =>
                             metric.MetricType
                     )
                     .Select(
                         group =>
-                            group.First()
+                            group
+                                .OrderByDescending(
+                                    metric =>
+                                        metric.RecordedAt
+                                )
+                                .Select(
+                                    metric =>
+                                        new HealthMetricResponseDto
+                                        {
+                                            Id =
+                                                metric.Id,
+
+                                            MetricType =
+                                                metric.MetricType,
+
+                                            Value =
+                                                metric.Value,
+
+                                            Unit =
+                                                metric.Unit,
+
+                                            Status =
+                                                metric.Status,
+
+                                            Note =
+                                                metric.Note,
+
+                                            RecordedAt =
+                                                metric.RecordedAt
+                                        }
+                                )
+                                .First()
                     )
-                    .ToList();
+                    .OrderBy(
+                        metric =>
+                            metric.MetricType
+                    )
+                    .ToListAsync();
 
             var unread =
                 await _context.Notifications
+                    .AsNoTracking()
                     .CountAsync(
                         notification =>
                             notification.UserId ==
@@ -503,7 +549,10 @@ namespace PersonalProject.Services.Implementations
                 )
                 .FirstOrDefaultAsync();
 
-            if (nextCollection != null)
+            if (
+                nextCollection !=
+                null
+            )
             {
                 FinalizeCollectionDto(
                     nextCollection
@@ -624,17 +673,20 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task<AppointmentResponseDto>
-    BookAppointmentAsync(
-        Guid userId,
-        PatientBookAppointmentDto dto
-    )
+            BookAppointmentAsync(
+                Guid userId,
+                PatientBookAppointmentDto dto
+            )
         {
             var patient =
                 await GetActivePatientAccessAsync(
                     userId
                 );
 
-            if (patient.ClinicId == null)
+            if (
+                patient.ClinicId ==
+                null
+            )
             {
                 throw new InvalidOperationException(
                     "A clinic must be assigned before booking an appointment."
@@ -725,7 +777,8 @@ namespace PersonalProject.Services.Implementations
                             dto.Notes
                         )
                             ? null
-                            : dto.Notes.Trim(),
+                            : dto.Notes
+                                .Trim(),
 
                     CreatedAt =
                         DateTime.UtcNow
@@ -752,11 +805,11 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task<AppointmentResponseDto>
-    RescheduleAppointmentAsync(
-        Guid userId,
-        Guid appointmentId,
-        PatientRescheduleAppointmentDto dto
-    )
+            RescheduleAppointmentAsync(
+                Guid userId,
+                Guid appointmentId,
+                PatientRescheduleAppointmentDto dto
+            )
         {
             var patient =
                 await GetActivePatientAccessAsync(
@@ -786,7 +839,10 @@ namespace PersonalProject.Services.Implementations
                                 patient.Id
                     );
 
-            if (appointment == null)
+            if (
+                appointment ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Appointment not found."
@@ -825,7 +881,7 @@ namespace PersonalProject.Services.Implementations
                     .Rescheduled;
 
             appointment.UpdatedAt =
-                DateTime.UtcNow;
+                now;
 
             await _context
                 .SaveChangesAsync();
@@ -844,9 +900,9 @@ namespace PersonalProject.Services.Implementations
         }
 
         public async Task CancelAppointmentAsync(
-    Guid userId,
-    Guid appointmentId
-)
+            Guid userId,
+            Guid appointmentId
+        )
         {
             var patient =
                 await GetActivePatientAccessAsync(
@@ -863,7 +919,10 @@ namespace PersonalProject.Services.Implementations
                                 patient.Id
                     );
 
-            if (appointment == null)
+            if (
+                appointment ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Appointment not found."
@@ -955,7 +1014,8 @@ namespace PersonalProject.Services.Implementations
                                 appointment.NurseId,
 
                             NurseName =
-                                appointment.Nurse == null
+                                appointment.Nurse ==
+                                null
                                     ? null
                                     : appointment
                                         .Nurse
@@ -1035,7 +1095,8 @@ namespace PersonalProject.Services.Implementations
                                 record.ProviderName,
 
                             Facility =
-                                record.Clinic == null
+                                record.Clinic ==
+                                null
                                     ? null
                                     : record
                                         .Clinic
@@ -1087,7 +1148,10 @@ namespace PersonalProject.Services.Implementations
                 )
                 .ToListAsync();
 
-            foreach (var collection in collections)
+            foreach (
+                var collection
+                in collections
+            )
             {
                 FinalizeCollectionDto(
                     collection
@@ -1130,9 +1194,11 @@ namespace PersonalProject.Services.Implementations
                                 item.PatientId ==
                                     patientId &&
                                 item.Status !=
-                                    "Collected" &&
+                                    MedicationCollectionStatuses
+                                        .Collected &&
                                 item.Status !=
-                                    "Cancelled"
+                                    MedicationCollectionStatuses
+                                        .Cancelled
                         )
                 )
                 .OrderBy(
@@ -1142,7 +1208,10 @@ namespace PersonalProject.Services.Implementations
                 )
                 .FirstOrDefaultAsync();
 
-            if (collection == null)
+            if (
+                collection ==
+                null
+            )
             {
                 return null;
             }
@@ -1213,6 +1282,9 @@ namespace PersonalProject.Services.Implementations
                     userId
                 );
 
+            /*
+             * Tracking is required because IsRead changes.
+             */
             var notification =
                 await _context.Notifications
                     .FirstOrDefaultAsync(
@@ -1223,7 +1295,10 @@ namespace PersonalProject.Services.Implementations
                                 userId
                     );
 
-            if (notification == null)
+            if (
+                notification ==
+                null
+            )
             {
                 throw new KeyNotFoundException(
                     "Notification not found."
@@ -1233,7 +1308,8 @@ namespace PersonalProject.Services.Implementations
             notification.IsRead =
                 true;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
         }
 
         // =====================================================
@@ -1297,7 +1373,8 @@ namespace PersonalProject.Services.Implementations
             preference.UpdatedAt =
                 DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             await _audit.LogAsync(
                 "PatientPreferencesUpdated",
@@ -1319,6 +1396,11 @@ namespace PersonalProject.Services.Implementations
                 Guid userId
             )
         {
+            /*
+             * Most Patient endpoints only need Patient.Id and
+             * ClinicId for authorization. Avoid loading a full
+             * Patient/User graph for those calls.
+             */
             var patient =
                 await _context.Patients
                     .AsNoTracking()
@@ -1343,7 +1425,10 @@ namespace PersonalProject.Services.Implementations
                     )
                     .FirstOrDefaultAsync();
 
-            if (patient == null)
+            if (
+                patient ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active Patient profile not found."
@@ -1354,31 +1439,26 @@ namespace PersonalProject.Services.Implementations
         }
 
         private async Task<Patient>
-    GetPatientByUserIdAsync(
-        Guid userId,
-        bool asTracking
-    )
+            GetPatientByUserIdAsync(
+                Guid userId,
+                bool asTracking
+            )
         {
             IQueryable<Patient> query =
                 _context.Patients;
 
-            if (!asTracking)
+            if (
+                !asTracking
+            )
             {
                 query =
                     query.AsNoTracking();
             }
 
             /*
-             * The patient profile contains two collection
-             * navigations: Allergies and MedicalConditions.
-             *
-             * Loading both through one SQL query can create a
-             * cartesian multiplication of rows and EF Core warns
-             * about this situation.
-             *
-             * Split the query so User/Clinic and each collection
-             * are loaded efficiently without duplicating the
-             * patient row for every allergy-condition combination.
+             * Allergies and MedicalConditions are two collection
+             * navigations. Split queries avoid multiplying every
+             * allergy row by every condition row.
              */
             query =
                 query.AsSplitQuery();
@@ -1410,7 +1490,10 @@ namespace PersonalProject.Services.Implementations
                             item.User.IsActive
                     );
 
-            if (patient == null)
+            if (
+                patient ==
+                null
+            )
             {
                 throw new UnauthorizedAccessException(
                     "Active Patient profile not found."
@@ -1429,6 +1512,10 @@ namespace PersonalProject.Services.Implementations
                 Guid patientId
             )
         {
+            /*
+             * Tracking is intentional because UpdatePreferences
+             * mutates the returned entity.
+             */
             var preference =
                 await _context.PatientPreferences
                     .FirstOrDefaultAsync(
@@ -1437,7 +1524,10 @@ namespace PersonalProject.Services.Implementations
                                 patientId
                     );
 
-            if (preference != null)
+            if (
+                preference !=
+                null
+            )
             {
                 return preference;
             }
@@ -1477,7 +1567,8 @@ namespace PersonalProject.Services.Implementations
                 preference
             );
 
-            await _context.SaveChangesAsync();
+            await _context
+                .SaveChangesAsync();
 
             return preference;
         }
@@ -1515,7 +1606,7 @@ namespace PersonalProject.Services.Implementations
 
                 DateOfBirth =
                     patient.DateOfBirth ==
-                        default
+                    default
                         ? null
                         : patient.DateOfBirth,
 
@@ -1554,7 +1645,8 @@ namespace PersonalProject.Services.Implementations
                     patient.ClinicId,
 
                 ClinicName =
-                    patient.Clinic?.Name,
+                    patient.Clinic
+                        ?.Name,
 
                 IsProfileComplete =
                     patient.IsProfileComplete,
@@ -1677,7 +1769,8 @@ namespace PersonalProject.Services.Implementations
                     ),
 
                 DaysRemaining =
-                    medication.EndDate == null
+                    medication.EndDate ==
+                    null
                         ? null
                         : Math.Max(
                             0,
@@ -1720,9 +1813,9 @@ namespace PersonalProject.Services.Implementations
         }
 
         private static DateTime? CalculateNextDose(
-    IEnumerable<MedicationSchedule> schedules,
-    DateTime? nowOverride = null
-)
+            IEnumerable<MedicationSchedule> schedules,
+            DateTime? nowOverride = null
+        )
         {
             var active =
                 schedules
@@ -1736,7 +1829,10 @@ namespace PersonalProject.Services.Implementations
                     )
                     .ToList();
 
-            if (active.Count == 0)
+            if (
+                active.Count ==
+                0
+            )
             {
                 return null;
             }
@@ -1746,14 +1842,13 @@ namespace PersonalProject.Services.Implementations
                 DateTime.UtcNow;
 
             /*
-             * Medication schedule times are South African local
-             * clock times.
-             *
-             * South Africa uses UTC+2 throughout the year and
-             * does not observe daylight-saving time.
+             * Medication schedule times are stored as South
+             * African local clock times.
              */
             var southAfricaOffset =
-                TimeSpan.FromHours(2);
+                TimeSpan.FromHours(
+                    2
+                );
 
             var localNow =
                 nowUtc +
@@ -1776,11 +1871,6 @@ namespace PersonalProject.Services.Implementations
                     localNow
                 )
                 {
-                    /*
-                     * API DateTime values should remain UTC.
-                     * Convert the local SAST clock time back to UTC
-                     * before returning it to the frontend.
-                     */
                     return DateTime.SpecifyKind(
                         candidateLocal -
                             southAfricaOffset,
@@ -1792,7 +1882,9 @@ namespace PersonalProject.Services.Implementations
             var tomorrowLocal =
                 DateTime.SpecifyKind(
                     localNow.Date
-                        .AddDays(1) +
+                        .AddDays(
+                            1
+                        ) +
                     active[0]
                         .TimeOfDay,
                     DateTimeKind.Unspecified
@@ -1862,7 +1954,8 @@ namespace PersonalProject.Services.Implementations
                                 appointment.NurseId,
 
                             NurseName =
-                                appointment.Nurse == null
+                                appointment.Nurse ==
+                                null
                                     ? null
                                     : appointment
                                         .Nurse
@@ -1903,6 +1996,10 @@ namespace PersonalProject.Services.Implementations
                 IQueryable<MedicationCollection> query
             )
         {
+            /*
+             * Collection endpoints need DTOs rather than tracked
+             * collection graphs. Keep projection server-side.
+             */
             return query.Select(
                 collection =>
                     new MedicationCollectionResponseDto
@@ -1931,7 +2028,8 @@ namespace PersonalProject.Services.Implementations
                             collection.ProxyId,
 
                         ProxyName =
-                            collection.Proxy == null
+                            collection.Proxy ==
+                            null
                                 ? null
                                 : collection
                                     .Proxy
@@ -1944,7 +2042,7 @@ namespace PersonalProject.Services.Implementations
 
                         ProcessedByNurseName =
                             collection.ProcessedByNurse ==
-                                null
+                            null
                                 ? null
                                 : collection
                                     .ProcessedByNurse
@@ -1958,11 +2056,6 @@ namespace PersonalProject.Services.Implementations
                         CollectedAt =
                             collection.CollectedAt,
 
-                        /*
-                         * Raw status is finalized after the
-                         * database projection so Pending/Overdue
-                         * behavior remains exactly as before.
-                         */
                         Status =
                             collection.Status,
 
@@ -2023,9 +2116,9 @@ namespace PersonalProject.Services.Implementations
         {
             if (
                 collection.Status !=
-                    "Collected" &&
+                    MedicationCollectionStatuses.Collected &&
                 collection.Status !=
-                    "Cancelled"
+                    MedicationCollectionStatuses.Cancelled
             )
             {
                 collection.Status =
@@ -2033,8 +2126,10 @@ namespace PersonalProject.Services.Implementations
                         .ScheduledCollectionDate
                         .Date <
                     DateTime.UtcNow.Date
-                        ? "Overdue"
-                        : "Pending";
+                        ? MedicationCollectionStatuses
+                            .Overdue
+                        : MedicationCollectionStatuses
+                            .Pending;
             }
 
             collection.MedicationName =
@@ -2076,10 +2171,12 @@ namespace PersonalProject.Services.Implementations
                         .ClinicNotifications,
 
                 HealthUpdates =
-                    preference.HealthUpdates,
+                    preference
+                        .HealthUpdates,
 
                 ShareHealthData =
-                    preference.ShareHealthData,
+                    preference
+                        .ShareHealthData,
 
                 AllowChatbotProfileAccess =
                     preference
