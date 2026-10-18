@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -43,7 +42,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetMeAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetMeAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -52,11 +53,15 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPut("me")]
-        public async Task<IActionResult> UpdateMe(UpdatePatientProfileDto dto)
+        public async Task<IActionResult> UpdateMe(
+            UpdatePatientProfileDto dto)
         {
             try
             {
-                return Ok(await _patientService.UpdateMeAsync(GetCurrentUserId(), dto));
+                return Ok(
+                    await _patientService.UpdateMeAsync(
+                        GetCurrentUserId(),
+                        dto));
             }
             catch (InvalidOperationException ex)
             {
@@ -107,7 +112,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetDashboardAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetDashboardAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -120,7 +127,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetMedicationsAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetMedicationsAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -133,7 +142,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetAppointmentsAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetAppointmentsAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -142,12 +153,17 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPost("me/appointments")]
-        public async Task<IActionResult> BookAppointment(PatientBookAppointmentDto dto)
+        public async Task<IActionResult> BookAppointment(
+            PatientBookAppointmentDto dto)
         {
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _patientService.BookAppointmentAsync(userId, dto);
+
+                var result =
+                    await _patientService.BookAppointmentAsync(
+                        userId,
+                        dto);
 
                 await TryNotifyAppointmentAsync(userId, result);
 
@@ -171,10 +187,12 @@ namespace PersonalProject.Controllers
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _patientService.RescheduleAppointmentAsync(
-                    userId,
-                    id,
-                    dto);
+
+                var result =
+                    await _patientService.RescheduleAppointmentAsync(
+                        userId,
+                        id,
+                        dto);
 
                 await TryNotifyAppointmentAsync(userId, result);
 
@@ -201,17 +219,25 @@ namespace PersonalProject.Controllers
             {
                 var userId = GetCurrentUserId();
 
-                await _patientService.CancelAppointmentAsync(userId, id);
+                await _patientService.CancelAppointmentAsync(
+                    userId,
+                    id);
 
-                var appointment = await _appointmentService
-                    .GetPatientAppointmentByIdAsync(id, userId);
+                var appointment =
+                    await _appointmentService
+                        .GetPatientAppointmentByIdAsync(id, userId);
 
                 if (appointment != null)
                 {
-                    await TryNotifyAppointmentAsync(userId, appointment);
+                    await TryNotifyAppointmentAsync(
+                        userId,
+                        appointment);
                 }
 
-                return Ok(new { message = "Appointment cancelled." });
+                return Ok(new
+                {
+                    message = "Appointment cancelled."
+                });
             }
             catch (KeyNotFoundException ex)
             {
@@ -237,14 +263,15 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                var result = await PatientRecordQueries.GetPageAsync(
-                    _context,
-                    GetCurrentUserId(),
-                    category,
-                    search,
-                    page,
-                    pageSize,
-                    HttpContext.RequestAborted);
+                var result =
+                    await PatientRecordQueries.GetPageAsync(
+                        _context,
+                        GetCurrentUserId(),
+                        category,
+                        search,
+                        page,
+                        pageSize,
+                        HttpContext.RequestAborted);
 
                 return Ok(result);
             }
@@ -263,7 +290,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetCollectionsAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetCollectionsAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -276,7 +305,10 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                var result = await _patientService.GetNextCollectionAsync(GetCurrentUserId());
+                var result =
+                    await _patientService.GetNextCollectionAsync(
+                        GetCurrentUserId());
+
                 return Ok(result);
             }
             catch (UnauthorizedAccessException)
@@ -290,7 +322,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetNotificationsAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetNotificationsAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -303,7 +337,10 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                await _patientService.MarkNotificationReadAsync(GetCurrentUserId(), id);
+                await _patientService.MarkNotificationReadAsync(
+                    GetCurrentUserId(),
+                    id);
+
                 return NoContent();
             }
             catch (KeyNotFoundException ex)
@@ -321,7 +358,9 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return Ok(await _patientService.GetPreferencesAsync(GetCurrentUserId()));
+                return Ok(
+                    await _patientService.GetPreferencesAsync(
+                        GetCurrentUserId()));
             }
             catch (UnauthorizedAccessException)
             {
@@ -330,11 +369,15 @@ namespace PersonalProject.Controllers
         }
 
         [HttpPut("me/preferences")]
-        public async Task<IActionResult> UpdatePreferences(PatientPreferenceDto dto)
+        public async Task<IActionResult> UpdatePreferences(
+            PatientPreferenceDto dto)
         {
             try
             {
-                return Ok(await _patientService.UpdatePreferencesAsync(GetCurrentUserId(), dto));
+                return Ok(
+                    await _patientService.UpdatePreferencesAsync(
+                        GetCurrentUserId(),
+                        dto));
             }
             catch (UnauthorizedAccessException)
             {
@@ -348,10 +391,13 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                var localTime = ToSouthAfricaTime(appointment.ScheduledAt);
-                var type = string.IsNullOrWhiteSpace(appointment.Type)
-                    ? "appointment"
-                    : appointment.Type;
+                var localTime =
+                    ToSouthAfricaTime(appointment.ScheduledAt);
+
+                var type =
+                    string.IsNullOrWhiteSpace(appointment.Type)
+                        ? "appointment"
+                        : appointment.Type;
 
                 var message =
                     "Appointment update: " +
@@ -359,12 +405,14 @@ namespace PersonalProject.Controllers
                     $"{appointment.Status} for " +
                     $"{localTime:ddd, dd MMM yyyy 'at' HH:mm}.";
 
-                await _notificationService.CreateAppointmentForPatientAsync(
-                    userId,
-                    message);
+                await _notificationService
+                    .CreateAppointmentForPatientAsync(
+                        userId,
+                        message);
             }
             catch (Exception ex)
             {
+                // Appointment changes must not fail because a notification failed.
                 _logger.LogWarning(
                     ex,
                     "Appointment {AppointmentId} was saved, but its notification could not be created.",
@@ -376,13 +424,15 @@ namespace PersonalProject.Controllers
         {
             try
             {
-                return TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg");
+                return TimeZoneInfo.FindSystemTimeZoneById(
+                    "Africa/Johannesburg");
             }
             catch (TimeZoneNotFoundException)
             {
                 try
                 {
-                    return TimeZoneInfo.FindSystemTimeZoneById("South Africa Standard Time");
+                    return TimeZoneInfo.FindSystemTimeZoneById(
+                        "South Africa Standard Time");
                 }
                 catch
                 {
@@ -401,17 +451,21 @@ namespace PersonalProject.Controllers
                 ? value
                 : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
-            return TimeZoneInfo.ConvertTimeFromUtc(utc, SouthAfricaTimeZone);
+            return TimeZoneInfo.ConvertTimeFromUtc(
+                utc,
+                SouthAfricaTimeZone);
         }
 
         private Guid GetCurrentUserId()
         {
-            var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var value =
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (string.IsNullOrWhiteSpace(value) ||
                 !Guid.TryParse(value, out var userId))
             {
-                throw new UnauthorizedAccessException("Invalid authentication token.");
+                throw new UnauthorizedAccessException(
+                    "Invalid authentication token.");
             }
 
             return userId;
