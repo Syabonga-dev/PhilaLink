@@ -458,11 +458,12 @@ namespace PersonalProject.Services.Implementations
                     .ToListAsync();
 
             /*
-             * Latest health metric per metric type is resolved
-             * inside SQL rather than downloading the patient's
-             * complete metric history and grouping in memory.
+             * Load the patient's metrics in a deterministic order,
+             * then select the latest record for each type in memory.
+             * This avoids provider-specific translation failures for
+             * GroupBy + ordered First() projections in EF Core.
              */
-            var metrics =
+            var metricEntities =
                 await _context.HealthMetrics
                     .AsNoTracking()
                     .Where(
@@ -470,50 +471,61 @@ namespace PersonalProject.Services.Implementations
                             metric.PatientId ==
                                 patient.Id
                     )
+                    .OrderBy(
+                        metric =>
+                            metric.MetricType
+                    )
+                    .ThenByDescending(
+                        metric =>
+                            metric.RecordedAt
+                    )
+                    .ThenByDescending(
+                        metric =>
+                            metric.Id
+                    )
+                    .ToListAsync();
+
+            var metrics =
+                metricEntities
                     .GroupBy(
                         metric =>
                             metric.MetricType
                     )
                     .Select(
                         group =>
-                            group
-                                .OrderByDescending(
-                                    metric =>
-                                        metric.RecordedAt
-                                )
-                                .Select(
-                                    metric =>
-                                        new HealthMetricResponseDto
-                                        {
-                                            Id =
-                                                metric.Id,
+                        {
+                            var metric = group.First();
 
-                                            MetricType =
-                                                metric.MetricType,
+                            return new HealthMetricResponseDto
+                            {
+                                Id =
+                                    metric.Id,
 
-                                            Value =
-                                                metric.Value,
+                                MetricType =
+                                    metric.MetricType,
 
-                                            Unit =
-                                                metric.Unit,
+                                Value =
+                                    metric.Value,
 
-                                            Status =
-                                                metric.Status,
+                                Unit =
+                                    metric.Unit,
 
-                                            Note =
-                                                metric.Note,
+                                Status =
+                                    metric.Status,
 
-                                            RecordedAt =
-                                                metric.RecordedAt
-                                        }
-                                )
-                                .First()
+                                Note =
+                                    metric.Note,
+
+                                RecordedAt =
+                                    metric.RecordedAt
+                            };
+                        }
                     )
                     .OrderBy(
                         metric =>
                             metric.MetricType
                     )
-                    .ToListAsync();
+                    .ToList();
 
             var unread =
                 await _context.Notifications
